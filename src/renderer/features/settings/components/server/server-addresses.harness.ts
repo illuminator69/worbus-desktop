@@ -21,6 +21,7 @@ import {
     promptFor,
     setView,
     statusRoute,
+    titlesToArrive,
     typedUrlAfterRemove,
 } from './server-status.ts';
 
@@ -321,4 +322,18 @@ test('remove_and_learned_switch_persist', () => {
     const index = read('../../../../../main/features/core/hub/index.ts');
     assert.match(index, /ipcMain\.handle\('hub-server-edit'/);
     assert.match(index, /applyServerEdit\(/);
+});
+
+test('found_rows_fold_in_when_they_arrive', () => {
+    // F6 walk (W-4): a found row that arrives with a look (Look on this network, the look when the
+    // tab opens) was mounted already open: the section jumped 46 px in one frame. A new row is now
+    // drawn folded once and opens on the next frame, so its Fold eases in like every other row.
+    assert.deepEqual(titlesToArrive(new Set(), ['Worbus Server · 192.168.129.194']), [
+        'Worbus Server · 192.168.129.194',
+    ]);
+    assert.deepEqual(titlesToArrive(new Set(['a']), ['a', 'b']), ['b']);
+    assert.deepEqual(titlesToArrive(new Set(['a', 'b']), ['a']), []);
+    const tab = read('./worbus-server-settings.tsx');
+    assert.match(tab, /isHidden: configured \|\| !drawnFound\.has\(title\),/);
+    assert.match(tab, /requestAnimationFrame\(\(\) =>\s*setDrawnFound\(/);
 });

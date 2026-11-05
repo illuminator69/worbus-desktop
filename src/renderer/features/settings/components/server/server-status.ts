@@ -477,3 +477,10 @@ export const promptFor = (
     if (offers.length !== 1) return null;
     return record?.promptDismissed.includes(dismissKey(offers[0])) ? null : offers[0];
 };
+
+/**
+ * F6 walk (W-4): the found rows that have not been drawn yet. Such a row is drawn folded closed
+ * once and opened on the next frame, so it eases in instead of arriving open in one frame.
+ */
+export const titlesToArrive = (drawn: ReadonlySet<string>, titles: string[]): string[] =>
+    titles.filter((title) => !drawn.has(title));

@@ -22,6 +22,7 @@ import {
     setView,
     showTokenField,
     statusRoute,
+    titlesToArrive,
 } from './server-status';
 
 import { clapAvailableKey } from '/@/renderer/features/discover/use-discover-capabilities';
@@ -245,6 +246,17 @@ export const WorbusServerSettings = memo(() => {
         finder.scope === 'home' ? { ...finder, kind: 'idle', results: [] } : finder,
         username,
     );
+    // W-4: a found row arrives folded and opens on the next frame (the Fold eases it in).
+    const foundTitles = notSet.rows.map((row) => say(row.title));
+    const [drawnFound, setDrawnFound] = useState<ReadonlySet<string>>(() => new Set());
+    const arriving = titlesToArrive(drawnFound, foundTitles).join('\n');
+    useEffect(() => {
+        if (!arriving) return undefined;
+        const frame = requestAnimationFrame(() =>
+            setDrawnFound((drawn) => new Set([...arriving.split('\n'), ...drawn])),
+        );
+        return () => cancelAnimationFrame(frame);
+    }, [arriving]);
     const set = server ? setView(server.record, server.activeAddress, settings.url) : null;
     const sweeping = finder.kind === 'looking' && finder.scope !== 'beside';
     const foundWhere = say({ key: finder.scope === 'network' ? 'foundOnNetwork' : 'foundBeside' });
@@ -278,25 +290,27 @@ export const WorbusServerSettings = memo(() => {
             keywords: KEYWORDS.serverStatus,
             title: 'Status',
         },
-        ...notSet.rows.map((row) => ({
-            control: row.action ? (
-                <Button
-                    aria-label={say(row.action)}
-                    loading={signingIn && row.kind === 'server'}
-                    onClick={() => void signInToFound(row.found, row.address)}
-                    variant={row.kind === 'server' ? 'filled' : 'default'}
-                >
-                    {say(row.action)}
-                </Button>
-            ) : (
-                <></>
-            ),
-            description: row.kind === 'server' ? foundWhere : '',
-            fold: true,
-            isHidden: configured,
-            keywords: KEYWORDS.serverAddress,
-            title: say(row.title),
-        })),
+        ...notSet.rows
+            .map((row, i) => ({ row, title: foundTitles[i] }))
+            .map(({ row, title }) => ({
+                control: row.action ? (
+                    <Button
+                        aria-label={say(row.action)}
+                        loading={signingIn && row.kind === 'server'}
+                        onClick={() => void signInToFound(row.found, row.address)}
+                        variant={row.kind === 'server' ? 'filled' : 'default'}
+                    >
+                        {say(row.action)}
+                    </Button>
+                ) : (
+                    <></>
+                ),
+                description: row.kind === 'server' ? foundWhere : '',
+                fold: true,
+                isHidden: configured || !drawnFound.has(title),
+                keywords: KEYWORDS.serverAddress,
+                title,
+            })),
         {
             control: (
                 <Button
