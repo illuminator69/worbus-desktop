@@ -1,8 +1,14 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import { useSettingsStore } from '/@/renderer/store/settings.store';
-import { LbDownloads, LbMode, modeFromFrame, rememberMode } from '/@/shared/utils/lbbot-mode';
+import { currentServerKey, useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
+import {
+    LbDownloads,
+    LbMode,
+    modeFromFrame,
+    rekeyMode,
+    rememberMode,
+} from '/@/shared/utils/lbbot-mode';
 
 /**
  * Worbus P1: lb-bot's downloads mode for this connection, and the last known one per hub.
@@ -23,22 +29,25 @@ interface LbBotModeState {
         applyFrame: (frame: unknown) => void;
         /** The hub was switched off or pointed elsewhere: back to the remembered mode. */
         forgetSession: () => void;
+        /** P3: the first welcome with the server's id - copy the address's mode to the id. */
+        rekey: (from: string, to: string) => void;
     };
-    /** The last `on` / `off` each hub said, keyed by its configured URL (at most four). */
+    /**
+     * The last `on` / `off` each hub said (at most four), keyed by the server key (P3: the id
+     * once known, else the configured URL as before).
+     */
     byHub: Record<string, LbDownloads>;
     /** `byHub`'s keys, oldest first. */
     order: string[];
     session: LbMode | null;
 }
 
-const hubUrl = (): string => useSettingsStore.getState().hub?.url ?? '';
-
 export const useLbBotModeStore = create<LbBotModeState>()(
     persist(
         (set, get) => {
             const setMode = (mode: LbMode) => {
                 const { byHub, order } = get();
-                const remembered = rememberMode(byHub, order, hubUrl(), mode);
+                const remembered = rememberMode(byHub, order, currentServerKey(), mode);
                 set({ byHub: remembered.map, order: remembered.order, session: mode });
             };
             return {
@@ -46,6 +55,11 @@ export const useLbBotModeStore = create<LbBotModeState>()(
                     adopt: setMode,
                     applyFrame: (frame) => setMode(modeFromFrame(getLbBotMode(), frame)),
                     forgetSession: () => set({ session: null }),
+                    rekey: (from, to) => {
+                        const { byHub, order } = get();
+                        const moved = rekeyMode(byHub, order, from, to);
+                        set({ byHub: moved.map, order: moved.order });
+                    },
                 },
                 byHub: {},
                 order: [],
@@ -64,12 +78,12 @@ const modeOf = (state: LbBotModeState, url: string): LbMode =>
     state.session ?? state.byHub[url] ?? 'unknown';
 
 /** The mode now, outside React. */
-export const getLbBotMode = (): LbMode => modeOf(useLbBotModeStore.getState(), hubUrl());
+export const getLbBotMode = (): LbMode => modeOf(useLbBotModeStore.getState(), currentServerKey());
 
 /** The mode, re-rendering when it (or the configured hub) changes. */
 export const useLbBotModeValue = (): LbMode => {
-    const url = useSettingsStore((state) => state.hub?.url ?? '');
-    return useLbBotModeStore((state) => modeOf(state, url));
+    const key = useServerKey();
+    return useLbBotModeStore((state) => modeOf(state, key));
 };
 
 export const lbBotModeActions = () => useLbBotModeStore.getState().actions;

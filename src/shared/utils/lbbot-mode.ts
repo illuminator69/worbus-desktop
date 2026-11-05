@@ -103,6 +103,22 @@ export const rememberMode = (
     return { map: nextMap, order: nextOrder };
 };
 
+/**
+ * Worbus P3 (design §6.5): the first welcome carrying `server.id` copies what was remembered under
+ * the address to `id:<serverId>`. The address entry is left in place (no key dropped); an id that
+ * already has a mode keeps it.
+ */
+export const rekeyMode = (
+    map: Record<string, LbDownloads>,
+    order: string[],
+    from: string,
+    to: string,
+): { map: Record<string, LbDownloads>; order: string[] } => {
+    const mode = map[from];
+    if (!mode || map[to] || from === to) return { map, order };
+    return rememberMode(map, order, to, mode);
+};
+
 const count = (value: unknown): null | number =>
     typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 

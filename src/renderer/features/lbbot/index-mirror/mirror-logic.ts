@@ -32,6 +32,11 @@ export interface MirrorMeta {
      *  leave the OLD hub's library rendering under the new one. */
     hubUrl: string;
     scanVersion: number;
+    /**
+     * Worbus P3 (design §6.5): the server key (`id:<serverId>`, else the address) this mirror was
+     * pulled for. Absent from a project 2 store; B-014's check compares it, not the address.
+     */
+    serverKey?: string;
     ttlDays: number;
 }
 
@@ -258,3 +263,25 @@ export const toDiscography = (
     scannedAt: artist.scannedAt,
     stale: isArtistStale(artist, envelope, nowSeconds),
 });
+
+/**
+ * B-014, keyed by the server (Worbus P3, design §6.5): whether a stored mirror belongs to the
+ * server this app is pointed at now.
+ * - `keep`: the same server (the same id at another address included), or nothing stored yet, or
+ *   main has not said yet which server the record holds (judged again when it has);
+ * - `adopt`: the same server under its older key - a project 2 meta, or one stamped with the
+ *   address before the first welcome carried the id: kept, and stamped with the new key;
+ * - `clear`: another server (another id; an older server at another address).
+ */
+export const mirrorVerdict = (
+    meta: Partial<Pick<MirrorMeta, 'hubUrl' | 'serverKey'>>,
+    current: { hubUrl: string; known: boolean; serverKey: string },
+): 'adopt' | 'clear' | 'keep' => {
+    if (!meta.hubUrl && !meta.serverKey) return 'keep';
+    if (meta.serverKey && meta.serverKey === current.serverKey) return 'keep';
+    if (meta.serverKey?.startsWith('id:')) {
+        if (!current.known) return 'keep';
+        if (current.serverKey.startsWith('id:')) return 'clear';
+    }
+    return meta.hubUrl === current.hubUrl ? 'adopt' : 'clear';
+};

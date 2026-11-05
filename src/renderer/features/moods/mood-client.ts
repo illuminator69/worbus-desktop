@@ -1,6 +1,7 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import isElectron from 'is-electron';
 
+import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import { moodsShown } from '/@/renderer/features/moods/mood-mix';
 import { useCurrentServer, useHubSettings } from '/@/renderer/store';
 import { useHubSecretHeld } from '/@/renderer/store/hub-set-up';
@@ -91,6 +92,8 @@ export const useMoodCatalogue = (): {
     refetch: () => void;
 } => {
     const hub = useHubSettings();
+    // P3: the catalogue is the server's, whichever of its addresses answers (design §6.5).
+    const serverKey = useServerKey();
     const server = useCurrentServer();
     const on = moodsShown({
         electron: isElectron(),
@@ -117,7 +120,7 @@ export const useMoodCatalogue = (): {
             }
             throw new MoodCatalogueError(result.error, result.status);
         },
-        queryKey: ['moods', 'catalogue', hub.url],
+        queryKey: ['moods', 'catalogue', serverKey],
         retry: (failures, error) =>
             failures < 3 && error instanceof MoodCatalogueError && error.status === 0,
         retryDelay: 1500,

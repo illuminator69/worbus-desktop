@@ -14,6 +14,7 @@ import {
     hubConfiguredFrom,
     HubServerRecord,
     probeInfo,
+    serverKey,
 } from './addresses';
 import { createHubAuth } from './auth';
 import { kickAction } from './kick';
@@ -93,6 +94,11 @@ export const hubAuth = createHubAuth({
     httpBase: () => httpBaseOfAddress(getHubConfig().url),
     legacyToken: () => config.legacyToken,
     log,
+    // P3: `id:<serverId>` once known, else the address - device ids and this launch's verdicts.
+    serverKey: () => {
+        const base = httpBaseOfAddress(getHubConfig().url);
+        return base ? serverKey(records.current(), base) : null;
+    },
     setDeviceId: (id) => store.set('hub.deviceId', id),
     store: {
         delete: (key) => store.delete(key),
@@ -466,7 +472,15 @@ function kick(reason: string): void {
  * passed. Never moves the socket (design §6.3): a new public address is for the next choice.
  */
 function noteWelcomeServer(url: string, server: unknown): void {
-    activeAddress.welcome(url, server);
+    const { after, before } = activeAddress.welcome(url, server);
+    // The first welcome with an id (design §6.5): what was kept under the address - the one this
+    // welcome came on, and the typed one project 2 keyed by - is copied to the id. Never wiped.
+    if (before === null && after !== null) {
+        const from = [httpBaseOfAddress(url), httpBaseOfAddress(config.url)].filter(
+            (base): base is string => base !== null,
+        );
+        hubAuth.rekey(from, `id:${after}`);
+    }
 }
 
 /**

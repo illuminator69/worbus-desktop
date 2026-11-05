@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
+import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
     echoDisconnected,
@@ -49,6 +50,7 @@ import {
     sendAct,
 } from '/@/renderer/features/hub/utils/remote-queue';
 import { placeholderSong, resolveHubTracks } from '/@/renderer/features/hub/utils/resolve-songs';
+import { serverKeyMove } from '/@/renderer/features/hub/utils/server-key';
 import {
     sleepGuardStep,
     sleepTimerFromFrame,
@@ -1504,10 +1506,22 @@ export const useHub = () => {
     // describes anything this app talks to — forget it rather than let it stand
     // for the rest of the session (R17). A token or name change reconnects to
     // the same hub, whose next welcome restates it, so those keep it.
-    const lbStatusHub = useRef(settings.url);
+    //
+    // Worbus P3 (design §6.5): "pointed somewhere else" is another SERVER - its key (`id:<id>`,
+    // else the typed address as before). The same id at another address is no move; the first
+    // welcome carrying the id re-keys what was kept under the address (copied, never wiped).
+    const serverKey = useServerKey();
+    const lbStatusHub = useRef(serverKey);
     useEffect(() => {
-        const moved = lbStatusHub.current !== settings.url;
-        lbStatusHub.current = settings.url;
+        const previous = lbStatusHub.current;
+        const move = serverKeyMove(lbStatusHub.current, serverKey);
+        const moved = move === 'moved';
+        lbStatusHub.current = serverKey;
+        if (move === 'rekey') {
+            lbBotModeActions().rekey(previous, serverKey);
+            // The mirror's own check: a meta under the address is adopted, not cleared.
+            clearIndexMirrorForHubChange();
+        }
         if (!settings.enabled || moved) {
             clearLbBotStatus();
             // Worbus P1: the progress, the refusal and this session's downloads mode were the
@@ -1527,7 +1541,18 @@ export const useHub = () => {
             // address. Dropped, so the token field goes and the upgrade sign-in runs here.
             useHubStore.getState().actions.setStore({ signInResult: null });
         }
-    }, [settings.enabled, settings.url]);
+    }, [settings.enabled, serverKey]);
+
+    // Worbus P3: main's server record and the live socket's address, at start and on each change.
+    useEffect(() => {
+        if (!hub) return undefined;
+        const { setStore } = useHubStore.getState().actions;
+        void hub
+            .serverState()
+            .then((server) => setStore({ server }))
+            .catch(() => undefined);
+        return hub.onServer((server) => setStore({ server }));
+    }, []);
 
     // Wire the inbound hub stream.
     useEffect(() => {

@@ -115,6 +115,7 @@ test('record_never_holds_a_secret', async () => {
         httpBase: () => 'http://192.168.1.20:4790',
         legacyToken: () => 'legacy-typed-token-0123456789',
         log: { info: () => {}, warn: () => {} },
+        serverKey: () => 'http://192.168.1.20:4790',
         setDeviceId: () => {},
         store,
         vault: { available: () => true, decrypt: (hex) => hex, encrypt: (text) => `enc:${text}` },

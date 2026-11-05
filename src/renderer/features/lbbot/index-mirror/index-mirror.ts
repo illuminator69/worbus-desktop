@@ -5,12 +5,17 @@ import { clear, createStore, entries, promisifyRequest, UseStore } from 'idb-key
 import isElectron from 'is-electron';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
+import {
+    currentServerKey,
+    serverRecordKnown,
+} from '/@/renderer/features/hub/utils/current-server-key';
 import { hubSecretHeld, hubSetUp } from '/@/renderer/features/hub/utils/hub-credential';
 import {
     EMPTY_MIRROR_META,
     lookupByNdId,
     MirrorMeta,
     mirrorTotals,
+    mirrorVerdict,
     ndIdsOf,
     PageDelta,
     pageSeqLookup,
@@ -87,6 +92,22 @@ const MAX_RESYNCS_PER_SYNC = 2;
  *  hub identity check is the same value for the same reason: the mirror and
  *  `lbStatus` both describe "the hub this app is currently pointed at". */
 const currentHubUrl = (): string => useSettingsStore.getState().hub?.url ?? '';
+
+/**
+ * Worbus P3 (design §6.5): B-014's identity is the server key now (`id:<serverId>`, else the
+ * address as before), so the same server at another address keeps its mirror and another id
+ * still clears it (`mirrorVerdict`).
+ */
+const currentIdentity = () => ({
+    hubUrl: currentHubUrl(),
+    known: serverRecordKnown(),
+    serverKey: currentServerKey(),
+});
+
+const identityStamp = (identity: { hubUrl: string; serverKey: string }) => ({
+    hubUrl: identity.hubUrl,
+    serverKey: identity.serverKey,
+});
 
 // ---------------------------------------------------------------------------
 // State
@@ -186,6 +207,7 @@ const isStoredMeta = (value: unknown): value is StoredMeta => {
         typeof v.cursor === 'number' &&
         typeof v.epoch === 'string' &&
         typeof v.hubUrl === 'string' &&
+        (v.serverKey === undefined || typeof v.serverKey === 'string') &&
         typeof v.scanVersion === 'number' &&
         typeof v.ttlDays === 'number'
     );
@@ -225,18 +247,21 @@ export const loadIndexMirror = (): Promise<void> => {
             // it) under a hub that never built it. Empty `hubUrl` is a store
             // from before a page ever committed, or a genuinely unconfigured
             // hub; either way there is nothing to conflict with yet.
-            if (
-                isStoredMeta(storedMeta) &&
-                storedMeta.hubUrl &&
-                storedMeta.hubUrl !== currentHubUrl()
-            ) {
+            // P3: by server key - the same id at another address is the same hub; a project 2
+            // meta under the typed address is adopted (stamped at the next commit), not cleared.
+            const verdict = isStoredMeta(storedMeta)
+                ? mirrorVerdict(storedMeta, currentIdentity())
+                : null;
+            if (verdict === 'clear') {
                 await clear(store());
             } else if (isStoredMeta(storedMeta)) {
+                const identity = currentIdentity();
                 meta = {
                     cursor: storedMeta.cursor,
                     epoch: storedMeta.epoch,
-                    hubUrl: storedMeta.hubUrl,
+                    hubUrl: verdict === 'adopt' ? identity.hubUrl : storedMeta.hubUrl,
                     scanVersion: storedMeta.scanVersion,
+                    serverKey: verdict === 'adopt' ? identity.serverKey : storedMeta.serverKey,
                     ttlDays: storedMeta.ttlDays,
                 };
                 for (const [key, value] of rows) {
@@ -305,7 +330,16 @@ export const clearIndexMirrorForHubChange = (force = false): void => {
     void loadIndexMirror().then(() => {
         // Worbus P2: `force` - a Navidrome logout or account switch on the same hub. The mirror
         // was read under the old account and goes with it.
-        if (!force && (!meta.hubUrl || meta.hubUrl === currentHubUrl())) return;
+        if (!force) {
+            const identity = currentIdentity();
+            const verdict = mirrorVerdict(meta, identity);
+            if (verdict === 'keep') return;
+            // P3: the first welcome with the id - the same server's mirror, re-stamped, kept.
+            if (verdict === 'adopt') {
+                void commit({ deletes: [], puts: [] }, { ...meta, ...identityStamp(identity) });
+                return;
+            }
+        }
         // Reset to the empty sentinel, not stamped with the new URL: no page
         // has been pulled under it yet, and `pull()` stamps it on the first
         // one that lands.
@@ -421,6 +455,8 @@ const pull = async (): Promise<null | number> => {
     // that wipe's own mismatch check forever. Guarded below, every time a
     // response lands.
     const hubUrl = currentHubUrl();
+    // P3: the server this pull is for; a page that lands after it changed is not committed.
+    const serverKey = currentServerKey();
     for (;;) {
         const since = cursor;
         const result = await lbBot.indexChanges(since, epoch);
@@ -447,7 +483,7 @@ const pull = async (): Promise<null | number> => {
         // not necessarily the hub configured NOW. Abort without committing —
         // the new hub (if any) gets its own correctly-stamped pull from its
         // own welcome/interval trigger; there is nothing here worth keeping.
-        if (currentHubUrl() !== hubUrl) return null;
+        if (currentServerKey() !== serverKey) return null;
 
         // `resync`, or a normal answer under an epoch that is not ours (which
         // lb-bot would itself have answered with resync, so this is defence
@@ -480,6 +516,7 @@ const pull = async (): Promise<null | number> => {
                 epoch: page.epoch,
                 hubUrl,
                 scanVersion: page.scanVersion,
+                serverKey,
                 ttlDays: page.ttlDays,
             },
             pendingWipe,
@@ -515,7 +552,7 @@ const pull = async (): Promise<null | number> => {
         const keys = await lbBot.indexKeys();
         if (!keys.ok || !keys.data) return keys.status;
         // B-014: same guard as above — this response also crossed an await.
-        if (currentHubUrl() !== hubUrl) return null;
+        if (currentServerKey() !== serverKey) return null;
         // A different epoch: the next changes read answers resync; loop to it.
         if (keys.data.epoch !== meta.epoch) continue;
 

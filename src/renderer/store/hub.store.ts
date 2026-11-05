@@ -1,4 +1,5 @@
 import type { LbBotStatus } from '/@/shared/types/lbbot-types';
+import type { HubServerRecord } from '/@/shared/utils/hub-addresses';
 import type { HubSignInResult, HubUser } from '/@/shared/utils/hub-signin';
 import type { LbIndexProgress } from '/@/shared/utils/lbbot-mode';
 
@@ -49,6 +50,12 @@ export interface HubDevice {
 /** Can the session be handed to this device right now? Unknown reachability is permissive. */
 export const isHubDeviceTransferable = (device: HubDevice): boolean =>
     device.online && device.reachable !== false;
+
+/** Worbus P3: what main says about the Worbus Server's addresses (preload `HubServerState`). */
+export interface HubServerState {
+    activeAddress: null | string;
+    record: HubServerRecord;
+}
 
 export interface HubTrack {
     album?: string;
@@ -190,6 +197,11 @@ interface HubState {
     /** Saved-queue history id of the CURRENT session — the "Now Playing" record. */
     savedQueueId: null | string;
     /**
+     * Worbus P3: main's server record and the live socket's address (`hub-server`), or null until
+     * main has answered. The per-server key (`id:<serverId>`, else `hub.url`) is read from it.
+     */
+    server: HubServerState | null;
+    /**
      * Worbus P2: the Worbus Server signed this device out (close 4005 / `signed_out`) and the one
      * silent sign-in did not work, or there was no account to make it with. The transport stands
      * down until a sign-in works; the Server tab says "Signed out of the Worbus Server" with a
@@ -243,6 +255,7 @@ const initialState: HubState = {
     remoteRepeat: 'none',
     remoteShuffle: false,
     savedQueueId: null,
+    server: null,
     signedOut: false,
     signingIn: false,
     signInResult: null,

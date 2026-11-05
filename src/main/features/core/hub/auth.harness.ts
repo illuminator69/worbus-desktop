@@ -83,6 +83,8 @@ const world = (opts: { answers?: Answer[]; encryption?: boolean; token?: string 
         httpBase: () => 'http://hub.lan:4790',
         legacyToken: () => token,
         log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
+        // P3: no server id known here, so the key is the address (as for an older server).
+        serverKey: () => deps.httpBase(),
         setDeviceId: (id) => {
             plain['hub.deviceId'] = id;
         },

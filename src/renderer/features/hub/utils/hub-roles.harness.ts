@@ -339,10 +339,8 @@ test('logout clears mirror and saved queues', async () => {
         /clearFills: \(\) => useActiveFillsStore\.getState\(\)\.actions\.clear\(\)/,
     );
     const mirror = read('../../lbbot/index-mirror/index-mirror.ts');
-    assert.match(
-        mirror,
-        /if \(!force && \(!meta\.hubUrl \|\| meta\.hubUrl === currentHubUrl\(\)\)\) return;/,
-    );
+    // `force` (a logout) clears whatever the server check says (P3: the check is `mirrorVerdict`).
+    assert.match(mirror, /if \(!force\) \{\s*const identity = currentIdentity\(\);/);
 });
 
 // --- review I1, M7: the account is the server entry's user and address, not its id --------------

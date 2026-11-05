@@ -87,6 +87,11 @@ export interface HubAuthDeps {
     /** The typed token (older servers). Empty when none. */
     legacyToken: () => string;
     log: { info: (message: string) => void; warn: (message: string) => void };
+    /**
+     * Worbus P3 (design §6.5): the key per-server values live under - `id:<serverId>` once the
+     * server has said it, else the address (`httpBase()`). Null when no address is set.
+     */
+    serverKey: () => null | string;
     /** R4: the id the hub answered with becomes this device's hub id. */
     setDeviceId: (id: string) => void;
     store: {
@@ -195,6 +200,12 @@ export interface HubAuth {
      * to a secret hello means the hub was rolled back to P1 (whose welcome names no user).
      */
     oldServer: () => void;
+    /**
+     * Worbus P3 (design §6.5): the first welcome carrying `server.id` - every value kept under one
+     * of these addresses (`http(s)://…`) is copied to `to` (`id:<serverId>`). Nothing is wiped,
+     * and the address entries stay (a rollback to project 2 finds them).
+     */
+    rekey: (from: string[], to: string) => void;
     /** The hub refused the secret (close 4005 / `signed_out`): forget it; a sign-in is owed. */
     signedOutByServer: () => void;
     signIn: (pair: SignInPair) => Promise<HubSignInResult>;
@@ -220,6 +231,7 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
      * token at all; it is used only once this launch has itself been answered OldServer there (one
      * 405 POST per launch on a P1 hub), so a hub upgraded in place is found at the next launch.
      */
+    /** By server key (P3): an older server has no id, so this is its address. */
     const answeredThisLaunch = new Set<string>();
     /**
      * R36: addresses that sent a `welcome` naming a user this launch - hubs of this round. An
@@ -229,18 +241,25 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
      */
     const p2ThisLaunch = new Set<string>();
     const atP2Hub = () => {
-        const base = deps.httpBase();
-        return base !== null && p2ThisLaunch.has(base);
+        const key = deps.serverKey();
+        return key !== null && p2ThisLaunch.has(key);
     };
     const atOldServer = () => {
         const base = deps.httpBase();
-        return base !== null && answeredThisLaunch.has(base) && oldServers().includes(base);
+        const key = deps.serverKey();
+        return (
+            base !== null &&
+            key !== null &&
+            answeredThisLaunch.has(key) &&
+            oldServers().includes(base)
+        );
     };
     const noteOldServer = (older: boolean) => {
         const base = deps.httpBase();
-        if (!base) return;
-        if (older) answeredThisLaunch.add(base);
-        else answeredThisLaunch.delete(base);
+        const key = deps.serverKey();
+        if (!base || !key) return;
+        if (older) answeredThisLaunch.add(key);
+        else answeredThisLaunch.delete(key);
         const rest = oldServers().filter((x) => x !== base);
         const next = older ? [...rest, base].slice(-OLD_SERVERS_MAX) : rest;
         if (next.length) deps.store.set(OLD_SERVERS_KEY, next);
@@ -297,17 +316,42 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
         },
 
         newServer: () => {
-            const base = deps.httpBase();
-            if (base) p2ThisLaunch.add(base);
+            const key = deps.serverKey();
+            if (key) p2ThisLaunch.add(key);
             noteOldServer(false);
         },
 
         oldServer: () => {
-            const base = deps.httpBase();
-            if (base) p2ThisLaunch.delete(base);
+            const key = deps.serverKey();
+            if (key) p2ThisLaunch.delete(key);
             drop(true);
             deps.store.delete(TOKEN_RETIRED_KEY);
             noteOldServer(true);
+        },
+
+        rekey: (from, to) => {
+            const stored = deps.store.get(DEVICE_IDS_KEY);
+            if (typeof stored === 'object' && stored !== null) {
+                const ids = { ...(stored as Record<string, string>) };
+                let changed = false;
+                for (const [key, id] of Object.entries(stored as Record<string, string>)) {
+                    let parsed: unknown;
+                    try {
+                        parsed = JSON.parse(key);
+                    } catch {
+                        continue;
+                    }
+                    if (!Array.isArray(parsed) || !from.includes(parsed[0])) continue;
+                    const moved = JSON.stringify([to, parsed[1]]);
+                    if (ids[moved]) continue;
+                    ids[moved] = id;
+                    changed = true;
+                }
+                if (changed) deps.store.set(DEVICE_IDS_KEY, ids);
+            }
+            for (const set of [answeredThisLaunch, p2ThisLaunch]) {
+                if (from.some((key) => set.has(key))) set.add(to);
+            }
         },
 
         signedOutByServer: () => {
@@ -319,7 +363,8 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             const base = deps.httpBase();
             if (!base) return { kind: 'noServer' };
             const device = deps.device();
-            const idKey = JSON.stringify([base, accountName(pair.username)]);
+            // P3: by server key - the same id is offered at home and away (design §6.5).
+            const idKey = JSON.stringify([deps.serverKey() ?? base, accountName(pair.username)]);
             const stored = deps.store.get(DEVICE_IDS_KEY);
             const firstRead = typeof stored !== 'object' || stored === null;
             const ids: Record<string, string> = firstRead
