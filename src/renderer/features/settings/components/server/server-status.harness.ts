@@ -189,6 +189,13 @@ test('anAddressTypedWithoutASchemeOrWithHttpIsMadeAWebSocketAddress', () => {
     assert.equal(normaliseHubAddress('   '), DEFAULT_HUB_URL);
 });
 
+test('theTypedAddressUsesTheSharedRuleKeepingThePathAndDroppingConnect', () => {
+    // P3 F1: one normaliser per client - this one delegates to shared/utils/hub-addresses.ts.
+    assert.equal(normaliseHubAddress('ws://h:4790/connect/'), 'ws://h:4790');
+    assert.equal(normaliseHubAddress('https://example.com/worbus/'), 'wss://example.com/worbus');
+    assert.equal(normaliseHubAddress('ftp://h:1'), 'ftp://h:1');
+});
+
 test('noSentenceNamesAnInternalTerm', () => {
     const all: string[] = [];
     for (const link of [

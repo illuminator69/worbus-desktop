@@ -1,5 +1,10 @@
 import type { HubSignInResult, HubUser } from '../../../../../shared/utils/hub-signin.ts';
 
+import {
+    DEFAULT_HUB_URL,
+    hubConfiguredFrom,
+    normaliseHubAddress as normaliseAddress,
+} from '../../../../../shared/utils/hub-addresses.ts';
 import { hasHubCredential } from '../../../hub/utils/hub-credential.ts';
 import { SIGN_IN_REFUSAL_TEXT } from '../../../hub/utils/hub-failure.ts';
 
@@ -11,7 +16,7 @@ import { SIGN_IN_REFUSAL_TEXT } from '../../../hub/utils/hub-failure.ts';
  * CLAP probe the sidebar already runs, and the station mode. Nothing asks the server anything.
  */
 
-export const DEFAULT_HUB_URL = 'ws://localhost:4790';
+export { DEFAULT_HUB_URL };
 
 /** How long after switching on (or changing the address or token) "connecting" is still true. */
 export const CONNECT_GRACE_MS = 8000;
@@ -49,9 +54,11 @@ export const isHubConfigured = (s: {
     token: string;
     url: string;
 }): boolean =>
-    s.enabled ||
-    hasHubCredential(s, s.signedIn === true) ||
-    (s.url.trim() !== '' && s.url !== DEFAULT_HUB_URL);
+    hubConfiguredFrom({
+        enabled: s.enabled,
+        hasCredential: hasHubCredential(s, s.signedIn === true),
+        url: s.url,
+    });
 
 export const hubLink = (i: HubLinkInput): HubLink => {
     if (i.enabled && i.connected) return 'connected';
@@ -157,17 +164,15 @@ export const addressFieldValue = (url: string, configured: boolean): string =>
     !configured && url === DEFAULT_HUB_URL ? '' : url;
 
 /**
- * What gets stored for a typed address. Empty is the default; `http(s)://` and a bare `host:port`
- * become `ws(s)://`, since the transport speaks WebSocket and a user pastes what they know.
+ * What gets stored for a typed address: the one rule both processes share (P3,
+ * `shared/utils/hub-addresses.ts`: `ws://` added, `http(s)://` becomes `ws(s)://`, a trailing
+ * `/connect` and `/` dropped, the path kept). Empty is the default; a value the rule cannot read
+ * (another scheme) is kept as typed, as before, and the transport fails on it visibly.
  */
 export const normaliseHubAddress = (input: string): string => {
     const value = input.trim();
     if (value === '') return DEFAULT_HUB_URL;
-    if (/^wss?:\/\//i.test(value)) return value.replace(/^wss?/i, (s) => s.toLowerCase());
-    if (/^https:\/\//i.test(value)) return value.replace(/^https/i, 'wss');
-    if (/^http:\/\//i.test(value)) return value.replace(/^http/i, 'ws');
-    if (value.includes('://')) return value;
-    return `ws://${value}`;
+    return normaliseAddress(value) ?? value;
 };
 
 // --- Worbus P2: signing in (design §6.2, §6.5) ---------------------------------------------------

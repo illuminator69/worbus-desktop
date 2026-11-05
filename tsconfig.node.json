@@ -15,6 +15,7 @@
     "src/shared/**/*.harness.ts"
   ],
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "composite": true,
     "types": ["electron-vite/node"],
     "esModuleInterop": true,
