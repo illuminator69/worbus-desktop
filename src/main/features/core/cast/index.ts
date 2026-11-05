@@ -19,6 +19,7 @@ import net from 'net';
 import { WebSocket } from 'ws';
 
 import {
+    getHubActiveAddress,
     getHubConfig,
     getHubDeviceId,
     getHubDevices,
@@ -271,7 +272,6 @@ class CastDeviceBridge {
         private readonly deviceId: string,
         private readonly friendlyName: string,
         private host: string,
-        private readonly hubUrl: string,
         /** What the speaker is, from its mDNS record; undefined when the record does not say. */
         private readonly kind: CastKind | undefined,
     ) {
@@ -851,9 +851,17 @@ class CastDeviceBridge {
             log.info(`[cast-bridge] ${this.friendlyName}: no hub credential - not connecting`);
             return;
         }
+        // Worbus P3 (design §6.3): the main socket's address, read at each dial - the one address
+        // whose `/hub/info` named this server. Without a live main socket there is none: wait.
+        const hubUrl = getHubActiveAddress();
+        if (!hubUrl) {
+            log.info(`[cast-bridge] ${this.friendlyName}: no live hub address yet - waiting`);
+            this.scheduleReconnect();
+            return;
+        }
         let ws: WebSocket;
         try {
-            ws = new WebSocket(this.hubUrl);
+            ws = new WebSocket(hubUrl);
         } catch {
             this.scheduleReconnect();
             return;
@@ -2034,7 +2042,7 @@ function startBridging(): void {
         }
         bridges.set(
             device.id,
-            new CastDeviceBridge(device.id, device.name, device.host, config.url, device.kind),
+            new CastDeviceBridge(device.id, device.name, device.host, device.kind),
         );
     });
     browser.on('down', (service) => {

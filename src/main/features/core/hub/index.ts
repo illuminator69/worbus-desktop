@@ -7,7 +7,15 @@ import { EventEmitter } from 'events';
 import { WebSocket } from 'ws';
 
 import { store } from '../settings';
-import { createHubAuth, httpBaseOf } from './auth';
+import { createActiveAddress } from './active-address';
+import {
+    createServerRecordStore,
+    httpBaseOfAddress,
+    hubConfiguredFrom,
+    HubServerRecord,
+    probeInfo,
+} from './addresses';
+import { createHubAuth } from './auth';
 import { kickAction } from './kick';
 
 import { getMainWindow } from '/@/main/index';
@@ -80,7 +88,9 @@ export const hubAuth = createHubAuth({
         platform: 'desktop',
     }),
     fetch: (url, init) => fetch(url, init),
-    httpBase: () => httpBaseOf(config.url),
+    // P3: sign-in, sign-out and the device-id keys build on the active address, like every
+    // other main client (design §6.3 "HTTP calls follow the socket").
+    httpBase: () => httpBaseOfAddress(getHubConfig().url),
     legacyToken: () => config.legacyToken,
     log,
     setDeviceId: (id) => store.set('hub.deviceId', id),
@@ -98,6 +108,31 @@ export const hubAuth = createHubAuth({
 
 // safeStorage answers only once the app is ready (on Linux it says "unavailable" before).
 void app.whenReady().then(() => hubAuth.load());
+
+/**
+ * Worbus P3 (design §6.3): the server record (`hubServer`) and the address the socket is on. Every
+ * change goes to the renderer as `hub-server` (the Server tab, the per-server keys).
+ */
+const records = createServerRecordStore({
+    onChange: () => emitServer(),
+    store: { get: (key) => store.get(key), set: (key, value) => store.set(key, value) },
+});
+const activeAddress = createActiveAddress({ log, now: Date.now, probe: probeInfo, records });
+
+export interface HubServerEvent {
+    activeAddress: null | string;
+    record: HubServerRecord;
+}
+
+const serverEvent = (): HubServerEvent => ({
+    activeAddress: activeAddress.active(),
+    record: records.current(),
+});
+
+function emitServer(): void {
+    getMainWindow()?.webContents.send('hub-server', serverEvent());
+    hubEvents.emit('server', serverEvent());
+}
 
 /** Moves whenever the credential changes, so the cast bridges rebuild with the new one. */
 let credentialGeneration = 0;
@@ -137,17 +172,49 @@ let generation = 0;
 
 const isCurrent = (socket: WebSocket, gen: number): boolean => gen === generation && socket === ws;
 
+/** The generation whose address choice (the `/hub/info` probes) is under way; 0 for none. */
+let choosing = 0;
+
+/**
+ * One (re)connect (P3, design §6.3): probe the record's addresses in order and dial the first that
+ * answers as this server. Nothing is dialled while choosing, and an address that answered as
+ * another server never sees a hello. None passes: the backoff runs as before and the next attempt
+ * tries the whole list again.
+ */
 function connect(): void {
-    if (!shouldRun || !config.url) return;
+    if (!shouldRun || records.current().addresses.length === 0) return;
     // Worbus P2: nothing to connect with (never signed in and no token, signed out by the user,
     // or signed out by the server). A hello without a credential is only refused (4005), and a
     // refusal would read as "signed out" and set off a silent sign-in the user did not ask for:
     // the Server tab says "Not signed in" and its Sign in starts the transport again.
     if (!hubAuth.bearer()) return;
     const gen = ++generation;
+    choosing = gen;
+    void activeAddress.choose().then((url) => {
+        if (gen !== generation) return;
+        choosing = 0;
+        if (!shouldRun) return;
+        if (!url) {
+            scheduleReconnect(undefined, gen);
+            return;
+        }
+        dial(url, gen);
+    });
+}
+
+function deviceId(): string {
+    let id = store.get('hub.deviceId') as string | undefined;
+    if (!id) {
+        id = randomBytes(8).toString('hex');
+        store.set('hub.deviceId', id);
+    }
+    return id;
+}
+
+function dial(url: string, gen: number): void {
     let socket: WebSocket;
     try {
-        socket = new WebSocket(config.url, { handshakeTimeout: HANDSHAKE_TIMEOUT_MS });
+        socket = new WebSocket(url, { handshakeTimeout: HANDSHAKE_TIMEOUT_MS });
     } catch {
         scheduleReconnect(undefined, gen);
         return;
@@ -180,6 +247,10 @@ function connect(): void {
         // The link is up — reset the backoff so the NEXT drop starts fast again.
         backoffMs = INITIAL_BACKOFF_MS;
         alive = true;
+        // P3: this socket's address is the active one from here (the hello's credential, sign-in
+        // and every HTTP call build on it) until it closes.
+        activeAddress.opened(url);
+        emitServer();
         heartbeat = setInterval(() => {
             // No pong since the last tick → the socket is half-open; kill it so
             // the close handler can reconnect instead of blocking forever.
@@ -258,6 +329,8 @@ function connect(): void {
             // R24: "the server refused the access token" is false here - there is no token; the
             // close that follows tells the renderer it is an older server instead.
             if (msg?.t === 'error' && msg?.code === 'auth' && helloHadSecret) return;
+            // P3: `welcome.server` - the id, the name and the learned address. The socket stays.
+            if (msg?.t === 'welcome') noteWelcomeServer(url, msg.server);
             if (msg?.t === 'welcome' || msg?.t === 'devices') {
                 if (Array.isArray(msg.devices)) {
                     knownDevices = msg.devices;
@@ -281,6 +354,8 @@ function connect(): void {
         // to tell the renderer the transport went down and to schedule a reconnect.
         stopBeat();
         if (!isCurrent(socket, gen)) return;
+        activeAddress.closed(url);
+        emitServer();
         if (code === CLOSE_SIGNED_OUT || signedOutSeen) {
             // The secret is dead. Forget it and stand down (a reconnect would only be refused
             // again); the renderer makes the one silent sign-in, and a sign-in restarts us.
@@ -327,15 +402,6 @@ function connect(): void {
     socket.on('error', () => {
         // 'close' fires after 'error'; reconnect is handled there.
     });
-}
-
-function deviceId(): string {
-    let id = store.get('hub.deviceId') as string | undefined;
-    if (!id) {
-        id = randomBytes(8).toString('hex');
-        store.set('hub.deviceId', id);
-    }
-    return id;
 }
 
 /**
@@ -393,6 +459,14 @@ function kick(reason: string): void {
     } catch {
         /* ignore */
     }
+}
+
+/**
+ * A `welcome` on `url`: the record follows `welcome.server` (absent from an older hub) and `url`
+ * passed. Never moves the socket (design §6.3): a new public address is for the next choice.
+ */
+function noteWelcomeServer(url: string, server: unknown): void {
+    activeAddress.welcome(url, server);
 }
 
 /**
@@ -473,7 +547,7 @@ function sendOn(socket: undefined | WebSocket, obj: unknown): void {
 function start(): void {
     shouldRun = true;
     backoffMs = INITIAL_BACKOFF_MS;
-    if (!ws) connect();
+    if (!ws && choosing !== generation) connect();
 }
 
 function stop(): void {
@@ -485,9 +559,12 @@ function stop(): void {
     // Bump the generation before closing: the close fires asynchronously, and by then this
     // socket must already be unable to speak for whatever start() has since created.
     generation += 1;
+    choosing = 0;
     const closing = ws;
     ws = undefined;
     knownDevices = [];
+    activeAddress.reset();
+    if (closing) emitServer();
     try {
         closing?.close();
     } catch {
@@ -523,12 +600,26 @@ ipcMain.handle(
         config.url = url;
         config.legacyToken = token;
         config.name = name || 'Feishin';
+        // P3: the typed address joins the server record (migrated on the first push); "no server
+        // set" forgets it. `hub.url` itself stays the typed address (design §6.3).
+        const auth = hubAuth.state();
+        const recordBefore = JSON.stringify(records.current());
+        records.reconcile(
+            url,
+            hubConfiguredFrom({
+                enabled,
+                hasCredential: token.trim() !== '' || auth.signedIn || auth.needsSignIn,
+                url,
+            }),
+        );
+        const recordMoved = JSON.stringify(records.current()) !== recordBefore;
         const credentialMoved = hubAuth.bearer() !== before.bearer;
         if (credentialMoved) credentialGeneration += 1;
         // R23: the renderer clears a retired token from its field after a sign-in. That token was
         // not in use (the secret was, or nothing): no reconnect for it.
         if (
             !credentialMoved &&
+            !recordMoved &&
             before.enabled === config.enabled &&
             before.url === config.url &&
             before.name === config.name
@@ -592,6 +683,9 @@ ipcMain.handle('hub-signout', async (_event, opts?: { reconnect?: boolean }) => 
 
 ipcMain.handle('hub-auth-state', () => hubAuth.state());
 
+// P3: the server record and the active address, read once at start; `hub-server` follows changes.
+ipcMain.handle('hub-server-state', () => serverEvent());
+
 function settingsEvent(): { credential: number; enabled: boolean; url: string } {
     return { credential: credentialGeneration, enabled: config.enabled, url: config.url };
 }
@@ -605,11 +699,24 @@ export const hubEvents = new EventEmitter();
  */
 export const getHubDevices = (): HubDeviceInfo[] => knownDevices;
 
-/** Whether the hub is switched on and where. The credential is `hubAuth`'s, never read here. */
+/**
+ * Whether the hub is switched on and where. The credential is `hubAuth`'s, never read here.
+ *
+ * P3: `url` is the ACTIVE address - the live socket's base, else the first of the order not seen
+ * answering as another server this launch (so a sign-in works before the first connect). Read by
+ * auth.ts (sign-in, sign-out), lbbot, preview, mood, station, audiomuse's `endpoint()` and the cast
+ * bridge's start check; HTTP calls follow the socket (design §6.3). Empty with nothing to call.
+ */
 export const getHubConfig = (): { enabled: boolean; url: string } => ({
     enabled: config.enabled,
-    url: config.url,
+    url: activeAddress.url(),
 });
+
+/**
+ * The live socket's address, or null: the only address the cast bridges dial with the device
+ * secret (one the main socket's `/hub/info` check passed).
+ */
+export const getHubActiveAddress = (): null | string => activeAddress.active();
 
 export const shutdownHub = (): void => stop();
 

@@ -101,15 +101,11 @@ export interface HubAuthDeps {
     };
 }
 
-/** `ws://host:4790/connect` → `http://host:4790`. Null for an empty address. */
-export const httpBaseOf = (wsUrl: string): null | string => {
-    const url = wsUrl.trim();
-    if (!url) return null;
-    return url
-        .replace(/^ws/i, 'http')
-        .replace(/\/+$/, '')
-        .replace(/\/connect$/, '');
-};
+/**
+ * `ws://host:4790/connect` → `http://host:4790`, the path kept. Null for an empty address. P3: the
+ * one normaliser (`shared/utils/hub-addresses.ts`); index.ts hands `httpBase` the active address.
+ */
+export { httpBaseOfAddress as httpBaseOf } from '../../../../shared/utils/hub-addresses.ts';
 
 const parseUser = (raw: unknown): HubUser | null => {
     if (typeof raw !== 'object' || raw === null) return null;
