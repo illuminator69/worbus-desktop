@@ -472,6 +472,8 @@ const forgetIfNoneUsablePassed = (record: HubServerRecord): HubServerRecord => {
     return {
         ...record,
         addresses: record.addresses.filter((a) => a.source !== 'learned'),
+        // The switch was about this server's away address; the next server's starts on.
+        learnedOff: false,
         name: null,
         serverId: null,
     };

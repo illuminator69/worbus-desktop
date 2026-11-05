@@ -422,6 +422,8 @@ test('learned_off_with_nothing_else_passed_forgets_server', () => {
     assert.equal(applyServerEdit(r, { op: 'learnedOff', value: false }).serverId, ID_A);
     const off = applyServerEdit(r, { op: 'learnedOff', value: true });
     assert.equal(off.serverId, null, 'nothing usable has passed as A: A is forgotten');
+    // A's "Use away from home" answer was about A: the next server's learned address starts on.
+    assert.equal(off.learnedOff, false);
     assert.deepEqual(
         off.addresses.map((a) => a.url),
         ['ws://127.0.0.1:4798'],
