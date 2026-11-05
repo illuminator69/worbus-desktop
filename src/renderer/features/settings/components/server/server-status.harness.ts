@@ -550,8 +550,11 @@ test('the server tab rows and status change with the app transitions', () => {
         [['Sign out of this server', true]],
     );
     const tab = read('./worbus-server-settings.tsx');
-    // The Sign in and Sign out rows fold (the device name below them moves with them).
-    assert.equal((tab.match(/fold: true,/g) ?? []).length, 2);
+    // The Sign in and Sign out rows fold (the device name below them moves with them) - and, P3,
+    // every row that comes and goes: what looking found, the actions, the address list.
+    const folds = (tab.match(/fold: true,/g) ?? []).length;
+    assert.ok(folds >= 2);
+    assert.equal(folds, (tab.match(/isHidden:/g) ?? []).length, 'every hidable row folds');
     // The Advanced section folds in and out, without leaving a gap while closed.
     assert.match(tab, /<Fold name="server-advanced" open=\{showToken\}>/);
     // The status line grows and shrinks with its lines; the capability lines fold.

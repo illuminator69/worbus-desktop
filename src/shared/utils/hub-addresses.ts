@@ -425,3 +425,49 @@ export const removeAddress = (record: HubServerRecord, url: string): HubServerRe
         serverId: null,
     };
 };
+
+/** The Server tab's edits to the record (main's `hub-server-edit`). */
+export type ServerEdit =
+    | { found: FoundServer; op: 'adoptFound' }
+    | { key: string; op: 'dismiss' }
+    | { op: 'add'; url: string }
+    | { op: 'learnedOff'; value: boolean }
+    | { op: 'remove'; url: string };
+
+const PROMPT_DISMISSED_MAX = 16;
+
+/** One edit, applied; anything malformed changes nothing. */
+export const applyServerEdit = (record: HubServerRecord, edit: unknown): HubServerRecord => {
+    if (typeof edit !== 'object' || edit === null) return record;
+    const e = edit as Record<string, unknown>;
+    switch (e.op) {
+        case 'add':
+            return typeof e.url === 'string' ? withTyped(record, e.url) : record;
+        case 'adoptFound': {
+            const f = (e.found ?? {}) as Record<string, unknown>;
+            if (!Array.isArray(f.addresses)) return record;
+            return withFound(record, {
+                addresses: f.addresses.filter((a): a is string => typeof a === 'string'),
+                name: typeof f.name === 'string' ? f.name : null,
+                serverId:
+                    typeof f.serverId === 'string' && SERVER_ID.test(f.serverId)
+                        ? f.serverId
+                        : null,
+            });
+        }
+        case 'dismiss':
+            if (typeof e.key !== 'string' || !e.key || record.promptDismissed.includes(e.key)) {
+                return record;
+            }
+            return {
+                ...record,
+                promptDismissed: [...record.promptDismissed, e.key].slice(-PROMPT_DISMISSED_MAX),
+            };
+        case 'learnedOff':
+            return typeof e.value === 'boolean' ? { ...record, learnedOff: e.value } : record;
+        case 'remove':
+            return typeof e.url === 'string' ? removeAddress(record, e.url) : record;
+        default:
+            return record;
+    }
+};

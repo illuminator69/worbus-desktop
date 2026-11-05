@@ -1,8 +1,18 @@
+import type {
+    HubFinderState,
+    HubFound,
+    HubServerRecord,
+} from '../../../../../shared/utils/hub-addresses.ts';
 import type { HubSignInResult, HubUser } from '../../../../../shared/utils/hub-signin.ts';
 
 import {
+    classifyHubAddress,
+    connectOrder,
     DEFAULT_HUB_URL,
+    displayAddress,
+    hostOfAddress,
     hubConfiguredFrom,
+    isPrivateAddress,
     normaliseHubAddress as normaliseAddress,
 } from '../../../../../shared/utils/hub-addresses.ts';
 import { hasHubCredential } from '../../../hub/utils/hub-credential.ts';
@@ -282,3 +292,184 @@ export const serverStatusSentence = (
 /** The token field ("Server token, for older servers") exists only after an older server (R6). */
 export const showTokenField = (result: HubSignInResult | null): boolean =>
     result?.kind === 'oldServer';
+
+// --- Worbus P3: finding the server and its addresses (design §6.4, §6.6) -------------------------
+
+/** One sentence from en.json `setting.worbus.<key>`, with its `{{values}}`. */
+export interface Copy {
+    key: string;
+    values?: Record<string, string>;
+}
+
+const copy = (key: string, values?: Record<string, string>): Copy =>
+    values ? { key, values } : { key };
+
+/**
+ * What the signed-in sentence appends (design §6.6): "home network" for a private address,
+ * "Tailscale", or "via <host>" for any other; and "not encrypted" for a public plain `ws://` one
+ * (only a typed one can be used, design §6.3).
+ */
+export const statusRoute = (activeAddress: null | string): Copy[] => {
+    if (!activeAddress) return [];
+    const kind = classifyHubAddress(activeAddress);
+    if (kind === 'private') return [copy('routeHome')];
+    if (kind === 'tailscale') return [copy('routeTailscale')];
+    const via = copy('routeVia', { host: hostOfAddress(activeAddress) ?? activeAddress });
+    return activeAddress.startsWith('ws://') ? [via, copy('notEncrypted')] : [via];
+};
+
+/** The address of a found server a tap uses: its home one first (the order's rule). */
+export const tapAddress = (found: HubFound): string =>
+    found.kind === 'server'
+        ? (connectOrder({
+              addresses: found.addresses.map((url) => ({ lastOkAt: null, source: 'found', url })),
+              learnedOff: false,
+              name: null,
+              promptDismissed: [],
+              serverId: found.serverId,
+          })[0]?.url ?? found.addresses[0])
+        : found.address;
+
+export interface NotSetRow {
+    /** The button's words, or null when there is nothing to offer (no account; plain text). */
+    action: Copy | null;
+    address: string;
+    found: HubFound;
+    kind: 'notEncrypted' | 'older' | 'server';
+    title: Copy;
+}
+
+const FINDER_SENTENCES: Partial<Record<HubFinderState['kind'], string>> = {
+    looking: 'lookingFor',
+    nothingBeside: 'nothingBeside',
+    nothingOnNetwork: 'nothingOnNetwork',
+    notOnWifi: 'notOnWifi',
+};
+
+/** No server set: the finder's sentence, then one row per thing found (design §6.6). */
+export const notSetView = (
+    finder: HubFinderState,
+    username: null | string,
+): { rows: NotSetRow[]; sentence: Copy | null } => {
+    const key = FINDER_SENTENCES[finder.kind];
+    const rows = (finder.kind === 'results' ? finder.results : []).map((found): NotSetRow => {
+        const address = tapAddress(found);
+        if (found.kind === 'server') {
+            return {
+                action: username ? copy('signInAs', { username }) : null,
+                address,
+                found,
+                kind: 'server',
+                title: copy('foundRow', {
+                    address: hostOfAddress(address) ?? address,
+                    name: found.name,
+                }),
+            };
+        }
+        if (found.kind === 'olderAt') {
+            return {
+                action: copy('useThisAddress'),
+                address,
+                found,
+                kind: 'older',
+                title: copy('olderAt', { address: hostOfAddress(address) ?? address }),
+            };
+        }
+        return {
+            action: null,
+            address,
+            found,
+            kind: 'notEncrypted',
+            title: copy('notEncryptedFound', { address: displayAddress(address) }),
+        };
+    });
+    return { rows, sentence: key ? copy(key) : null };
+};
+
+export interface AddressRow {
+    active: boolean;
+    display: string;
+    /** A typed or found address, while another typed or found one is left. */
+    removable: boolean;
+    source: Copy;
+    url: string;
+}
+
+const SOURCE: Record<string, string> = {
+    found: 'sourceFound',
+    learned: 'sourceLearned',
+    typed: 'sourceTyped',
+};
+
+/**
+ * A server is set: the Address row (the active address, else the typed one), a second line for
+ * the others, the list (typed and found, removable while another is left; the learned one as a
+ * switch), and whether Find home address shows (the record has no private address).
+ */
+export const setView = (
+    record: HubServerRecord,
+    activeAddress: null | string,
+    typedUrl: string,
+): {
+    findHome: boolean;
+    learned: null | { on: boolean; url: string };
+    others: Copy[];
+    primary: string;
+    rows: AddressRow[];
+} => {
+    const shown = activeAddress ?? normaliseAddress(typedUrl) ?? typedUrl;
+    const kept = record.addresses.filter((a) => a.source !== 'learned');
+    const learned = record.addresses.find((a) => a.source === 'learned');
+    const usable = connectOrder(record).filter((a) => a.url !== shown);
+    const home = usable.filter((a) => isPrivateAddress(a.url)).map((a) => displayAddress(a.url));
+    const away = usable.filter((a) => !isPrivateAddress(a.url)).map((a) => displayAddress(a.url));
+    return {
+        findHome:
+            record.serverId !== null && !record.addresses.some((a) => isPrivateAddress(a.url)),
+        learned: learned ? { on: !record.learnedOff, url: learned.url } : null,
+        others: [
+            ...(home.length ? [copy('atHome', { addresses: home.join(', ') })] : []),
+            ...(away.length ? [copy('awayFromHome', { addresses: away.join(', ') })] : []),
+        ],
+        primary: displayAddress(shown),
+        rows: kept.map((a) => ({
+            active: a.url === activeAddress,
+            display: displayAddress(a.url),
+            removable: kept.length > 1,
+            source: copy(SOURCE[a.source]),
+            url: a.url,
+        })),
+    };
+};
+
+/**
+ * `hub.url` after an address is removed from the list: unchanged (null) unless it was that one;
+ * then the first typed or found address left - never a learned one (design §6.3).
+ */
+export const typedUrlAfterRemove = (
+    record: HubServerRecord,
+    removed: string,
+    typedUrl: string,
+): null | string => {
+    if ((normaliseAddress(typedUrl) ?? typedUrl) !== removed) return null;
+    return record.addresses.find((a) => a.source !== 'learned' && a.url !== removed)?.url ?? null;
+};
+
+/** What Not now remembers: the server's id, or an older server's address. */
+export const dismissKey = (found: HubFound): string =>
+    found.kind === 'server' ? found.serverId : found.address;
+
+/**
+ * The post-sign-in prompt (design §6.4): after a look beside Navidrome that found exactly one
+ * server (or one older one) not answered Not now, while no server is set.
+ */
+export const promptFor = (
+    finder: HubFinderState,
+    record: HubServerRecord | null | undefined,
+    configured: boolean,
+): HubFound | null => {
+    if (configured || finder.kind !== 'results' || finder.scope !== 'beside') return null;
+    const offers = finder.results.filter((f) => f.kind !== 'notEncrypted');
+    if (offers.length !== 1) return null;
+    return record?.promptDismissed.includes(dismissKey(offers[0])) ? null : offers[0];
+};

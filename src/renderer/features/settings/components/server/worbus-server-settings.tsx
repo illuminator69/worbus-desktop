@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { memo, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
     DEFAULT_DEVICE_NAME,
@@ -11,16 +12,27 @@ import {
     addressFieldValue,
     capabilityLines,
     CONNECT_GRACE_MS,
+    Copy,
     hubLink,
     isHubConfigured,
     normaliseHubAddress,
+    notSetView,
     serverStatus,
     serverStatusSentence,
+    setView,
     showTokenField,
+    statusRoute,
 } from './server-status';
 
 import { clapAvailableKey } from '/@/renderer/features/discover/use-discover-capabilities';
 import {
+    editServer,
+    lookIfNotSet,
+    lookOnNetwork,
+    removeServerAddress,
+} from '/@/renderer/features/hub/utils/hub-finder-actions';
+import {
+    signInToFound,
     signInWithCurrentServer,
     signOutOfServer,
 } from '/@/renderer/features/hub/utils/hub-signin-actions';
@@ -46,6 +58,13 @@ import { TextInput } from '/@/shared/components/text-input/text-input';
 import { Text } from '/@/shared/components/text/text';
 import { toast } from '/@/shared/components/toast/toast';
 import { parseSubsonicPair } from '/@/shared/utils/hub-signin';
+
+/** A sentence from en.json `setting.worbus.*` (Worbus P3). */
+const useSay = () => {
+    const { t } = useTranslation();
+    return (copy: Copy | null): string =>
+        copy ? t(`setting.worbus.${copy.key}`, copy.values ?? {}) : '';
+};
 
 /** The current music server's account name, or null when there is no pair to sign in with. */
 const useSignInUsername = (): null | string =>
@@ -120,6 +139,20 @@ const ServerStatus = memo(() => {
         username,
     };
     const status = serverStatus(link, sign);
+    const say = useSay();
+    // Worbus P3 (design §6.6): the route the signed-in line names; and, while no server is set or
+    // while a set server looks for its home address, what looking says.
+    const activeAddress = useHubStore((s) => s.server?.activeAddress ?? null);
+    const finder = useHubStore((s) => s.finder);
+    const route = statusRoute(activeAddress).filter(
+        (part) => status === 'signedIn' || (status === 'connected' && part.key === 'notEncrypted'),
+    );
+    const sentence = [serverStatusSentence(status, settings.url, sign), ...route.map(say)].join(
+        ' · ',
+    );
+    const configured = isHubConfigured({ ...settings, signedIn });
+    const looking =
+        !configured || finder.scope === 'home' ? say(notSetView(finder, username).sentence) : '';
 
     const current =
         link === 'connected'
@@ -145,7 +178,12 @@ const ServerStatus = memo(() => {
         // the app's own grow tween instead of jumping it.
         <GrowBox name="server-status">
             <Stack aria-live="polite" gap={0}>
-                <Text size="sm">{serverStatusSentence(status, settings.url, sign)}</Text>
+                <Text size="sm">{sentence}</Text>
+                {looking && (
+                    <Text isMuted size="sm">
+                        {looking}
+                    </Text>
+                )}
                 <Fold name="server-capabilities" open={lines.length > 0}>
                     <Stack gap="xs" pt="xs">
                         {drawn.map((line) => (
@@ -178,6 +216,27 @@ export const WorbusServerSettings = memo(() => {
     const configured = isHubConfigured({ ...settings, signedIn });
     // Walk B6: what the Address field shows. With none, there is nowhere to sign in to.
     const hasAddress = addressFieldValue(settings.url, configured) !== '';
+
+    // Worbus P3 (design §6.4, §6.6): not set - what looking found, Look on this network, Type an
+    // address; set - the address in use, the others, the list, Find home address.
+    const say = useSay();
+    const { t } = useTranslation();
+    const server = useHubStore((s) => s.server);
+    const finder = useHubStore((s) => s.finder);
+    const [typing, setTyping] = useState(false);
+    const [listOpen, setListOpen] = useState(false);
+    const [newAddress, setNewAddress] = useState('');
+    // Each time the tab opens while no server is set: look beside Navidrome (never the sweep).
+    useEffect(() => {
+        lookIfNotSet();
+    }, []);
+    const notSet = notSetView(
+        finder.scope === 'home' ? { ...finder, kind: 'idle', results: [] } : finder,
+        username,
+    );
+    const set = server ? setView(server.record, server.activeAddress, settings.url) : null;
+    const sweeping = finder.kind === 'looking' && finder.scope !== 'beside';
+    const foundWhere = say({ key: finder.scope === 'network' ? 'foundOnNetwork' : 'foundBeside' });
     const [address, setAddress] = useState(addressFieldValue(settings.url, configured));
     const [name, setName] = useState(settings.name);
 
@@ -208,6 +267,53 @@ export const WorbusServerSettings = memo(() => {
             keywords: KEYWORDS.serverStatus,
             title: 'Status',
         },
+        ...notSet.rows.map((row) => ({
+            control: row.action ? (
+                <Button
+                    aria-label={say(row.action)}
+                    loading={signingIn && row.kind === 'server'}
+                    onClick={() => void signInToFound(row.found, row.address)}
+                    variant={row.kind === 'server' ? 'filled' : 'default'}
+                >
+                    {say(row.action)}
+                </Button>
+            ) : (
+                <></>
+            ),
+            description: row.kind === 'server' ? foundWhere : '',
+            fold: true,
+            isHidden: configured,
+            keywords: KEYWORDS.serverAddress,
+            title: say(row.title),
+        })),
+        {
+            control: (
+                <Button
+                    loading={sweeping && finder.scope === 'network'}
+                    onClick={() => void lookOnNetwork('network')}
+                    variant="default"
+                >
+                    {t('setting.worbus.lookOnNetwork')}
+                </Button>
+            ),
+            description: t('setting.worbus.lookOnNetworkDescription'),
+            fold: true,
+            isHidden: configured,
+            keywords: KEYWORDS.serverAddress,
+            title: t('setting.worbus.lookOnNetwork'),
+        },
+        {
+            control: (
+                <Button onClick={() => setTyping(true)} variant="default">
+                    {t('setting.worbus.typeAddress')}
+                </Button>
+            ),
+            description: 'The address of your Worbus Server, for example ws://192.168.1.10:4790.',
+            fold: true,
+            isHidden: configured || typing,
+            keywords: KEYWORDS.serverAddress,
+            title: t('setting.worbus.typeAddress'),
+        },
         {
             control: (
                 <TextInput
@@ -225,8 +331,123 @@ export const WorbusServerSettings = memo(() => {
                 />
             ),
             description: 'The address of your Worbus Server, for example ws://192.168.1.10:4790.',
+            fold: true,
+            // P3: typed only after "Type an address"; once a server is set, the list below.
+            isHidden: configured || !typing,
             keywords: KEYWORDS.serverAddress,
             title: 'Server address',
+        },
+        {
+            control: (
+                <Button
+                    aria-expanded={listOpen}
+                    onClick={() => setListOpen((open) => !open)}
+                    variant="default"
+                >
+                    {t('setting.worbus.addresses')}
+                </Button>
+            ),
+            description: (
+                <Stack gap={0}>
+                    <Text size="sm">{set?.primary ?? settings.url}</Text>
+                    {set?.others.map((line) => (
+                        <Text isMuted key={line.key} size="sm">
+                            {say(line)}
+                        </Text>
+                    ))}
+                </Stack>
+            ),
+            fold: true,
+            isHidden: !configured,
+            keywords: KEYWORDS.serverAddress,
+            // Its own title: rows are keyed by title, and the typed field above is "Server address".
+            title: 'Address',
+        },
+        ...(set?.rows ?? []).map((row) => ({
+            control: (
+                <Button
+                    aria-label={`${t('setting.worbus.remove')} ${row.display}`}
+                    disabled={!row.removable}
+                    onClick={() => void removeServerAddress(row.url)}
+                    variant="default"
+                >
+                    {t('setting.worbus.remove')}
+                </Button>
+            ),
+            description: say(row.source),
+            fold: true,
+            indent: true,
+            isHidden: !configured || !listOpen,
+            keywords: KEYWORDS.serverAddress,
+            title: row.display,
+        })),
+        {
+            control: (
+                <Switch
+                    aria-label={t('setting.worbus.useAwayFromHome')}
+                    checked={set?.learned?.on ?? false}
+                    onChange={(e) =>
+                        void editServer({ op: 'learnedOff', value: !e.currentTarget.checked })
+                    }
+                />
+            ),
+            description: set?.learned ? `${say({ key: 'sourceLearned' })}: ${set.learned.url}` : '',
+            fold: true,
+            indent: true,
+            isHidden: !configured || !listOpen || !set?.learned,
+            keywords: KEYWORDS.serverAddress,
+            title: t('setting.worbus.useAwayFromHome'),
+        },
+        {
+            control: (
+                <TextInput
+                    aria-label={t('setting.worbus.addAddress')}
+                    onChange={(e) => setNewAddress(e.currentTarget.value)}
+                    onKeyDown={(e) => {
+                        if (e.key !== 'Enter' || !newAddress.trim()) return;
+                        void editServer({ op: 'add', url: newAddress });
+                        setNewAddress('');
+                    }}
+                    placeholder="ws://192.168.1.10:4790"
+                    rightSection={
+                        <Button
+                            disabled={!newAddress.trim()}
+                            onClick={() => {
+                                void editServer({ op: 'add', url: newAddress });
+                                setNewAddress('');
+                            }}
+                            size="compact-xs"
+                            variant="subtle"
+                        >
+                            {t('setting.worbus.add')}
+                        </Button>
+                    }
+                    rightSectionWidth={56}
+                    value={newAddress}
+                />
+            ),
+            description: t('setting.worbus.addressesDescription'),
+            fold: true,
+            indent: true,
+            isHidden: !configured || !listOpen,
+            keywords: KEYWORDS.serverAddress,
+            title: t('setting.worbus.addAddress'),
+        },
+        {
+            control: (
+                <Button
+                    loading={sweeping && finder.scope === 'home'}
+                    onClick={() => void lookOnNetwork('home')}
+                    variant="default"
+                >
+                    {t('setting.worbus.findHomeAddress')}
+                </Button>
+            ),
+            description: t('setting.worbus.findHomeAddressDescription'),
+            fold: true,
+            isHidden: !configured || !set?.findHome,
+            keywords: KEYWORDS.serverAddress,
+            title: t('setting.worbus.findHomeAddress'),
         },
         {
             control: (

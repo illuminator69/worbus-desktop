@@ -10,6 +10,7 @@ import { WebSocket } from 'ws';
 import { store } from '../settings';
 import { createActiveAddress } from './active-address';
 import {
+    applyServerEdit,
     createServerRecordStore,
     httpBaseOfAddress,
     hubConfiguredFrom,
@@ -818,6 +819,13 @@ async function lookForHomeAddress(): Promise<void> {
 
 // P3: the server record and the active address, read once at start; `hub-server` follows changes.
 ipcMain.handle('hub-server-state', () => serverEvent());
+
+// P3: the Server tab's edits - a found server tapped, an address added or removed, the learned
+// address switched, a prompt answered Not now. None moves the socket (design §6.3).
+ipcMain.handle('hub-server-edit', (_event, edit: unknown) => {
+    records.update((record) => applyServerEdit(record, edit));
+    return serverEvent();
+});
 
 function settingsEvent(): { credential: number; enabled: boolean; url: string } {
     return { credential: credentialGeneration, enabled: config.enabled, url: config.url };

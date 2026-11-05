@@ -1,4 +1,4 @@
-import type { HubFinderState, HubServerRecord } from '/@/shared/utils/hub-addresses';
+import type { HubFinderState, HubServerRecord, ServerEdit } from '/@/shared/utils/hub-addresses';
 import type { HubAuthState, HubSignInResult, SignInPair } from '/@/shared/utils/hub-signin';
 
 import { ipcRenderer } from 'electron';
@@ -70,6 +70,10 @@ export interface HubServerState {
 /** P3: the record and active address now, then `onServer` for every change. */
 const serverState = (): Promise<HubServerState> => ipcRenderer.invoke('hub-server-state');
 
+/** P3: one edit to the server record (found tapped, address added or removed, switch, Not now). */
+const serverEdit = (edit: ServerEdit): Promise<HubServerState> =>
+    ipcRenderer.invoke('hub-server-edit', edit);
+
 const onServer = (cb: (state: HubServerState) => void): (() => void) => {
     const handler = (_event: unknown, state: HubServerState) => cb(state);
     ipcRenderer.on('hub-server', handler);
@@ -110,6 +114,7 @@ export const hub = {
     onServer,
     removeListeners,
     send,
+    serverEdit,
     serverState,
     setNavidromeUrls,
     setSettings,
