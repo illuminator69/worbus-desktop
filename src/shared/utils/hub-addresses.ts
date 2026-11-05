@@ -457,10 +457,21 @@ export const withFound = (record: HubServerRecord, found: FoundServer): HubServe
 export const removeAddress = (record: HubServerRecord, url: string): HubServerRecord => {
     const addresses = record.addresses.filter((a) => a.url !== url || a.source === 'learned');
     if (addresses.length === record.addresses.length) return record;
-    if (addresses.some((a) => a.lastOkAt !== null)) return { ...record, addresses };
+    return forgetIfNoneUsablePassed({ ...record, addresses });
+};
+
+/**
+ * Keep the server while an address that may still be used has passed as it; else forget it, so
+ * what is left is tried as a new server. A learned address switched off is not usable: F6 walk
+ * W-2 - its old pass otherwise kept the id for good, and another server's address the person
+ * added was skipped on every reconnect with no way left to change server.
+ */
+const forgetIfNoneUsablePassed = (record: HubServerRecord): HubServerRecord => {
+    const usable = record.addresses.filter((a) => !(a.source === 'learned' && record.learnedOff));
+    if (record.serverId === null || usable.some((a) => a.lastOkAt !== null)) return record;
     return {
         ...record,
-        addresses: addresses.filter((a) => a.source !== 'learned'),
+        addresses: record.addresses.filter((a) => a.source !== 'learned'),
         name: null,
         serverId: null,
     };
@@ -504,7 +515,9 @@ export const applyServerEdit = (record: HubServerRecord, edit: unknown): HubServ
                 promptDismissed: [...record.promptDismissed, e.key].slice(-PROMPT_DISMISSED_MAX),
             };
         case 'learnedOff':
-            return typeof e.value === 'boolean' ? { ...record, learnedOff: e.value } : record;
+            return typeof e.value === 'boolean'
+                ? forgetIfNoneUsablePassed({ ...record, learnedOff: e.value })
+                : record;
         case 'remove':
             return typeof e.url === 'string' ? removeAddress(record, e.url) : record;
         default:

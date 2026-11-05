@@ -119,12 +119,14 @@ const ServerStatus = memo(() => {
     const username = useSignInUsername();
 
     const now = useNowAfter(attemptAt, settings.enabled && !connected);
+    const activeAddress = useHubStore((s) => s.server?.activeAddress ?? null);
     const link = hubLink({
         attemptAt,
         authRefused,
         connected,
         enabled: settings.enabled,
         now,
+        opening: activeAddress !== null,
         signedIn,
         token: settings.token,
         url: settings.url,
@@ -144,7 +146,6 @@ const ServerStatus = memo(() => {
     const say = useSay();
     // Worbus P3 (design §6.6): the route the signed-in line names; and, while no server is set or
     // while a set server looks for its home address, what looking says.
-    const activeAddress = useHubStore((s) => s.server?.activeAddress ?? null);
     const finder = useHubStore((s) => s.finder);
     const route = statusRoute(activeAddress).filter(
         (part) => status === 'signedIn' || (status === 'connected' && part.key === 'notEncrypted'),

@@ -47,6 +47,8 @@ export interface HubLinkInput {
     connected: boolean;
     enabled: boolean;
     now: number;
+    /** P3: main reports a live socket (`hub-server`'s activeAddress) whose welcome has not come yet. */
+    opening?: boolean;
     /** Worbus P2: main holds a device secret (a signed-in device has no typed token). */
     signedIn?: boolean;
     token: string;
@@ -82,6 +84,8 @@ export const hubLink = (i: HubLinkInput): HubLink => {
         return 'notConfigured';
     }
     if (i.authRefused) return 'refused';
+    // F6 walk (W-1): a socket main says is open is connecting until its welcome, never unreachable.
+    if (i.opening) return 'connecting';
     return i.now - i.attemptAt < CONNECT_GRACE_MS ? 'connecting' : 'unreachable';
 };
 

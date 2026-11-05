@@ -5,6 +5,7 @@ import type { HubAddress, HubServerRecord, InfoOutcome } from './hub-addresses.t
 
 import {
     admitsAddress,
+    applyServerEdit,
     applyWelcomeServer,
     classifyHubAddress,
     classifyInfoAnswer,
@@ -403,4 +404,43 @@ test('removing the last address that ever passed forgets the server', () => {
 test('serverKey: the id once known, else the address', () => {
     assert.equal(serverKey(record({}), 'ws://h:4790'), 'ws://h:4790');
     assert.equal(serverKey(record({ serverId: ID_A }), 'ws://h:4790'), `id:${ID_A}`);
+});
+
+test('learned_off_with_nothing_else_passed_forgets_server', () => {
+    // F6 walk (W-2): set to A, which taught its learned address and was reached through it; then
+    // the person adds B's address, removes A's, and switches the learned one off. Before, the
+    // learned entry's pass kept A's id for good: B was skipped as another server on every
+    // reconnect and the device read "Can't reach" with no way left in the UI to change server.
+    const learned = { lastOkAt: 9, source: 'learned' as const, url: 'wss://hub.example.com' };
+    const r: HubServerRecord = {
+        ...EMPTY_HUB_SERVER_RECORD,
+        addresses: [learned, { lastOkAt: null, source: 'typed', url: 'ws://127.0.0.1:4798' }],
+        name: 'Home',
+        serverId: ID_A,
+    };
+    // While the learned address may be used, it is still A's way in: A is kept.
+    assert.equal(applyServerEdit(r, { op: 'learnedOff', value: false }).serverId, ID_A);
+    const off = applyServerEdit(r, { op: 'learnedOff', value: true });
+    assert.equal(off.serverId, null, 'nothing usable has passed as A: A is forgotten');
+    assert.deepEqual(
+        off.addresses.map((a) => a.url),
+        ['ws://127.0.0.1:4798'],
+    );
+    // The same when the learned address was off already and the last passed typed one goes.
+    const before: HubServerRecord = {
+        ...r,
+        addresses: [
+            learned,
+            { lastOkAt: 5, source: 'typed', url: 'ws://127.0.0.1:4799' },
+            r.addresses[1],
+        ],
+        learnedOff: true,
+    };
+    assert.equal(removeAddress(before, 'ws://127.0.0.1:4799').serverId, null);
+    // A typed address that passed keeps the server, learned off or not.
+    const home: HubServerRecord = {
+        ...r,
+        addresses: [learned, { lastOkAt: 5, source: 'typed', url: 'ws://192.168.1.20:4790' }],
+    };
+    assert.equal(applyServerEdit(home, { op: 'learnedOff', value: true }).serverId, ID_A);
 });

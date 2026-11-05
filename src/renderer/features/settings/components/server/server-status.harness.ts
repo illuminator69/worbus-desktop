@@ -568,3 +568,14 @@ test('the server tab rows and status change with the app transitions', () => {
     // No snap: nothing in the tab mounts or unmounts a row on a state change.
     assert.doesNotMatch(tab, /\{showToken && /);
 });
+
+test('aSocketThatOpenedIsConnectingUntilItsWelcomeNeverUnreachable', () => {
+    // F6 walk (W-1): main says a socket opened (`hub-server`'s activeAddress) a few frames before
+    // its welcome. The line read "Can't reach <that address>" in between, for 3 frames.
+    const away: HubLinkInput = { ...on, attemptAt: NOW - 60_000, enabled: true };
+    assert.equal(hubLink(away), 'unreachable');
+    assert.equal(hubLink({ ...away, opening: true }), 'connecting');
+    assert.equal(hubLink({ ...away, connected: true, opening: true }), 'connected');
+    assert.equal(hubLink({ ...away, enabled: false, opening: true }), 'off');
+    assert.match(read('./worbus-server-settings.tsx'), /opening: activeAddress !== null,/);
+});
