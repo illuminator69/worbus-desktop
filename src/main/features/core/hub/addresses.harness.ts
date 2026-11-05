@@ -97,6 +97,44 @@ test('an unconfigured push forgets the server, keeping the Not now answers', () 
     assert.deepEqual(cleared.promptDismissed, [ID_A]);
 });
 
+test('a changed typed address replaces the previous typed one', () => {
+    // M6: `hub.url` changed (the not-set field, a tap): the typed entry equal to the previous one
+    // goes, so a stale typed address with its `lastOkAt` is not tried first for ever.
+    const records = createServerRecordStore({ onChange: () => {}, store: fakeStore() });
+    records.reconcile('ws://192.168.1.20:4790', true);
+    records.update((r) => applyWelcomeServer(r, { id: ID_A, name: 'Home' }));
+    records.update((r) => ({
+        ...r,
+        addresses: [...r.addresses, { lastOkAt: 7, source: 'found', url: 'ws://10.0.0.5:4790' }],
+    }));
+    const next = records.reconcile('ws://192.168.1.30:4790', true, 'ws://192.168.1.20:4790/');
+    assert.deepEqual(
+        next.addresses.map((a) => `${a.source} ${a.url}`),
+        ['found ws://10.0.0.5:4790', 'typed ws://192.168.1.30:4790'],
+    );
+    assert.equal(next.serverId, ID_A, 'a found address that passed still stands for the server');
+    // Unchanged, or no previous one: nothing is replaced.
+    assert.equal(records.reconcile('ws://192.168.1.30:4790', true, 'ws://192.168.1.30:4790'), next);
+    // A typed address that was the last to pass goes through the removal rule: the server is
+    // forgotten, and the store says so (C1: its credential is not presented again).
+    const changes: [string, null | string][] = [];
+    const lone = createServerRecordStore({
+        onChange: () => {},
+        onServerChange: (from, to) => changes.push([from, to]),
+        store: fakeStore(),
+    });
+    lone.reconcile('ws://192.168.1.20:4790', true);
+    lone.update((r) => ({
+        ...applyWelcomeServer(r, { id: ID_A, name: 'Home' }),
+        addresses: [{ lastOkAt: 3, source: 'typed', url: 'ws://192.168.1.20:4790' }],
+    }));
+    assert.equal(
+        lone.reconcile('ws://10.0.0.9:4790', true, 'ws://192.168.1.20:4790').serverId,
+        null,
+    );
+    assert.deepEqual(changes, [[ID_A, null]]);
+});
+
 test('record_never_holds_a_secret', async () => {
     const store = fakeStore({ 'hub.deviceId': 'dev-1' });
     const records = createServerRecordStore({ onChange: () => {}, store });

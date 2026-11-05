@@ -270,7 +270,8 @@ export const toDiscography = (
  * - `keep`: the same server (the same id at another address included), or nothing stored yet, or
  *   main has not said yet which server the record holds (judged again when it has);
  * - `adopt`: the same server under its older key - a project 2 meta, or one stamped with the
- *   address before the first welcome carried the id: kept, and stamped with the new key;
+ *   address before the first welcome carried the id: kept, and stamped with the new key (never an
+ *   id-keyed meta into an id-less key: that one is kept unstamped, or cleared);
  * - `clear`: another server (another id; an older server at another address).
  */
 export const mirrorVerdict = (
@@ -282,6 +283,10 @@ export const mirrorVerdict = (
     if (meta.serverKey?.startsWith('id:')) {
         if (!current.known) return 'keep';
         if (current.serverKey.startsWith('id:')) return 'clear';
+        // Review C1: an id-keyed mirror is never adopted under an id-less key - the record forgot
+        // its server, and the next welcome may name another one. Kept as it is (not re-stamped)
+        // while `hub.url` is unchanged, so that welcome judges it by id; else another server.
+        return meta.hubUrl === current.hubUrl ? 'keep' : 'clear';
     }
     return meta.hubUrl === current.hubUrl ? 'adopt' : 'clear';
 };

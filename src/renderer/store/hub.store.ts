@@ -1,5 +1,5 @@
 import type { LbBotStatus } from '/@/shared/types/lbbot-types';
-import type { HubFinderState, HubServerRecord } from '/@/shared/utils/hub-addresses';
+import type { HubFinderState, HubServerState } from '/@/shared/utils/hub-addresses';
 import type { HubSignInResult, HubUser } from '/@/shared/utils/hub-signin';
 import type { LbIndexProgress } from '/@/shared/utils/lbbot-mode';
 
@@ -50,12 +50,6 @@ export interface HubDevice {
 /** Can the session be handed to this device right now? Unknown reachability is permissive. */
 export const isHubDeviceTransferable = (device: HubDevice): boolean =>
     device.online && device.reachable !== false;
-
-/** Worbus P3: what main says about the Worbus Server's addresses (preload `HubServerState`). */
-export interface HubServerState {
-    activeAddress: null | string;
-    record: HubServerRecord;
-}
 
 export interface HubTrack {
     album?: string;

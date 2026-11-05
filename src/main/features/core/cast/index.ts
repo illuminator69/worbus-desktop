@@ -232,7 +232,6 @@ class CastDeviceBridge {
     private reconnectingCast = false;
 
     private reconnectTimer: NodeJS.Timeout | null = null;
-
     private releasing = false;
 
     // Saved-queue identity of the session we adopted, so re-claiming it refreshes that
@@ -266,6 +265,9 @@ class CastDeviceBridge {
     /** Wall-clock ms the hub last told this speaker a level on its current connection. */
     private volumeToldAt: null | number = null;
 
+    /** P3 (M2): the last connect found no live hub address and is waiting out a backoff for one. */
+    private waitingForAddress = false;
+
     private ws: null | WebSocket = null;
 
     constructor(
@@ -276,6 +278,19 @@ class CastDeviceBridge {
         private readonly kind: CastKind | undefined,
     ) {
         this.scheduleClaim();
+    }
+
+    /**
+     * P3 (M2): the main socket has an address now. A bridge that was waiting for one goes back
+     * through arbitration at once instead of at the end of its backoff (which the waits grew).
+     */
+    addressReady(): void {
+        if (this.destroyed || !this.waitingForAddress || !this.reconnectTimer) return;
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+        this.waitingForAddress = false;
+        this.backoffMs = INITIAL_BACKOFF_MS;
+        this.scheduleClaim(0);
     }
 
     destroy(): void {
@@ -844,19 +859,23 @@ class CastDeviceBridge {
 
     private connectHub(): void {
         if (this.destroyed) return;
+        // Worbus P3 (design §6.3): the main socket's address, read at each dial - the one address
+        // whose `/hub/info` named this server. Without a live main socket there is none: wait
+        // (M2: the main socket opening cuts the wait, `addressReady`). Read first: the bearer (an
+        // older server's token) is judged at the active address.
+        const hubUrl = getHubActiveAddress();
+        if (!hubUrl) {
+            log.info(`[cast-bridge] ${this.friendlyName}: no live hub address yet - waiting`);
+            this.waitingForAddress = true;
+            this.scheduleReconnect();
+            return;
+        }
+        this.waitingForAddress = false;
         if (!hubAuth.bearer()) {
             // Worbus P2: nothing to say hello with (signed out, never signed in, the token retired).
             // A hello without a credential is only refused with 4005; the `settings` event
             // rebuilds every bridge when a credential arrives.
             log.info(`[cast-bridge] ${this.friendlyName}: no hub credential - not connecting`);
-            return;
-        }
-        // Worbus P3 (design §6.3): the main socket's address, read at each dial - the one address
-        // whose `/hub/info` named this server. Without a live main socket there is none: wait.
-        const hubUrl = getHubActiveAddress();
-        if (!hubUrl) {
-            log.info(`[cast-bridge] ${this.friendlyName}: no live hub address yet - waiting`);
-            this.scheduleReconnect();
             return;
         }
         let ws: WebSocket;
@@ -2011,9 +2030,10 @@ function serviceToDevice(
 }
 
 function startBridging(): void {
-    const config = getHubConfig();
-    if (!config.enabled || !config.url) {
-        log.info('[cast-bridge] not starting (hub disabled or no url)');
+    // P3 (review C2, M2): `enabled` only - the hub address `getHubConfig()` gives is the live socket's, empty
+    // before the first open; each bridge waits for that address itself before it dials.
+    if (!getHubConfig().enabled) {
+        log.info('[cast-bridge] not starting (hub disabled)');
         return;
     }
     if (browser) return;
@@ -2102,6 +2122,12 @@ function stopBridging(): void {
 // released by a client that quit is picked back up without waiting for a restart.
 hubEvents.on('devices', () => {
     bridges.forEach((bridge) => bridge.reevaluate());
+});
+
+// P3 (M2): the main socket opened on an address - bridges waiting for one dial now.
+hubEvents.on('server', (server: { activeAddress: null | string }) => {
+    if (!server.activeAddress) return;
+    bridges.forEach((bridge) => bridge.addressReady());
 });
 
 // `credential` moves on every sign-in, sign-out, server sign-out and token change (hub/index.ts):

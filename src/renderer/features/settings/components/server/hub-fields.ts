@@ -31,7 +31,7 @@ export const hostOf = (url: string): null | string => {
 export const resolvePublicServerUrl = (
     input: string,
     current: string,
-    hubUrl: string,
+    hubUrl: string | string[],
 ): { changed: boolean; draft: string; error: 'hub' | 'invalid' | null; value: string } => {
     const value = input.trim();
     if (value === '') return { changed: current !== '', draft: '', error: null, value: '' };
@@ -40,8 +40,9 @@ export const resolvePublicServerUrl = (
     if (host === null || !/^https?:\/\//i.test(value)) {
         return { changed: false, draft: current, error: 'invalid', value: current };
     }
-    const hubHost = hostOf(hubUrl);
-    if (hubHost !== null && host === hubHost) {
+    // P3 (M9): any of the Worbus Server's addresses, not only the typed one.
+    const hubHosts = (Array.isArray(hubUrl) ? hubUrl : [hubUrl]).map(hostOf);
+    if (hubHosts.includes(host)) {
         return { changed: false, draft: current, error: 'hub', value: current };
     }
     return { changed: value !== current, draft: value, error: null, value };

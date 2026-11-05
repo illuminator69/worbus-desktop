@@ -24,6 +24,14 @@ export const openFoundPrompt = (opts: {
     const t = i18n.t.bind(i18n);
     const address = tapAddress(found);
     const host = hostOfAddress(address) ?? displayAddress(address);
+    // M8: closing it any other way (Esc, the backdrop, its close button) is Not now too - it is
+    // asked once. Only the confirm tap is not.
+    let answered = false;
+    const notNow = () => {
+        if (answered) return;
+        answered = true;
+        onNotNow();
+    };
     openModal({
         children: (
             <ConfirmModal
@@ -35,10 +43,11 @@ export const openFoundPrompt = (opts: {
                             : t('setting.worbus.useThisAddress'),
                 }}
                 onCancel={() => {
-                    onNotNow();
+                    notNow();
                     closeAllModals();
                 }}
                 onConfirm={() => {
+                    answered = true;
                     closeAllModals();
                     void signInToFound(found, address);
                 }}
@@ -55,6 +64,7 @@ export const openFoundPrompt = (opts: {
                 </Stack>
             </ConfirmModal>
         ),
+        onClose: notNow,
         title: found.kind === 'server' ? found.name : t('setting.worbus.useThisAddress'),
     });
 };

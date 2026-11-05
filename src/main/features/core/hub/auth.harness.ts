@@ -84,7 +84,7 @@ const world = (opts: { answers?: Answer[]; encryption?: boolean; token?: string 
         legacyToken: () => token,
         log: { info: (m) => logs.push(m), warn: (m) => logs.push(m) },
         // P3: no server id known here, so the key is the address (as for an older server).
-        serverKey: () => deps.httpBase(),
+        serverKey: (base) => base,
         setDeviceId: (id) => {
             plain['hub.deviceId'] = id;
         },
@@ -478,11 +478,11 @@ test('the IPC handlers hand the renderer results, never the secret', () => {
     assert.doesNotMatch(hub, /!shouldRun && hubAuth\.bearer\(\)\) start\(\)/);
     assert.match(
         hub,
-        /const before = hubAuth\.bearer\(\);\s*const result = await hubAuth\.signIn\(/,
+        /const before = hubAuth\.bearer\(\);\s*const connected = isHubConnected\(\);\s*const result = await hubAuth\.signIn\(/,
     );
     assert.match(
         hub,
-        /if \(result\.kind === 'signedIn' \|\| hubAuth\.bearer\(\) !== before\) restartWithCredential\(true\);/,
+        /if \(\s*result\.kind === 'signedIn' \|\|\s*hubAuth\.bearer\(\) !== before \|\|\s*\(result\.kind === 'oldServer' && !connected\)\s*\) \{\s*restartWithCredential\(true\);/,
     );
     const preload = read('../../../../preload/hub.ts');
     for (const channel of ['hub-signin', 'hub-signout', 'hub-auth-state']) {
@@ -703,7 +703,7 @@ test('a 4001 answering a secret hello is an older server', async () => {
     assert.match(hub, /helloHadSecret = 'auth' in credential;/);
     assert.match(
         hub,
-        /if \(code === CLOSE_BAD_TOKEN && helloHadSecret\) \{[\s\S]{0,700}hubAuth\.oldServer\(\);[\s\S]{0,300}emitStatus\('oldServer'\);/,
+        /if \(code === CLOSE_BAD_TOKEN && helloHadSecret\) \{[\s\S]{0,700}hubAuth\.oldServer\(httpBaseOfAddress\(url\)\);[\s\S]{0,400}emitStatus\('oldServer'\);/,
     );
     // The `auth` error before that close says "check the token" - there is no token: not passed on.
     assert.match(
@@ -729,7 +729,7 @@ test('nothing goes out on a credential that is not there', () => {
     const cast = read('../cast/index.ts');
     const connect = cast.slice(cast.indexOf('private connectHub(): void {'));
     assert.match(
-        connect.slice(0, 600),
+        connect.slice(0, 1400),
         /if \(!hubAuth\.bearer\(\)\) \{[\s\S]{0,400}return;/,
         'a bridge with nothing to say hello with does not open a socket (4005 each time)',
     );
@@ -900,7 +900,7 @@ test('an older-hub verdict lasts one launch and ends at a P2 welcome', async () 
     assert.match(hub, /msg\?\.t === 'welcome' && msg\.user && !helloHadSecret\) p2Welcome = true;/);
     assert.match(
         hub,
-        /if \(p2Welcome\) \{\s*(?:\/\/[^\n]*\n\s*)*hubAuth\.newServer\(\);\s*restartWithCredential\(true\);/,
+        /if \(p2Welcome\) \{\s*(?:\/\/[^\n]*\n\s*)*hubAuth\.newServer\(httpBaseOfAddress\(url\)\);\s*restartWithCredential\(true\);/,
     );
     const useHub = read('../../../../renderer/features/hub/hooks/use-hub.tsx');
     assert.match(
@@ -957,7 +957,7 @@ test('a P2 hub whose sign-in answers like an older one settles instead of loopin
     const hub = read('./index.ts');
     assert.match(
         hub,
-        /if \(code === CLOSE_BAD_TOKEN && helloHadSecret\) \{\s*(?:\/\/[^\n]*\n\s*)*hubAuth\.oldServer\(\);/,
+        /if \(code === CLOSE_BAD_TOKEN && helloHadSecret\) \{\s*(?:\/\/[^\n]*\n\s*)*hubAuth\.oldServer\(httpBaseOfAddress\(url\)\);/,
     );
     // The tidy-up: the renderer's 30 s retry ends on a sign-out, logout, switch or a tapped
     // sign-in.

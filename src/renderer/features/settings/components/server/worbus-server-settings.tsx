@@ -30,6 +30,7 @@ import {
     lookIfNotSet,
     lookOnNetwork,
     removeServerAddress,
+    stopLooking,
 } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import {
     signInToFound,
@@ -57,6 +58,7 @@ import { Switch } from '/@/shared/components/switch/switch';
 import { TextInput } from '/@/shared/components/text-input/text-input';
 import { Text } from '/@/shared/components/text/text';
 import { toast } from '/@/shared/components/toast/toast';
+import { displayAddress } from '/@/shared/utils/hub-addresses';
 import { parseSubsonicPair } from '/@/shared/utils/hub-signin';
 
 /** A sentence from en.json `setting.worbus.*` (Worbus P3). */
@@ -147,9 +149,11 @@ const ServerStatus = memo(() => {
     const route = statusRoute(activeAddress).filter(
         (part) => status === 'signedIn' || (status === 'connected' && part.key === 'notEncrypted'),
     );
-    const sentence = [serverStatusSentence(status, settings.url, sign), ...route.map(say)].join(
-        ' · ',
-    );
+    // M10: "Connected to" names the address the socket is on, not the typed one.
+    const sentence = [
+        serverStatusSentence(status, activeAddress ?? settings.url, sign),
+        ...route.map(say),
+    ].join(' · ');
     const configured = isHubConfigured({ ...settings, signedIn });
     const looking =
         !configured || finder.scope === 'home' ? say(notSetView(finder, username).sentence) : '';
@@ -229,6 +233,12 @@ export const WorbusServerSettings = memo(() => {
     // Each time the tab opens while no server is set: look beside Navidrome (never the sweep).
     useEffect(() => {
         lookIfNotSet();
+        // M4: a finished "Find home address" answer is said while the tab is open, not on every
+        // later visit.
+        return () => {
+            const { finder: last } = useHubStore.getState();
+            if (last.scope === 'home' && last.kind !== 'looking') stopLooking();
+        };
     }, []);
     const notSet = notSetView(
         finder.scope === 'home' ? { ...finder, kind: 'idle', results: [] } : finder,
@@ -308,7 +318,7 @@ export const WorbusServerSettings = memo(() => {
                     {t('setting.worbus.typeAddress')}
                 </Button>
             ),
-            description: 'The address of your Worbus Server, for example ws://192.168.1.10:4790.',
+            description: t('setting.worbus.typeAddressDescription'),
             fold: true,
             isHidden: configured || typing,
             keywords: KEYWORDS.serverAddress,
@@ -361,7 +371,7 @@ export const WorbusServerSettings = memo(() => {
             isHidden: !configured,
             keywords: KEYWORDS.serverAddress,
             // Its own title: rows are keyed by title, and the typed field above is "Server address".
-            title: 'Address',
+            title: t('setting.worbus.address'),
         },
         ...(set?.rows ?? []).map((row) => ({
             control: (
@@ -391,7 +401,9 @@ export const WorbusServerSettings = memo(() => {
                     }
                 />
             ),
-            description: set?.learned ? `${say({ key: 'sourceLearned' })}: ${set.learned.url}` : '',
+            description: set?.learned
+                ? say({ key: 'learnedRow', values: { address: displayAddress(set.learned.url) } })
+                : '',
             fold: true,
             indent: true,
             isHidden: !configured || !listOpen || !set?.learned,
@@ -560,11 +572,14 @@ export const CastingSettings = memo(() => {
     const [publicUrl, setPublicUrl] = useState(settings.publicServerUrl);
     useEffect(() => setPublicUrl(settings.publicServerUrl), [settings.publicServerUrl]);
 
-    const hubHost = hostOf(settings.url);
+    // M9: every address the Worbus Server has (typed, found, learned), not only the typed one.
+    const record = useHubStore((s) => s.server?.record);
+    const hubUrls = [settings.url, ...(record?.addresses.map((a) => a.url) ?? [])];
+    const publicHost = hostOf(settings.publicServerUrl);
     const pointsAtHub =
         Boolean(settings.publicServerUrl) &&
-        hubHost !== null &&
-        hostOf(settings.publicServerUrl) === hubHost;
+        publicHost !== null &&
+        hubUrls.some((url) => hostOf(url) === publicHost);
 
     const options = [
         {
@@ -575,7 +590,7 @@ export const CastingSettings = memo(() => {
                         const result = resolvePublicServerUrl(
                             publicUrl,
                             settings.publicServerUrl,
-                            settings.url,
+                            hubUrls,
                         );
                         setPublicUrl(result.draft);
                         if (result.error) {

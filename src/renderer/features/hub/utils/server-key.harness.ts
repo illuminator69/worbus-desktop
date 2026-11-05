@@ -205,3 +205,24 @@ test('every per-server key reads the server key', () => {
     const auth = read('../../../../main/features/core/hub/auth.ts');
     assert.match(auth, /oldServers\(\)\.includes\(base\)/);
 });
+
+test('forgotten_server_mirror_not_adopted', () => {
+    // Review C1: the record forgot server A (its last passing address removed): the key is the
+    // typed address again. A's mirror is not adopted under it - kept as it is, unstamped...
+    const m = mirror({ hubUrl: TYPED, serverKey: `id:${ID_A}` });
+    assert.equal(m.check({ hubUrl: TYPED, known: true, serverKey: TYPED }), 'keep');
+    assert.equal(m.stored().serverKey, `id:${ID_A}`, 'still stamped with A');
+    assert.equal(m.rows.size, 3);
+    // ...so the next welcome judges it by id: server B's wipes it.
+    assert.equal(m.check({ hubUrl: TYPED, known: true, serverKey: `id:${ID_B}` }), 'clear');
+    assert.equal(m.rows.size, 0);
+    // The same server's welcome keeps it.
+    const same = mirror({ hubUrl: TYPED, serverKey: `id:${ID_A}` });
+    same.check({ hubUrl: TYPED, known: true, serverKey: TYPED });
+    assert.equal(same.check({ hubUrl: TYPED, known: true, serverKey: `id:${ID_A}` }), 'keep');
+    assert.equal(same.rows.size, 3);
+    // With `hub.url` moved as well, it is another server's mirror.
+    const moved = mirror({ hubUrl: TYPED, serverKey: `id:${ID_A}` });
+    const other = 'ws://10.0.0.9:4790';
+    assert.equal(moved.check({ hubUrl: other, known: true, serverKey: other }), 'clear');
+});

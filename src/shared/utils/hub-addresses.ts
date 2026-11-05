@@ -63,6 +63,12 @@ export type HubFound =
 
 export const IDLE_FINDER: HubFinderState = { kind: 'idle', results: [], scope: null };
 
+/** Main's `hub-server` event and `hub-server-state` answer: the record and the live socket's address. */
+export interface HubServerState {
+    activeAddress: null | string;
+    record: HubServerRecord;
+}
+
 /** What one `GET <base>/hub/info` said, judged against the id the record holds. */
 export type InfoOutcome =
     | { kind: 'match'; name: string; serverId: string }
@@ -93,7 +99,10 @@ export const normaliseHubAddress = (raw: string): null | string => {
     } else if (value.includes('://')) {
         return null;
     }
+    // M1: no `?query` or `#fragment` - a derived URL appends to the base, and a token pasted
+    // into a query must never be stored or logged as part of an address.
     rest = rest
+        .replace(/[?#].*$/, '')
         .replace(/\/+$/, '')
         .replace(/\/connect$/, '')
         .replace(/\/+$/, '');
@@ -319,8 +328,12 @@ export const classifyInfoAnswer = (
 /**
  * Whether the device secret may go to this address after this probe (design §6.3): a match with
  * this server's id; or, for an older answer (426/404), a `typed` or `found` address - when the
- * record knows an id, only one that last passed (a rollback, or a proxy that passes only upgrades),
- * never a `learned` one. Another server's id, not a Worbus Server and no answer: never.
+ * record knows an id, only one that last passed WITH that id (a rollback, or a proxy that passes
+ * only upgrades; `welcome` clears every other address's `lastOkAt` when the id is first learned or
+ * changes), never a `learned` one. Another server's id and no answer: never. Not a Worbus Server:
+ * only a `typed` address while no id is known (M5: project 2 dialled a typed address blindly, and
+ * a proxy in front of it may answer `/hub/info` with a page or a 5xx) - never a found or learned
+ * one, never once an id is known.
  */
 export const admitsAddress = (
     record: HubServerRecord,
@@ -330,6 +343,8 @@ export const admitsAddress = (
     switch (outcome.kind) {
         case 'match':
             return record.serverId === null || outcome.serverId === record.serverId;
+        case 'notWorbus':
+            return record.serverId === null && address.source === 'typed';
         case 'older':
             if (address.source === 'learned') return false;
             return record.serverId === null || address.lastOkAt !== null;
@@ -361,6 +376,31 @@ export const markAddressOk = (
     ...record,
     addresses: record.addresses.map((a) => (a.url === url ? { ...a, lastOkAt: now } : a)),
 });
+
+/**
+ * A `welcome` on `url`: the record follows `welcome.server` and `url` passed. Review I3: an
+ * address's `lastOkAt` says it passed as THIS id; when the id is first learned or changes, what
+ * the other addresses passed as is unknown, so theirs are cleared - the rollback fallback never
+ * admits one that passed with no id or with another id.
+ */
+export const welcomeAt = (
+    record: HubServerRecord,
+    url: string,
+    server: unknown,
+    now: number,
+): HubServerRecord => {
+    const applied = applyWelcomeServer(record, server);
+    const fresh =
+        applied.serverId === record.serverId
+            ? applied
+            : {
+                  ...applied,
+                  addresses: applied.addresses.map((a) =>
+                      a.url === url ? a : { ...a, lastOkAt: null },
+                  ),
+              };
+    return markAddressOk(fresh, url, now);
+};
 
 /** The person's address, added as `typed` unless the record already holds it. */
 export const withTyped = (record: HubServerRecord, raw: string): HubServerRecord => {

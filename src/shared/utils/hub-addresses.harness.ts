@@ -17,6 +17,7 @@ import {
     removeAddress,
     selectAddress,
     serverKey,
+    welcomeAt,
     withFound,
 } from './hub-addresses.ts';
 
@@ -305,6 +306,53 @@ test('older_answer_uses_typed_never_learned', () => {
         name: 'Den',
         serverId: ID_B,
     });
+    // Review I3: `lastOkAt` counts only when earned WITH this id. A project 2 era record: typed X
+    // passed against an older hub B (no id). Y, server A, connects: the id becomes A, and X's
+    // pass (made with no id) no longer admits it on an older answer - A's secret never goes to B.
+    const x = addr('ws://192.168.1.20:4790', 'typed', 100);
+    const y = addr('ws://192.168.1.30:4790', 'typed', null);
+    const p2Era = record({ addresses: [x, y] });
+    assert.equal(admitsAddress(p2Era, x, older), true, 'before any id: as today');
+    const afterA = welcomeAt(p2Era, y.url, { id: ID_A, name: 'A' }, 200);
+    const xNow = afterA.addresses.find((a) => a.url === x.url);
+    assert.ok(xNow);
+    assert.equal(xNow.lastOkAt, null, 'its pass was not as A');
+    assert.equal(afterA.addresses.find((a) => a.url === y.url)?.lastOkAt, 200);
+    assert.equal(admitsAddress(afterA, xNow, older), false);
+    // The same after a welcome that changes the id.
+    const toB = welcomeAt(afterA, x.url, { id: ID_B, name: 'B' }, 300);
+    const yNow = toB.addresses.find((a) => a.url === y.url);
+    assert.ok(yNow);
+    assert.equal(admitsAddress(toB, yNow, older), false, 'passed as A, not as B');
+    // A welcome with the same id keeps every pass.
+    const again = welcomeAt(afterA, y.url, { id: ID_A, name: 'A' }, 400);
+    assert.deepEqual(
+        again.addresses.map((a) => a.lastOkAt),
+        [null, 400],
+    );
+});
+
+test('typed_not_worbus_dialled_until_id_known', () => {
+    // M5: project 2 dialled a typed address blindly; a proxy in front may answer `/hub/info`
+    // with a page or a 5xx. With no id known, a typed one is still dialled; never a found or
+    // learned one, never once an id is known.
+    const notWorbus: InfoOutcome = { kind: 'notWorbus' };
+    const typed = addr('ws://192.168.1.20:4790', 'typed', null);
+    const found = addr('ws://192.168.1.21:4790', 'found', null);
+    assert.equal(admitsAddress(record({ addresses: [typed] }), typed, notWorbus), true);
+    assert.equal(admitsAddress(record({ addresses: [found] }), found, notWorbus), false);
+    const known = record({ addresses: [{ ...typed, lastOkAt: 5 }], serverId: ID_A });
+    assert.equal(admitsAddress(known, known.addresses[0], notWorbus), false);
+});
+
+test('normalise_drops_query_and_fragment', () => {
+    // M1: nothing after `?` or `#` is part of an address (a pasted token is never stored).
+    assert.equal(normaliseHubAddress('ws://h:4790?x=1'), 'ws://h:4790');
+    assert.equal(
+        normaliseHubAddress('https://hub.example.com/worbus/connect?token=s3cret#a'),
+        'wss://hub.example.com/worbus',
+    );
+    assert.equal(httpBaseOfAddress('ws://h:4790/?x=1'), 'http://h:4790');
 });
 
 test('found addresses: a plain-text public one is never stored, another id replaces', () => {

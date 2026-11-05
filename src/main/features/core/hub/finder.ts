@@ -87,7 +87,9 @@ const group = (answers: [string, InfoOutcome][], reportOlder: boolean): Found[] 
                 });
             }
         } else if (outcome.kind === 'older' && reportOlder && atNavidromeHost(url)) {
-            rest.push({ address: url, kind: 'olderAt' });
+            // I1: an older server answers in plain text; on a public host that is never offered
+            // (its sign-in would carry the Navidrome token pair over the internet).
+            rest.push({ address: url, kind: isPrivateAddress(url) ? 'olderAt' : 'notEncrypted' });
         }
     }
     const olderFirst = (f: Found) => (f.kind === 'olderAt' ? 0 : 1);
@@ -113,19 +115,24 @@ export const lookBeside = async (urls: string[], probe: InfoProbe): Promise<Foun
  */
 export const ownSubnets = (interfaces: NetInterfaces): string[] => {
     const subnets: string[] = [];
+    let used = 0;
     for (const [name, addresses] of Object.entries(interfaces)) {
+        if (used >= MAX_INTERFACES) break;
         if (VIRTUAL.test(name)) continue;
-        for (const a of addresses ?? []) {
-            if (a.internal || (a.family !== 'IPv4' && a.family !== 4)) continue;
+        // M13: interfaces are counted, not subnets - each real interface gives its first private
+        // IPv4 address's /24.
+        const first = (addresses ?? []).find((a) => {
+            if (a.internal || (a.family !== 'IPv4' && a.family !== 4)) return false;
             const octets = a.address.split('.').map(Number);
-            if (octets.length !== 4 || classifyIpv4(octets) !== 'private') continue;
-            if (octets[0] === 127 || (octets[0] === 169 && octets[1] === 254)) continue;
-            const subnet = octets.slice(0, 3).join('.');
-            if (!subnets.includes(subnet)) subnets.push(subnet);
-        }
-        if (subnets.length >= MAX_INTERFACES) break;
+            if (octets.length !== 4 || classifyIpv4(octets) !== 'private') return false;
+            return !(octets[0] === 127 || (octets[0] === 169 && octets[1] === 254));
+        });
+        if (!first) continue;
+        used += 1;
+        const subnet = first.address.split('.').slice(0, 3).join('.');
+        if (!subnets.includes(subnet)) subnets.push(subnet);
     }
-    return subnets.slice(0, MAX_INTERFACES);
+    return subnets;
 };
 
 export interface SweepDeps {

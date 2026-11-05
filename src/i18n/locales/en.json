@@ -987,6 +987,7 @@
         "worbus": {
             "add": "Add",
             "addAddress": "Add an address",
+            "address": "Address",
             "addresses": "Addresses",
             "addressesDescription": "The addresses this computer tries, home ones first. Your Worbus Server tells this computer its address away from home.",
             "atHome": "At home: {{addresses}}",
@@ -996,6 +997,7 @@
             "foundBeside": "Found beside your Navidrome.",
             "foundOnNetwork": "Found on this network.",
             "foundRow": "{{name}} · {{address}}",
+            "learnedRow": "From the server: {{address}}",
             "lookOnNetwork": "Look on this network",
             "lookOnNetworkDescription": "Asks every address on this computer's home network whether it is a Worbus Server.",
             "lookingFor": "Looking for your Worbus Server…",
@@ -1015,6 +1017,7 @@
             "sourceLearned": "from the server",
             "sourceTyped": "typed",
             "typeAddress": "Type an address",
+            "typeAddressDescription": "The address of your Worbus Server, for example ws://192.168.1.10:4790.",
             "useAwayFromHome": "Use away from home",
             "useThisAddress": "Use this address"
         },

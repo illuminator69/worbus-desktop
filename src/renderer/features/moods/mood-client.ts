@@ -3,7 +3,7 @@ import isElectron from 'is-electron';
 
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import { moodsShown } from '/@/renderer/features/moods/mood-mix';
-import { useCurrentServer, useHubSettings } from '/@/renderer/store';
+import { useCurrentServer, useHubSettings, useHubStore } from '/@/renderer/store';
 import { useHubSecretHeld } from '/@/renderer/store/hub-set-up';
 import { logger } from '/@/renderer/utils/logger';
 import { MoodCatalogue, MoodListData, MoodResult } from '/@/shared/types/mood-types';
@@ -102,8 +102,12 @@ export const useMoodCatalogue = (): {
         serverType: server?.type,
     });
 
+    // M7: the key is the server's id once main's record has answered; asking before that would
+    // fetch once under the typed address and again under the id on every launch. P3 (review C2):
+    // main's hub calls go only to the live socket's address, so the fetch waits for it too.
+    const known = useHubStore((s) => s.server !== null && s.connected);
     const query = useQuery<MoodCatalogue | null>({
-        enabled: on,
+        enabled: on && known,
         initialData: readPersisted,
         // The copy is old by definition: ask the hub at once.
         initialDataUpdatedAt: 0,

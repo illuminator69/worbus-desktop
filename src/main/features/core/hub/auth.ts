@@ -82,16 +82,24 @@ export interface HubAuthDeps {
             signal?: AbortSignal;
         },
     ) => Promise<{ status: number; text: () => Promise<string> }>;
-    /** `http(s)://host:port` of the Worbus Server, or null when no address is set. */
+    /**
+     * `http(s)://…` of the live socket's address (P3, review C2: the active address only), or
+     * null with no socket. What `bearer()` and `helloCredential()` judge the typed token by.
+     */
     httpBase: () => null | string;
     /** The typed token (older servers). Empty when none. */
     legacyToken: () => string;
     log: { info: (message: string) => void; warn: (message: string) => void };
     /**
-     * Worbus P3 (design §6.5): the key per-server values live under - `id:<serverId>` once the
-     * server has said it, else the address (`httpBase()`). Null when no address is set.
+     * P3 (review C2): where a sign-in or sign-out goes - the active address, else the first one a
+     * fresh `/hub/info` choice admits. Absent: `httpBase()` (the harness's fixed hub).
      */
-    serverKey: () => null | string;
+    requestBase?: () => Promise<{ base: string } | { kind: 'noServer' | 'unreachable' }>;
+    /**
+     * Worbus P3 (design §6.5): the key per-server values live under at `base` - `id:<serverId>`
+     * once the server has said it, else the address itself.
+     */
+    serverKey: (base: string) => null | string;
     /** R4: the id the hub answered with becomes this device's hub id. */
     setDeviceId: (id: string) => void;
     store: {
@@ -189,28 +197,42 @@ export interface HubAuth {
     /** Read the stored secret (start-up). */
     load: () => void;
     /**
+     * P3 (review C2): whether a connect has a credential to say hello with at one of these
+     * addresses (`http(s)://…`): the secret, or the typed token at an address that answered
+     * OldServer. The hello itself reads `helloCredential()` once the socket's address is active.
+     */
+    mayConnect: (bases: string[]) => boolean;
+    /**
      * R35: a `welcome` naming a user came from this address - a hub of this round (upgraded in
      * place). It is no older server: the token is not sent there again.
      */
-    newServer: () => void;
+    newServer: (base?: null | string) => void;
     /**
      * An older server (R6; R24: a 4001 answering a hello that carried the secret): the secret is no
      * use there, no sign-in is owed, and the typed token is the credential again. Also at an
      * address that welcomed with a user this launch: R36 covers sign-in answers only, and a 4001
      * to a secret hello means the hub was rolled back to P1 (whose welcome names no user).
      */
-    oldServer: () => void;
+    oldServer: (base?: null | string) => void;
     /**
      * Worbus P3 (design §6.5): the first welcome carrying `server.id` - every value kept under one
      * of these addresses (`http(s)://…`) is copied to `to` (`id:<serverId>`). Nothing is wiped,
      * and the address entries stay (a rollback to project 2 finds them).
      */
     rekey: (from: string[], to: string) => void;
+    /**
+     * P3 (review C1): the server record's id was cleared or replaced - another server, or one not
+     * known. The secret was issued by the previous one: it is forgotten and never presented
+     * again (no `/hub/signout` either: that would send it to an address whose server is unknown).
+     * The device reads "Not signed in"; the person's own sign-in sends the pair to the address
+     * they chose (design §4).
+     */
+    serverChanged: () => void;
     /** The hub refused the secret (close 4005 / `signed_out`): forget it; a sign-in is owed. */
     signedOutByServer: () => void;
     signIn: (pair: SignInPair) => Promise<HubSignInResult>;
     /** `POST /hub/signout`, best effort, then forget the secret for good. */
-    signOut: () => Promise<void>;
+    signOut: (base?: null | string) => Promise<void>;
     state: () => HubAuthState;
 }
 
@@ -240,13 +262,13 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
      * and forth (restart, welcome, restart...) with no back-off.
      */
     const p2ThisLaunch = new Set<string>();
-    const atP2Hub = () => {
-        const key = deps.serverKey();
+    const keyAt = (base: null | string) => (base ? deps.serverKey(base) : null);
+    const atP2Hub = (base: null | string) => {
+        const key = keyAt(base);
         return key !== null && p2ThisLaunch.has(key);
     };
-    const atOldServer = () => {
-        const base = deps.httpBase();
-        const key = deps.serverKey();
+    const atOldServer = (base: null | string) => {
+        const key = keyAt(base);
         return (
             base !== null &&
             key !== null &&
@@ -254,9 +276,8 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             oldServers().includes(base)
         );
     };
-    const noteOldServer = (older: boolean) => {
-        const base = deps.httpBase();
-        const key = deps.serverKey();
+    const noteOldServer = (older: boolean, base: null | string) => {
+        const key = keyAt(base);
         if (!base || !key) return;
         if (older) answeredThisLaunch.add(key);
         else answeredThisLaunch.delete(key);
@@ -269,7 +290,16 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
      * The typed token: only for an address that answered OldServer (R31), and never once retired
      * (R23) or while this device holds a sign-in.
      */
-    const token = () => (retired() || marked() || !atOldServer() ? '' : deps.legacyToken());
+    const tokenAt = (base: null | string) =>
+        retired() || marked() || !atOldServer(base) ? '' : deps.legacyToken();
+    const token = () => tokenAt(deps.httpBase());
+    const requestBase = async (): Promise<
+        { base: string } | { kind: 'noServer' | 'unreachable' }
+    > => {
+        if (deps.requestBase) return deps.requestBase();
+        const base = deps.httpBase();
+        return base ? { base } : { kind: 'noServer' };
+    };
     const retire = () => deps.store.set(TOKEN_RETIRED_KEY, true);
 
     const keep = (value: string) => {
@@ -315,18 +345,22 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             }
         },
 
-        newServer: () => {
-            const key = deps.serverKey();
+        mayConnect: (bases) => secret !== null || bases.some((base) => tokenAt(base) !== ''),
+
+        newServer: (at) => {
+            const base = at ?? deps.httpBase();
+            const key = keyAt(base);
             if (key) p2ThisLaunch.add(key);
-            noteOldServer(false);
+            noteOldServer(false, base);
         },
 
-        oldServer: () => {
-            const key = deps.serverKey();
+        oldServer: (at) => {
+            const base = at ?? deps.httpBase();
+            const key = keyAt(base);
             if (key) p2ThisLaunch.delete(key);
             drop(true);
             deps.store.delete(TOKEN_RETIRED_KEY);
-            noteOldServer(true);
+            noteOldServer(true, base);
         },
 
         rekey: (from, to) => {
@@ -354,17 +388,33 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             }
         },
 
+        serverChanged: () => {
+            if (!secret && !marked()) return;
+            deps.log.warn(
+                '[hub] the Worbus Server changed - the device credential for the previous one is forgotten; sign in again',
+            );
+            drop(true);
+        },
+
         signedOutByServer: () => {
             if (secret) deps.log.warn('[hub] the Worbus Server signed this device out');
             drop(false);
         },
 
         signIn: async (pair) => {
-            const base = deps.httpBase();
-            if (!base) return { kind: 'noServer' };
+            // P3 (review C2): the active address, else the first one whose `/hub/info` passed -
+            // the pair never goes to an address no probe admitted.
+            const where = await requestBase();
+            if (!('base' in where)) {
+                if (where.kind === 'unreachable') {
+                    deps.log.warn('[hub] sign-in: no address answered as this Worbus Server');
+                }
+                return { kind: where.kind };
+            }
+            const { base } = where;
             const device = deps.device();
             // P3: by server key - the same id is offered at home and away (design §6.5).
-            const idKey = JSON.stringify([deps.serverKey() ?? base, accountName(pair.username)]);
+            const idKey = JSON.stringify([keyAt(base) ?? base, accountName(pair.username)]);
             const stored = deps.store.get(DEVICE_IDS_KEY);
             const firstRead = typeof stored !== 'object' || stored === null;
             const ids: Record<string, string> = firstRead
@@ -411,7 +461,7 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             // R36: this address welcomed with a user this launch - its older-hub answer is a
             // gateway's, not the hub's. Unreachable: the status line and the renderer's retry.
             const { result, secret: issued } =
-                classified.result.kind === 'oldServer' && atP2Hub()
+                classified.result.kind === 'oldServer' && atP2Hub(base)
                     ? { result: { kind: 'unreachable' as const }, secret: undefined }
                     : classified;
             // R23: a sign-in that worked, or an account Navidrome refused, ends the typed token
@@ -420,7 +470,7 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
             if (result.kind === 'signedIn' && issued) {
                 keep(issued);
                 // An address that signs in is not an older server any more (an upgraded hub).
-                noteOldServer(false);
+                noteOldServer(false, base);
                 deps.setDeviceId(result.deviceId);
                 deps.store.set(DEVICE_IDS_KEY, { ...ids, [idKey]: result.deviceId });
                 if (unclaimed && result.deviceId === unclaimed) {
@@ -438,20 +488,24 @@ export const createHubAuth = (deps: HubAuthDeps): HubAuth => {
                 if (result.kind === 'oldServer') {
                     drop(true);
                     deps.store.delete(TOKEN_RETIRED_KEY);
-                    noteOldServer(true);
+                    noteOldServer(true, base);
                 }
             }
             return publicResult(result);
         },
 
-        signOut: async () => {
+        signOut: async (captured) => {
             const held = secret;
-            const base = deps.httpBase();
             drop(true);
             // R23 (b): the user's sign-out (and a Navidrome logout, a server switch) ends the typed
             // token as well - with only a token, it is the token being signed out.
             retire();
-            if (!held || !base) return;
+            if (!held) return;
+            // P3 (review C2): the address the socket was on (captured before it was stopped), else
+            // the first one a fresh `/hub/info` choice admits; else nowhere.
+            const where = captured ? { base: captured } : await requestBase();
+            if (!('base' in where)) return;
+            const { base } = where;
             try {
                 const res = await deps.fetch(`${base}/hub/signout`, {
                     headers: { Authorization: `Bearer ${held}` },

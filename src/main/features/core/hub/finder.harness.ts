@@ -2,10 +2,14 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import type { InfoOutcome, InfoProbe } from './addresses.ts';
+import type { HubFinderState, InfoOutcome, InfoProbe } from './addresses.ts';
 import type { NetInterfaces } from './finder.ts';
 
 import { createAutoLook } from '../../../../renderer/features/hub/utils/hub-finder-auto.ts';
+import {
+    notSetView,
+    promptFor,
+} from '../../../../renderer/features/settings/components/server/server-status.ts';
 import { createInfoProbe } from './addresses.ts';
 import {
     candidatesFor,
@@ -126,13 +130,14 @@ test('results_grouped_by_server_id', async () => {
 
 test('older_only_at_navidrome_host', async () => {
     const older: InfoOutcome = { kind: 'older' };
+    // A home host (a public one is never offered: public_http_found_not_offered).
     const { probe } = tableProbe({
-        'ws://music.example.com:4790': older,
-        'wss://hub.example.com': older,
-        'wss://worbus.example.com': older,
+        'ws://music.home.local:4790': older,
+        'wss://hub.home.local': older,
+        'wss://worbus.home.local': older,
     });
-    assert.deepEqual(await lookBeside(['https://music.example.com'], probe), [
-        { address: 'ws://music.example.com:4790', kind: 'olderAt' },
+    assert.deepEqual(await lookBeside(['https://music.home.local'], probe), [
+        { address: 'ws://music.home.local:4790', kind: 'olderAt' },
     ]);
     // The sweep never reports a 426: any WebSocket server answers one.
     const swept = await sweep({
@@ -151,6 +156,18 @@ test('public_http_found_not_offered', async () => {
     // A private or Tailscale plain-text one is offered.
     const home = tableProbe({ 'ws://100.101.1.2:4790': match() });
     assert.equal((await lookBeside(['http://100.101.1.2:4533'], home.probe))[0].kind, 'server');
+    // Review I1: an older server's 426 on a public host is plain text too - its sign-in would
+    // carry the Navidrome token pair over the internet. Not an `olderAt`, and never prompted.
+    const older = tableProbe({ 'ws://music.example.com:4790': { kind: 'older' } });
+    const results = await lookBeside(['https://music.example.com'], older.probe);
+    assert.deepEqual(results, [{ address: 'ws://music.example.com:4790', kind: 'notEncrypted' }]);
+    const state: HubFinderState = { kind: 'results', results, scope: 'beside' };
+    assert.equal(promptFor(state, null, false), null, 'nothing is offered');
+    assert.deepEqual(
+        notSetView(state, 'alice').rows.map((r) => r.action),
+        [null],
+        'no Use this address',
+    );
 });
 
 test('sweep_bounded_to_own_24', async () => {
@@ -229,6 +246,15 @@ test('sweep_skips_public_and_virtual_interfaces', () => {
     assert.deepEqual(
         ownSubnets({ eth0: [nic('192.168.1.37'), { ...nic('192.168.1.38'), family: 4 as never }] }),
         ['192.168.1'],
+    );
+    // M13: interfaces are counted, not subnets - an interface with addresses in two /24s is one
+    // interface (its first), and the second interface is still swept.
+    assert.deepEqual(
+        ownSubnets({
+            eth0: [nic('192.168.1.37'), nic('192.168.5.37')],
+            wlan0: [nic('10.0.0.5')],
+        }),
+        ['192.168.1', '10.0.0'],
     );
 });
 

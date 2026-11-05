@@ -8,14 +8,15 @@ import os from 'os';
 import { WebSocket } from 'ws';
 
 import { store } from '../settings';
-import { createActiveAddress } from './active-address';
+import { createActiveAddress, settingsAction } from './active-address';
 import {
     applyServerEdit,
+    connectOrder,
     createServerRecordStore,
     httpBaseOfAddress,
     hubConfiguredFrom,
     HubFinderState,
-    HubServerRecord,
+    HubServerState,
     IDLE_FINDER,
     isPrivateAddress,
     probeInfo,
@@ -103,16 +104,15 @@ export const hubAuth = createHubAuth({
         platform: 'desktop',
     }),
     fetch: (url, init) => fetch(url, init),
-    // P3: sign-in, sign-out and the device-id keys build on the active address, like every
-    // other main client (design §6.3 "HTTP calls follow the socket").
+    // P3 (review C2): the live socket's address only - what the hello's typed token is judged by.
     httpBase: () => httpBaseOfAddress(getHubConfig().url),
     legacyToken: () => config.legacyToken,
     log,
+    // P3 (review C2): sign-in and sign-out go to the active address, else to the first address a
+    // fresh `/hub/info` choice admits - never to one no probe passed.
+    requestBase: () => activeAddress.requestBase(),
     // P3: `id:<serverId>` once known, else the address - device ids and this launch's verdicts.
-    serverKey: () => {
-        const base = httpBaseOfAddress(getHubConfig().url);
-        return base ? serverKey(records.current(), base) : null;
-    },
+    serverKey: (base) => serverKey(records.current(), base),
     setDeviceId: (id) => store.set('hub.deviceId', id),
     store: {
         delete: (key) => store.delete(key),
@@ -135,16 +135,14 @@ void app.whenReady().then(() => hubAuth.load());
  */
 const records = createServerRecordStore({
     onChange: () => emitServer(),
+    // Review C1: the id was cleared or replaced - a server change. After the current handler
+    // (a welcome being forwarded, an edit being answered), the held credential is forgotten.
+    onServerChange: (from, to) => queueMicrotask(() => serverChanged(from, to)),
     store: { get: (key) => store.get(key), set: (key, value) => store.set(key, value) },
 });
 const activeAddress = createActiveAddress({ log, now: Date.now, probe: probeInfo, records });
 
-export interface HubServerEvent {
-    activeAddress: null | string;
-    record: HubServerRecord;
-}
-
-const serverEvent = (): HubServerEvent => ({
+const serverEvent = (): HubServerState => ({
     activeAddress: activeAddress.active(),
     record: records.current(),
 });
@@ -152,6 +150,28 @@ const serverEvent = (): HubServerEvent => ({
 function emitServer(): void {
     getMainWindow()?.webContents.send('hub-server', serverEvent());
     hubEvents.emit('server', serverEvent());
+}
+
+/** The record's addresses as `http(s)://` bases, in the order they are tried. */
+const recordBases = (): string[] =>
+    connectOrder(records.current())
+        .map((a) => httpBaseOfAddress(a.url))
+        .filter((base): base is string => base !== null);
+
+/**
+ * Review C1: the server record now names another server, or none. The device secret was issued by
+ * the previous one: forgotten (never presented in a hello, a bearer or a sign-out again), and the
+ * transport and the cast bridges restart without it. The person's sign-in is what is owed.
+ */
+function serverChanged(from: string, to: null | string): void {
+    log.warn(
+        `[hub] the server record no longer names the server ${from.slice(0, 8)}... (${to ? `now ${to.slice(0, 8)}...` : 'none known'})`,
+    );
+    const auth = hubAuth.state();
+    if (!auth.signedIn && !auth.needsSignIn) return;
+    hubAuth.serverChanged();
+    restartWithCredential(config.enabled);
+    emitServer();
 }
 
 /** Moves whenever the credential changes, so the cast bridges rebuild with the new one. */
@@ -207,7 +227,7 @@ function connect(): void {
     // or signed out by the server). A hello without a credential is only refused (4005), and a
     // refusal would read as "signed out" and set off a silent sign-in the user did not ask for:
     // the Server tab says "Not signed in" and its Sign in starts the transport again.
-    if (!hubAuth.bearer()) return;
+    if (!hubAuth.mayConnect(recordBases())) return;
     const gen = ++generation;
     choosing = gen;
     void activeAddress.choose().then((url) => {
@@ -365,7 +385,7 @@ function dial(url: string, gen: number): void {
             // The older-hub verdict ends and the socket on the shared token closes: until the
             // upgrade sign-in the renderer runs from this welcome works, this device is not
             // connected as the primary user (R31).
-            hubAuth.newServer();
+            hubAuth.newServer(httpBaseOfAddress(url));
             restartWithCredential(true);
         }
     });
@@ -393,12 +413,12 @@ function dial(url: string, gen: number): void {
             // R24: a hub of this round answers a dead secret with 4005, never 4001. A 4001 to a
             // hello that carried one comes from a hub without sign-in (rolled back to P1): forget
             // the secret, and the Server tab shows the token field for older servers.
-            hubAuth.oldServer();
+            hubAuth.oldServer(httpBaseOfAddress(url));
             credentialGeneration += 1;
             log.warn(
                 '[hub] an older Worbus Server (close 4001 to a signed-in hello) - token needed',
             );
-            shouldRun = config.enabled && hubAuth.bearer() !== null;
+            shouldRun = config.enabled && hubAuth.mayConnect(recordBases());
             emitStatus('disconnected');
             emitStatus('oldServer');
             scheduleReconnect(socket, gen);
@@ -640,21 +660,26 @@ ipcMain.handle(
                 hasCredential: token.trim() !== '' || auth.signedIn || auth.needsSignIn,
                 url,
             }),
+            before.url,
         );
         const recordMoved = JSON.stringify(records.current()) !== recordBefore;
         const credentialMoved = hubAuth.bearer() !== before.bearer;
         if (credentialMoved) credentialGeneration += 1;
         // R23: the renderer clears a retired token from its field after a sign-in. That token was
-        // not in use (the secret was, or nothing): no reconnect for it.
-        if (
-            !credentialMoved &&
-            !recordMoved &&
-            before.enabled === config.enabled &&
-            before.url === config.url &&
-            before.name === config.name
-        ) {
-            return null;
-        }
+        // not in use (the secret was, or nothing): no reconnect for it. Review I2: a typed address
+        // that moved only because it was removed from the list, while the live socket's address is
+        // still in the record, keeps the socket and the bridges (reconciled above).
+        const action = settingsAction(
+            {
+                credentialMoved,
+                enabled: { after: config.enabled, before: before.enabled },
+                name: { after: config.name, before: before.name },
+                recordMoved,
+                url: { after: config.url, before: before.url },
+            },
+            { live: isHubConnected() ? activeAddress.active() : null, record: records.current() },
+        );
+        if (action !== 'restart') return null;
         // Recreate the connection so url/token/name changes take effect.
         stop();
         if (enabled) start();
@@ -687,6 +712,7 @@ const isPair = (value: unknown): value is SignInPair => {
 ipcMain.handle('hub-signin', async (_event, pair: unknown) => {
     if (!isPair(pair)) return { kind: 'noAccount' };
     const before = hubAuth.bearer();
+    const connected = isHubConnected();
     const result = await hubAuth.signIn({
         salt: pair.salt,
         token: pair.token,
@@ -697,15 +723,25 @@ ipcMain.handle('hub-signin', async (_event, pair: unknown) => {
     // typed token was retired (R23), so a socket still on it closes and nothing reconnects. Any
     // answer that left the credential as it was leaves the transport alone (a device on the
     // token stays connected; an older server already on its token is not reconnected).
-    if (result.kind === 'signedIn' || hubAuth.bearer() !== before) restartWithCredential(true);
+    // P3: with no socket the bearer reads nothing either way (the token is judged at the address
+    // a socket is on), so an older server's answer to a device not connected starts it on its token.
+    if (
+        result.kind === 'signedIn' ||
+        hubAuth.bearer() !== before ||
+        (result.kind === 'oldServer' && !connected)
+    ) {
+        restartWithCredential(true);
+    }
     return result;
 });
 
 // Sign out of this server. The socket is closed first, so the 4005 the hub sends it for the
 // revoked secret is a superseded socket's and does not trigger a silent sign-in.
 ipcMain.handle('hub-signout', async (_event, opts?: { reconnect?: boolean }) => {
+    // P3 (review C2): the address the socket is on, taken before stop() clears it.
+    const live = httpBaseOfAddress(activeAddress.active() ?? '');
     stop();
-    await hubAuth.signOut();
+    await hubAuth.signOut(live);
     restartWithCredential(opts?.reconnect !== false);
     return null;
 });
@@ -739,9 +775,10 @@ ipcMain.on('hub-navidrome-urls', (_event, urls: unknown) => {
 ipcMain.handle('hub-finder-state', () => finderState);
 
 // A sign-in tap stops a sweep still running (design §7 RACES).
+// M4: also the Server tab closing - a finished "Find home address" answer is not said again.
 ipcMain.on('hub-finder-cancel', () => {
     lookGeneration += 1;
-    if (finderState.kind === 'looking') setFinder(IDLE_FINDER);
+    if (finderState.kind === 'looking' || finderState.scope === 'home') setFinder(IDLE_FINDER);
 });
 
 ipcMain.handle('hub-finder-look', async (_event, scope: unknown, urls: unknown) => {
@@ -824,6 +861,14 @@ ipcMain.handle('hub-server-state', () => serverEvent());
 // address switched, a prompt answered Not now. None moves the socket (design §6.3).
 ipcMain.handle('hub-server-edit', (_event, edit: unknown) => {
     records.update((record) => applyServerEdit(record, edit));
+    // M3: an address added or removed while no socket is up is tried now, not after the backoff:
+    // only a waiting reconnect is cut (an open or opening socket, or a choice under way, is left).
+    if (shouldRun && !ws && reconnectTimer && choosing !== generation) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+        backoffMs = INITIAL_BACKOFF_MS;
+        connect();
+    }
     return serverEvent();
 });
 
@@ -843,10 +888,10 @@ export const getHubDevices = (): HubDeviceInfo[] => knownDevices;
 /**
  * Whether the hub is switched on and where. The credential is `hubAuth`'s, never read here.
  *
- * P3: `url` is the ACTIVE address - the live socket's base, else the first of the order not seen
- * answering as another server this launch (so a sign-in works before the first connect). Read by
- * auth.ts (sign-in, sign-out), lbbot, preview, mood, station, audiomuse's `endpoint()` and the cast
- * bridge's start check; HTTP calls follow the socket (design §6.3). Empty with nothing to call.
+ * P3 (review C2): `url` is the ACTIVE address only - the live socket's base, else empty. Read by
+ * auth.ts's bearer and hello, lbbot, preview, mood, station and audiomuse's `endpoint()`, which
+ * all fail soft on empty; HTTP calls follow the socket (design §6.3), so a bearer never goes to an
+ * address no probe passed. Sign-in and sign-out go through `activeAddress.requestBase()` instead.
  */
 export const getHubConfig = (): { enabled: boolean; url: string } => ({
     enabled: config.enabled,

@@ -5,7 +5,9 @@ import {
     EMPTY_HUB_SERVER_RECORD,
     httpBaseOfAddress,
     migrateFrom,
+    normaliseHubAddress,
     parseHubServerRecord,
+    removeAddress,
     withTyped,
 } from '../../../../shared/utils/hub-addresses.ts';
 
@@ -34,15 +36,22 @@ export interface ServerRecordStore {
      * (an unconfigured profile, the default address included, gets an empty record); after that a
      * configured address not in the record is added as `typed`. An unconfigured push ("no server
      * set": Connect off, no credential, the default address) forgets the server and its addresses,
-     * keeping the Not now answers.
+     * keeping the Not now answers. M6: when the typed address changed (`previousUrl`), the
+     * `typed` entry equal to the previous one is replaced, so typed addresses do not pile up.
      */
-    reconcile: (url: string, configured: boolean) => HubServerRecord;
+    reconcile: (url: string, configured: boolean, previousUrl?: string) => HubServerRecord;
     update: (change: (record: HubServerRecord) => HubServerRecord) => HubServerRecord;
 }
 
 export interface ServerRecordStoreDeps {
     /** Every change to the record, after it is stored (the `hub-server` IPC event). */
     onChange: (record: HubServerRecord) => void;
+    /**
+     * Review C1: the record's id was cleared or replaced (an address removal that forgot the
+     * server, a found server with another id, an unconfigured push, a welcome naming another id).
+     * That is a server change: the credential held for `from` must not be presented again.
+     */
+    onServerChange?: (from: string, to: null | string) => void;
     store: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
 }
 
@@ -52,9 +61,12 @@ export const createServerRecordStore = (deps: ServerRecordStoreDeps): ServerReco
 
     const save = (next: HubServerRecord, force = false): HubServerRecord => {
         const before = record;
+        const fromId = (before ?? stored())?.serverId ?? null;
         record = next;
         if (!force && before && JSON.stringify(before) === JSON.stringify(next)) return next;
         deps.store.set(HUB_SERVER_KEY, next);
+        if (fromId !== null && next.serverId !== fromId)
+            deps.onServerChange?.(fromId, next.serverId);
         deps.onChange(next);
         return next;
     };
@@ -63,7 +75,7 @@ export const createServerRecordStore = (deps: ServerRecordStoreDeps): ServerReco
 
     return {
         current,
-        reconcile: (url, configured) => {
+        reconcile: (url, configured, previousUrl) => {
             const first = record === null;
             const base = record ?? stored();
             let next = base ?? migrateFrom(url, configured);
@@ -72,6 +84,14 @@ export const createServerRecordStore = (deps: ServerRecordStoreDeps): ServerReco
                     next = { ...EMPTY_HUB_SERVER_RECORD, promptDismissed: next.promptDismissed };
                 }
             } else {
+                const previous = previousUrl ? normaliseHubAddress(previousUrl) : null;
+                const replaced =
+                    previous !== null &&
+                    previous !== normaliseHubAddress(url) &&
+                    next.addresses.some((a) => a.url === previous && a.source === 'typed');
+                // Through the removal rule: a replaced address that was the last one to pass
+                // forgets the server (and `onServerChange` stops presenting its credential).
+                if (replaced) next = removeAddress(next, previous);
                 next = withTyped(next, url);
             }
             return save(next, first && base === null);

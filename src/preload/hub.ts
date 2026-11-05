@@ -1,4 +1,4 @@
-import type { HubFinderState, HubServerRecord, ServerEdit } from '/@/shared/utils/hub-addresses';
+import type { HubFinderState, HubServerState, ServerEdit } from '/@/shared/utils/hub-addresses';
 import type { HubAuthState, HubSignInResult, SignInPair } from '/@/shared/utils/hub-signin';
 
 import { ipcRenderer } from 'electron';
@@ -60,12 +60,6 @@ const signOut = (opts?: { reconnect?: boolean }): Promise<null> =>
 
 /** Whether a secret is held, kept in memory only, or owed after a restart. Never the secret. */
 const authState = (): Promise<HubAuthState> => ipcRenderer.invoke('hub-auth-state');
-
-/** P3: the server record and the address the live socket is on (null while none). */
-export interface HubServerState {
-    activeAddress: null | string;
-    record: HubServerRecord;
-}
 
 /** P3: the record and active address now, then `onServer` for every change. */
 const serverState = (): Promise<HubServerState> => ipcRenderer.invoke('hub-server-state');

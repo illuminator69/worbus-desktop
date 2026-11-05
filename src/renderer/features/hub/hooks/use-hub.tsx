@@ -25,6 +25,7 @@ import {
     clearLbQueries,
     currentServerUsername,
     reconcileSignIn,
+    refreshAuthState,
     signInWithCurrentServer,
     signOutOfServer,
     silentSignIn,
@@ -1552,7 +1553,17 @@ export const useHub = () => {
             .serverState()
             .then((server) => setStore({ server }))
             .catch(() => undefined);
-        const offServer = hub.onServer((server) => setStore({ server }));
+        const offServer = hub.onServer((server) => {
+            const before = useHubStore.getState().server?.record.serverId ?? null;
+            setStore({ server });
+            // Review C1: the record forgot its server or names another one - main forgot the
+            // secret issued by the previous one. What this device holds is read again, and that
+            // server's user flags are not this one's.
+            if (before !== null && server.record.serverId !== before) {
+                setStore({ user: null });
+                void refreshAuthState().catch(() => undefined);
+            }
+        });
         // P3: the finder's state, and the Navidrome hosts it may look beside - at start and on
         // every account change (main keeps no other copy of the server list).
         void hub
