@@ -48,6 +48,21 @@ export const EMPTY_HUB_SERVER_RECORD: HubServerRecord = {
 
 export type AddressClass = 'private' | 'public' | 'tailscale';
 
+/** Main's finder, as the Server tab reads it (`hub-finder-state`). No `NeedsPermission` here. */
+export interface HubFinderState {
+    kind: 'idle' | 'looking' | 'nothingBeside' | 'nothingOnNetwork' | 'notOnWifi' | 'results';
+    results: HubFound[];
+    scope: 'beside' | 'home' | 'network' | null;
+}
+
+/** What looking found (design §6.4): a server by id, an older one by address, a plain-text one. */
+export type HubFound =
+    | { address: string; kind: 'notEncrypted' }
+    | { address: string; kind: 'olderAt' }
+    | { addresses: string[]; kind: 'server'; name: string; serverId: string };
+
+export const IDLE_FINDER: HubFinderState = { kind: 'idle', results: [], scope: null };
+
 /** What one `GET <base>/hub/info` said, judged against the id the record holds. */
 export type InfoOutcome =
     | { kind: 'match'; name: string; serverId: string }

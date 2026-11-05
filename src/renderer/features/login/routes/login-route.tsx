@@ -14,6 +14,7 @@ import {
     isLegacyAuth,
     isServerLock,
 } from '/@/renderer/features/action-required/utils/window-properties';
+import { startAutoLook } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import JellyfinIcon from '/@/renderer/features/servers/assets/jellyfin.png';
 import NavidromeIcon from '/@/renderer/features/servers/assets/navidrome.png';
 import SubsonicIcon from '/@/renderer/features/servers/assets/opensubsonic.png';
@@ -153,9 +154,13 @@ const LoginRoute = () => {
                 });
                 const updated = getServerById(existingServer.id);
                 if (updated) setCurrentServer(updated);
+                // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+                startAutoLook();
             } else {
                 addServer(serverItem);
                 setCurrentServer(serverItem);
+                // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+                startAutoLook();
             }
 
             if (serverLock) {
@@ -255,12 +260,16 @@ const LoginRoute = () => {
                 updateServer(existingServer.id, updates);
                 const updated = getServerById(existingServer.id);
                 if (updated) setCurrentServer(updated);
+                // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+                startAutoLook();
             } else {
                 if (data.ndCredential !== undefined) {
                     serverItem.ndCredential = data.ndCredential;
                 }
                 addServer(serverItem);
                 setCurrentServer(serverItem);
+                // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+                startAutoLook();
             }
 
             if (serverLock) {

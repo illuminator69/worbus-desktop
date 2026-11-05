@@ -14,6 +14,7 @@ import {
     NO_ECHO,
 } from '/@/renderer/features/hub/utils/do-echo';
 import { hubFailureMessage } from '/@/renderer/features/hub/utils/hub-failure';
+import { currentNavidromeUrls } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import {
     accountChange,
     accountKey,
@@ -1551,7 +1552,29 @@ export const useHub = () => {
             .serverState()
             .then((server) => setStore({ server }))
             .catch(() => undefined);
-        return hub.onServer((server) => setStore({ server }));
+        const offServer = hub.onServer((server) => setStore({ server }));
+        // P3: the finder's state, and the Navidrome hosts it may look beside - at start and on
+        // every account change (main keeps no other copy of the server list).
+        void hub
+            .finderState()
+            .then((finder) => setStore({ finder }))
+            .catch(() => undefined);
+        const offFinder = hub.onFinderState((finder) => setStore({ finder }));
+        hub.setNavidromeUrls(currentNavidromeUrls());
+        const offAccount = useAuthStore.subscribe((state, prev) => {
+            if (
+                state.currentServer?.url === prev.currentServer?.url &&
+                state.currentServer?.remoteUrl === prev.currentServer?.remoteUrl
+            ) {
+                return;
+            }
+            hub.setNavidromeUrls(currentNavidromeUrls());
+        });
+        return () => {
+            offServer();
+            offFinder();
+            offAccount();
+        };
     }, []);
 
     // Wire the inbound hub stream.

@@ -1,4 +1,4 @@
-import type { HubServerRecord } from '/@/shared/utils/hub-addresses';
+import type { HubFinderState, HubServerRecord } from '/@/shared/utils/hub-addresses';
 import type { HubAuthState, HubSignInResult, SignInPair } from '/@/shared/utils/hub-signin';
 
 import { ipcRenderer } from 'electron';
@@ -76,18 +76,42 @@ const onServer = (cb: (state: HubServerState) => void): (() => void) => {
     return () => ipcRenderer.removeListener('hub-server', handler);
 };
 
+/** P3: the current Navidrome server's `url` and `remoteUrl`, the hosts main may look beside. */
+const setNavidromeUrls = (urls: string[]) => ipcRenderer.send('hub-navidrome-urls', urls);
+
+/** P3: look beside Navidrome, on this network (a tap), or for a set server's home address. */
+const finderLook = (
+    scope: 'beside' | 'home' | 'network',
+    urls: string[],
+): Promise<HubFinderState> => ipcRenderer.invoke('hub-finder-look', scope, urls);
+
+const finderCancel = () => ipcRenderer.send('hub-finder-cancel');
+
+const finderState = (): Promise<HubFinderState> => ipcRenderer.invoke('hub-finder-state');
+
+const onFinderState = (cb: (state: HubFinderState) => void): (() => void) => {
+    const handler = (_event: unknown, state: HubFinderState) => cb(state);
+    ipcRenderer.on('hub-finder-state', handler);
+    return () => ipcRenderer.removeListener('hub-finder-state', handler);
+};
+
 const removeListeners = () => {
     ipcRenderer.removeAllListeners('hub-message');
 };
 
 export const hub = {
     authState,
+    finderCancel,
+    finderLook,
+    finderState,
     kick,
+    onFinderState,
     onMessage,
     onServer,
     removeListeners,
     send,
     serverState,
+    setNavidromeUrls,
     setSettings,
     signIn,
     signOut,

@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { app, ipcMain, powerMonitor, safeStorage } from 'electron';
 import log from 'electron-log/main';
 import { EventEmitter } from 'events';
+import os from 'os';
 import { WebSocket } from 'ws';
 
 import { store } from '../settings';
@@ -12,11 +13,23 @@ import {
     createServerRecordStore,
     httpBaseOfAddress,
     hubConfiguredFrom,
+    HubFinderState,
     HubServerRecord,
+    IDLE_FINDER,
+    isPrivateAddress,
     probeInfo,
     serverKey,
+    withFound,
 } from './addresses';
 import { createHubAuth } from './auth';
+import {
+    findHomeAddress,
+    homeBesideNavidrome,
+    lookBeside,
+    ownSubnets,
+    sweep,
+    SweepDeps,
+} from './finder';
 import { kickAction } from './kick';
 
 import { getMainWindow } from '/@/main/index';
@@ -473,6 +486,7 @@ function kick(reason: string): void {
  */
 function noteWelcomeServer(url: string, server: unknown): void {
     const { after, before } = activeAddress.welcome(url, server);
+    void lookForHomeAddress();
     // The first welcome with an id (design §6.5): what was kept under the address - the one this
     // welcome came on, and the typed one project 2 keyed by - is copied to the id. Never wiped.
     if (before === null && after !== null) {
@@ -696,6 +710,111 @@ ipcMain.handle('hub-signout', async (_event, opts?: { reconnect?: boolean }) => 
 });
 
 ipcMain.handle('hub-auth-state', () => hubAuth.state());
+
+// --- Worbus P3: looking for the server (design §6.4) ----------------------------------------------
+
+/** The renderer's current Navidrome server's `url` and `remoteUrl`: the only copy main keeps. */
+let navidromeUrls: string[] = [];
+
+let finderState: HubFinderState = IDLE_FINDER;
+/** Moves on every look and on a cancel: an older look's answer is dropped. */
+let lookGeneration = 0;
+
+const setFinder = (state: HubFinderState): HubFinderState => {
+    finderState = state;
+    getMainWindow()?.webContents.send('hub-finder-state', state);
+    return state;
+};
+
+const urlsFrom = (value: unknown): string[] =>
+    Array.isArray(value)
+        ? value.filter((u): u is string => typeof u === 'string' && u.trim() !== '').slice(0, 4)
+        : [];
+
+ipcMain.on('hub-navidrome-urls', (_event, urls: unknown) => {
+    navidromeUrls = urlsFrom(urls);
+});
+
+ipcMain.handle('hub-finder-state', () => finderState);
+
+// A sign-in tap stops a sweep still running (design §7 RACES).
+ipcMain.on('hub-finder-cancel', () => {
+    lookGeneration += 1;
+    if (finderState.kind === 'looking') setFinder(IDLE_FINDER);
+});
+
+ipcMain.handle('hub-finder-look', async (_event, scope: unknown, urls: unknown) => {
+    if (scope !== 'beside' && scope !== 'network' && scope !== 'home') return finderState;
+    if (Array.isArray(urls)) navidromeUrls = urlsFrom(urls);
+    const gen = ++lookGeneration;
+    setFinder({ kind: 'looking', results: [], scope });
+    const deps: SweepDeps = {
+        cancelled: () => gen !== lookGeneration,
+        interfaces: () => os.networkInterfaces(),
+        now: Date.now,
+        probe: probeInfo,
+    };
+    let next: HubFinderState;
+    if (scope === 'beside') {
+        const results = await lookBeside(navidromeUrls, probeInfo);
+        next = { kind: results.length ? 'results' : 'nothingBeside', results, scope };
+    } else if (scope === 'network') {
+        const swept = await sweep(deps);
+        next = {
+            kind:
+                swept.kind === 'notOnWifi'
+                    ? 'notOnWifi'
+                    : swept.results.length
+                      ? 'results'
+                      : 'nothingOnNetwork',
+            results: swept.results,
+            scope,
+        };
+    } else {
+        // "Find home address": the sweep, this server's id only; a match joins the record as
+        // `found`. The socket stays where it is: the next reconnect may use it.
+        const { name, serverId } = records.current();
+        if (ownSubnets(os.networkInterfaces()).length === 0) {
+            next = { kind: 'notOnWifi', results: [], scope };
+        } else {
+            const home = serverId ? await findHomeAddress(serverId, deps) : null;
+            if (home && serverId && gen === lookGeneration) {
+                records.update((r) => withFound(r, { addresses: [home], name, serverId }));
+            }
+            next = home
+                ? {
+                      kind: 'results',
+                      results: [
+                          {
+                              addresses: [home],
+                              kind: 'server',
+                              name: name ?? '',
+                              serverId: serverId ?? '',
+                          },
+                      ],
+                      scope,
+                  }
+                : { kind: 'nothingOnNetwork', results: [], scope };
+        }
+    }
+    if (gen !== lookGeneration) return finderState;
+    log.info(`[hub] looked (${scope}): ${next.kind}, ${next.results.length} result(s)`);
+    return setFinder(next);
+});
+
+/**
+ * A set server with no home address (design §6.4): on each welcome over a home network, Navidrome's
+ * host on 4790 is asked, silently; a match with this server's id joins the record as `found`.
+ */
+async function lookForHomeAddress(): Promise<void> {
+    const { addresses, serverId } = records.current();
+    if (!serverId || addresses.some((a) => isPrivateAddress(a.url))) return;
+    if (navidromeUrls.length === 0 || ownSubnets(os.networkInterfaces()).length === 0) return;
+    const home = await homeBesideNavidrome(navidromeUrls, serverId, probeInfo);
+    if (home.length === 0 || records.current().serverId !== serverId) return;
+    log.info(`[hub] found this server's home address beside Navidrome: ${home.join(', ')}`);
+    records.update((r) => withFound(r, { addresses: home, name: r.name, serverId }));
+}
 
 // P3: the server record and the active address, read once at start; `hub-server` follows changes.
 ipcMain.handle('hub-server-state', () => serverEvent());

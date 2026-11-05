@@ -1,5 +1,5 @@
 import type { LbBotStatus } from '/@/shared/types/lbbot-types';
-import type { HubServerRecord } from '/@/shared/utils/hub-addresses';
+import type { HubFinderState, HubServerRecord } from '/@/shared/utils/hub-addresses';
 import type { HubSignInResult, HubUser } from '/@/shared/utils/hub-signin';
 import type { LbIndexProgress } from '/@/shared/utils/lbbot-mode';
 
@@ -150,6 +150,8 @@ interface HubState {
      * for an older hub, which sends no such field, and while there is no connection.
      */
     features: string[];
+    /** Worbus P3: main's finder (`hub-finder-state`): looking, what it found, or why nothing. */
+    finder: HubFinderState;
     /**
      * Worbus P1: lb-bot's index build countdown, from `welcome.lbIndex.progress` and each
      * `index` frame's. Null when the last one carried none (an older peer, or the build is
@@ -241,6 +243,7 @@ const initialState: HubState = {
     connected: false,
     devices: [],
     features: [],
+    finder: { kind: 'idle', results: [], scope: null },
     lbProgress: null,
     lbRefused: false,
     lbStatus: null,
