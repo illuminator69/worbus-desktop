@@ -44,6 +44,7 @@ import {
     resolveWindowBounds,
 } from '/@/main/utils/window-bounds';
 import { PlayerRepeat, PlayerStatus, PlayerType, TitleTheme } from '/@/shared/types/types';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 // No update feed of our own exists yet, and upstream's must never be one: it would replace this
 // fork with upstream's build. These stay empty until the rename gives the fork a release channel
@@ -1209,7 +1210,7 @@ if (!singleInstance) {
                 ignoreCors: !!store.get('ignore_cors'),
                 ignoreSsl: !!store.get('ignore_ssl'),
                 platform: process.platform,
-                version: packageJson.version,
+                version: appVersionLine(packageJson.version),
             });
 
             protocol.handle('feishin', async () => {

@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron
 import packageJson from '../../package.json';
 
 import { PlayerRepeat, PlayerStatus } from '/@/shared/types/types';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 export type MenuPlaybackState = {
     accelerators?: {
@@ -321,7 +322,7 @@ export default class MenuBuilder {
                 { type: 'separator' },
                 {
                     enabled: false,
-                    label: 'Version ' + packageJson.version,
+                    label: 'Version ' + appVersionLine(packageJson.version),
                 },
             ],
         };

@@ -15,6 +15,7 @@ import Store from 'electron-store';
 import { promises as fs, watch as fsWatch } from 'fs';
 import path from 'path';
 
+import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
 
 const getFrame = () => {
@@ -121,14 +122,8 @@ export const store = new Store<any>({
         window_start_minimized: false,
         window_window_bar_style: getFrame(),
     },
-    migrations: {
-        '>=0.21.2': (store) => {
-            store.set('window_bar_style', 'linux');
-        },
-        '>=1.0.0': (store) => {
-            store.clear();
-        },
-    },
+    // Worbus P4: upstream's `'>=1.0.0'` emptying of the store is gone (migrations.ts).
+    migrations: SETTINGS_MIGRATIONS,
 });
 
 /**

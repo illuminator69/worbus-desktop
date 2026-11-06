@@ -22,6 +22,7 @@ import { DropdownMenu, MenuItemProps } from '/@/shared/components/dropdown-menu/
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
 import { toast } from '/@/shared/components/toast/toast';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 const browser = isElectron() ? window.api.browser : null;
 
@@ -253,7 +254,7 @@ export const AppMenu = () => {
             // A plain label: this fork has no release feed to read (upstream's is not ours).
             disabled: true,
             id: 'version',
-            label: t('page.appMenu.version', { version: currentVersion }),
+            label: t('page.appMenu.version', { version: appVersionLine(currentVersion) }),
             type: 'item',
         },
         {
