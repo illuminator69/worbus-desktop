@@ -28,6 +28,9 @@ const W = '(?:password|secret|token|apikey|key|authorization)';
 const NAME = `[A-Za-z0-9_.\\-]*${W}[A-Za-z0-9_.\\-]*`;
 const QUOTED = '"(?:[^"\\\\]|\\\\.)*"';
 
+// Rule a' (contract v2): the same field inside escaped JSON, a document carried as a string so
+// its quotes read `\"`. The value ends at the next `\"`. Applied before rule a.
+const A2 = new RegExp(`\\\\"(${NAME})\\\\"(\\s*:\\s*)\\\\"(?:(?!\\\\").)*\\\\"`, 'gi');
 const A = new RegExp(`"(${NAME})"(\\s*:\\s*)${QUOTED}`, 'gi');
 const B = new RegExp(
     `(?<![A-Za-z0-9_.\\-"])(${NAME})(\\s*[:=]\\s*)(${QUOTED}|(?:(?:bearer|basic)\\s+)?[^\\s&,;"']+)`,
@@ -58,6 +61,7 @@ const isPasswordStoreChoice = (key: string, value: string, depth: number): boole
 /** One line, redacted. */
 export const redact = (line: string): string =>
     line
+        .replace(A2, (_m, name: string, sep: string) => `\\"${name}\\"${sep}\\"${REDACTED}\\"`)
         .replace(A, (_m, name: string, sep: string) => `"${name}"${sep}"${REDACTED}"`)
         .replace(B, (_m, name: string, sep: string, value: string) =>
             value.startsWith('"') ? `${name}${sep}"${REDACTED}"` : `${name}${sep}${REDACTED}`,

@@ -98,6 +98,16 @@
    "output": "payload={\\\"src\\\":\\\"https://nd/rest/stream?id=1&t=[removed]&s=[removed]\\\"}"
   },
   {
+   "name": "json_escaped_password",
+   "input": "body=\"{\\\"user\\\":\\\"bob\\\",\\\"password\\\":\\\"hunter2\\\"}\"",
+   "output": "body=\"{\\\"user\\\":\\\"bob\\\",\\\"password\\\":\\\"[removed]\\\"}\""
+  },
+  {
+   "name": "json_escaped_token_spaced",
+   "input": "frame {\\\"t\\\":\\\"hello\\\", \\\"token\\\" : \\\"tok-9\\\"}",
+   "output": "frame {\\\"t\\\":\\\"hello\\\", \\\"token\\\" : \\\"[removed]\\\"}"
+  },
+  {
    "name": "url_userinfo",
    "input": "fetch https://bob:hunter2@nd.example.org/rest/ping",
    "output": "fetch https://[removed]@nd.example.org/rest/ping"

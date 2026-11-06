@@ -35,7 +35,7 @@ const VECTORS = JSON.parse(
 
 test('redact_matches_navic_vectors', () => {
     assert.equal(VECTORS.mark, REDACTED);
-    assert.equal(VECTORS.cases.length, 25);
+    assert.equal(VECTORS.cases.length, 27);
     for (const c of VECTORS.cases) {
         assert.equal(redact(c.input), c.output, c.name);
     }
