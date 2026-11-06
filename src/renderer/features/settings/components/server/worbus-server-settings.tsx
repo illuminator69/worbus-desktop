@@ -19,6 +19,7 @@ import {
     notSetView,
     serverStatus,
     serverStatusSentence,
+    serverVersionCopy,
     setView,
     showTokenField,
     statusRoute,
@@ -121,6 +122,7 @@ const ServerStatus = memo(() => {
 
     const now = useNowAfter(attemptAt, settings.enabled && !connected);
     const activeAddress = useHubStore((s) => s.server?.activeAddress ?? null);
+    const versionSaid = useHubStore((s) => s.serverVersion);
     const link = hubLink({
         attemptAt,
         authRefused,
@@ -160,8 +162,11 @@ const ServerStatus = memo(() => {
     const looking =
         !configured || finder.scope === 'home' ? say(notSetView(finder, username).sentence) : '';
 
-    const current =
-        link === 'connected'
+    // Worbus P4: the server's own version line first (`welcome.server.version`), when it sent one.
+    const serverVersion = say(serverVersionCopy(versionSaid));
+    const current = [
+        ...(link === 'connected' && serverVersion ? [{ id: 'version', text: serverVersion }] : []),
+        ...(link === 'connected'
             ? capabilityLines({
                   clap: clap.data,
                   libraryTools,
@@ -170,7 +175,8 @@ const ServerStatus = memo(() => {
                   speakers,
                   stations,
               })
-            : [];
+            : []),
+    ];
 
     // R30: the lines fold in and out with the connection; while they fold closed the last ones
     // stay drawn, so the fold has something to close over.

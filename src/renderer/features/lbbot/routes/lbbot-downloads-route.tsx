@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import styles from './lbbot-downloads-route.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
+import { ImportsRow } from '/@/renderer/features/lbbot/components/imports-row';
 import { ResolveLinkBox } from '/@/renderer/features/lbbot/components/resolve-link-box';
 import { activityPageCopy } from '/@/renderer/features/lbbot/components/wishlist-copy';
 import { WishlistList } from '/@/renderer/features/lbbot/components/wishlist-list';
@@ -203,6 +204,9 @@ export const LbBotDownloadsPage = ({
                 <WishlistList />
             ) : (
                 <>
+                    {/* Worbus P4: lb-bot's imports that need you (Needs attention's own row),
+                        whatever the filter: they are not fills, and the chips do not count them. */}
+                    <ImportsRow />
                     {/* The one entry point into this surface that does not start
                         from something the library already knows about. It sits
                         here rather than on Discover because a pasted link is an

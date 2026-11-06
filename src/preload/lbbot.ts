@@ -397,6 +397,10 @@ const wishlistAdd = (args: {
 const wishlistRemove = (rgid: string): Promise<LbBotResult<boolean>> =>
     ipcRenderer.invoke('lbbot-wishlist-remove', { rgid });
 
+/** Worbus P4: `/lb/attention`'s `counts` (numbers only), or null when lb-bot did not answer. */
+const attentionCounts = (): Promise<null | Record<string, number>> =>
+    ipcRenderer.invoke('lbbot-attention-counts');
+
 export const lbBot = {
     albumCovers,
     albumCoverSet,
@@ -416,6 +420,7 @@ export const lbBot = {
     artistRelated,
     artistSearch,
     artistSimilar,
+    attentionCounts,
     cancelAlbum,
     deezerChart,
     deezerEditorial,

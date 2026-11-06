@@ -1012,6 +1012,7 @@
             "routeHome": "home network",
             "routeTailscale": "Tailscale",
             "routeVia": "via {{host}}",
+            "serverVersion": "Server version {{version}}",
             "signInAs": "Sign in as {{username}}",
             "sourceFound": "found",
             "sourceLearned": "from the server",
@@ -2025,6 +2026,13 @@
             "tracksFailed_other": "{{count}} tracks failed",
             "unreachable": "Can't reach lb-bot, so this may be out of date.",
             "wrongEdition": "Wrong edition?"
+        },
+        "imports": {
+            "line": "lb-bot couldn't finish filing these albums.",
+            "lineAway": "Open lb-bot's page on your home network to fix them.",
+            "open": "Open in lb-bot",
+            "title_one": "{{count}} import needs you",
+            "title_other": "{{count}} imports need you"
         },
         "indexProgress": {
             "counts": "Indexing your library · {{left}} of {{total}} artists left",

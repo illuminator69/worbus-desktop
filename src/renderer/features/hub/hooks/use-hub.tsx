@@ -126,6 +126,7 @@ import {
     tooOldFromLb,
 } from '/@/shared/utils/lbbot-mode';
 import { levelReportStep, NO_LEVEL_REPORT, toLevel } from '/@/shared/utils/level-report';
+import { serverVersionOf } from '/@/shared/utils/version-line';
 
 /**
  * B-053: adopting an orphaned session seeks to the hub's cursor - at launch usually our own
@@ -1645,6 +1646,8 @@ export const useHub = () => {
                     remoteRepeat: msg.session?.repeat ?? 'none',
                     remoteShuffle: msg.session?.shuffle ?? false,
                     savedQueueId: msg.session?.savedQueueId ?? null,
+                    // Worbus P4: absent from a server before project 4 (no line on the Server tab).
+                    serverVersion: serverVersionOf(msg.server),
                     signedOut: false,
                     // A refusal from an earlier sign-in is history once a connection works.
                     signInResult: keptSignInResult(useHubStore.getState().signInResult),

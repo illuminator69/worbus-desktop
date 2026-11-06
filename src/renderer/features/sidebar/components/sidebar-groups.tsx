@@ -8,17 +8,18 @@ import styles from './sidebar-groups.module.css';
 import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     useHubSupports,
+    useLbBotAttention,
     useLbBotAvailable,
     useLbBotDownloadsShown,
     useListeningSupported,
     useOverridesSupported,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { toFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { LIBRARY_FRAME_ROUTES } from '/@/renderer/features/library/library-routes';
 import { SidebarIcon } from '/@/renderer/features/sidebar/components/sidebar-icon';
 import { SidebarItem } from '/@/renderer/features/sidebar/components/sidebar-item';
 import {
-    attentionCount,
     type SidebarEntry,
     type SidebarGroup,
     sidebarGroups,
@@ -99,7 +100,9 @@ export const useSidebarModel = (options?: {
     const sidebarItems = useSidebarItems();
     // Worbus P2: `hub.store.user`; no user (an older hub) shows everything, as today.
     const roles = useHubRoles();
-    const count = useMemo(() => attentionCount(ledger), [ledger]);
+    // Worbus P4: lb-bot's imports that need you count in the badge with the ledger's failures.
+    const attention = useLbBotAttention().data;
+    const count = useMemo(() => toFixCount(ledger, attention), [ledger, attention]);
 
     return useMemo(() => {
         const label = (id: string, fallback?: string) =>

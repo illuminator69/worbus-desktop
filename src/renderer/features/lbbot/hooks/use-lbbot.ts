@@ -3567,6 +3567,29 @@ const NO_LINK: LbBotResult<LbBotResolvedLink> = {
  * hours — a landing also fires `/lb/notify`, which refreshes the library, but
  * the row leaving this list is a separate fact.
  */
+/**
+ * Worbus P4 (design §6.5): `/lb/attention`'s counts, for the imports row and the to-fix badge.
+ * Admin only, like the rest of `/lb/attention` (a non-admin never asks). `null` data (an older
+ * hub or lb-bot) reads as no imports (`attentionImports`).
+ */
+export const useLbBotAttention = () => {
+    const available = useLbBotAvailable();
+    const supported = useHubSupports('GET /lb/attention');
+    const admin = allows(useHubRoles(), 'needsAttention');
+    const query = useQuery<null | { counts: Record<string, number> }>({
+        enabled: !!lbBot && available && supported && admin,
+        gcTime: 5 * 60 * 1000,
+        queryFn: async () => {
+            const counts = await lbBot!.attentionCounts();
+            return counts ? { counts } : null;
+        },
+        queryKey: ['lbbot', 'attention-counts'],
+        refetchOnWindowFocus: true,
+        staleTime: 60 * 1000,
+    });
+    return useShownWithHub(query);
+};
+
 export const useLbBotWishlist = () => {
     const available = useLbBotAvailable();
     const supported = useHubSupports('GET /lb/wishlist');

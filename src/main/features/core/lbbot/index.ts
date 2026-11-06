@@ -2624,6 +2624,20 @@ const toWishlistEntry = (row: unknown): LbBotWishlistEntry[] => {
 // an empty wishlist is a perfectly ordinary state, so the page would simply have
 // said "nothing on the wishlist" forever.
 
+// Worbus P4 (design §6.5): Needs attention reads only `counts` from `/lb/attention` (its
+// `imports`, the albums lb-bot could not finish filing). Only the numbers cross to the renderer;
+// null (an older hub or lb-bot, a refusal, a non-admin) reads as no imports.
+ipcMain.handle('lbbot-attention-counts', async (): Promise<null | Record<string, number>> => {
+    const data = await get('/lb/attention');
+    const counts = data?.counts;
+    if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
+    return Object.fromEntries(
+        Object.entries(counts as Json).filter(
+            (entry): entry is [string, number] => typeof entry[1] === 'number',
+        ),
+    );
+});
+
 ipcMain.handle('lbbot-wishlist', async (): Promise<LbBotWishlist> => {
     const data = await get('/lb/wishlist');
     // A failed read rejects rather than answering an empty list: the wishlist section

@@ -17,3 +17,10 @@ export const BUILD_RELEASE: boolean =
 /** This build's line for the app's version (`package.json`). */
 export const appVersionLine = (version: string): string =>
     versionLine(version, BUILD_COMMIT, BUILD_RELEASE);
+
+/** `welcome.server.version` (`"0.4.0 (678af87)"`); null when absent (a server before project 4). */
+export const serverVersionOf = (server: unknown): null | string => {
+    const v =
+        server && typeof server === 'object' ? (server as Record<string, unknown>).version : null;
+    return typeof v === 'string' && v.trim() ? v.trim() : null;
+};

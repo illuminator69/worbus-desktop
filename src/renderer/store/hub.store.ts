@@ -198,6 +198,11 @@ interface HubState {
      */
     server: HubServerState | null;
     /**
+     * Worbus P4: `welcome.server.version` (`"0.4.0 (678af87)"`), or null from a server before
+     * project 4. The Server tab shows it while connected; the next welcome replaces it.
+     */
+    serverVersion: null | string;
+    /**
      * Worbus P2: the Worbus Server signed this device out (close 4005 / `signed_out`) and the one
      * silent sign-in did not work, or there was no account to make it with. The transport stands
      * down until a sign-in works; the Server tab says "Signed out of the Worbus Server" with a
@@ -253,6 +258,7 @@ const initialState: HubState = {
     remoteShuffle: false,
     savedQueueId: null,
     server: null,
+    serverVersion: null,
     signedOut: false,
     signingIn: false,
     signInResult: null,

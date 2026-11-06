@@ -322,6 +322,10 @@ export const statusRoute = (activeAddress: null | string): Copy[] => {
     return activeAddress.startsWith('ws://') ? [via, copy('notEncrypted')] : [via];
 };
 
+/** Worbus P4: the server's version line once a welcome said it (`welcome.server.version`); none before. */
+export const serverVersionCopy = (version: null | string): Copy | null =>
+    version ? copy('serverVersion', { version }) : null;
+
 /** The address of a found server a tap uses: its home one first (the order's rule). */
 export const tapAddress = (found: HubFound): string =>
     found.kind === 'server'
