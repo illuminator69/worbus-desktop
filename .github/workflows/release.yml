@@ -1,0 +1,125 @@
+name: Release
+
+# Worbus P4 (design §6.9): the fork's one release workflow, replacing upstream's per-OS publish
+# workflows. Each OS builds with `--publish never` (electron-builder never uploads anything); the
+# last job makes a DRAFT release on this fork and attaches the files. It runs only here
+# (illuminator69/feishin-gaps) and only for a `v*` tag; a dispatch on a branch builds and keeps
+# the files as the run's artifacts, and releases nothing. Nothing is signed (no certificates).
+
+on:
+    push:
+        tags: ['v*']
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    linux:
+        runs-on: ubuntu-latest
+        steps:
+            - name: Check out Git repository
+              uses: actions/checkout@v6
+
+            - name: Install Node.js and PNPM
+              uses: pnpm/action-setup@v4
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build
+              run: pnpm run build
+
+            - name: Package (AppImage, deb, tar.xz)
+              run: pnpm exec electron-builder --linux AppImage deb tar.xz --x64 --publish never
+
+            - name: Keep the files
+              uses: actions/upload-artifact@v4
+              with:
+                  name: linux
+                  if-no-files-found: error
+                  path: |
+                      dist/*.AppImage
+                      dist/*.deb
+                      dist/*.tar.xz
+
+    windows:
+        runs-on: windows-latest
+        steps:
+            - name: Check out Git repository
+              uses: actions/checkout@v6
+
+            - name: Install Node.js and PNPM
+              uses: pnpm/action-setup@v4
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build
+              run: pnpm run build
+
+            # The portable zip only: the NSIS installer of an unsigned binary is quarantined.
+            - name: Package (portable zip)
+              run: pnpm exec electron-builder --win zip --x64 --publish never
+
+            - name: Keep the files
+              uses: actions/upload-artifact@v4
+              with:
+                  name: windows
+                  if-no-files-found: error
+                  path: dist/*.zip
+
+    macos:
+        runs-on: macos-latest
+        steps:
+            - name: Check out Git repository
+              uses: actions/checkout@v6
+
+            - name: Install Node.js and PNPM
+              uses: pnpm/action-setup@v4
+
+            - name: Install dependencies
+              run: pnpm install
+
+            - name: Build
+              env:
+                  NODE_OPTIONS: --max-old-space-size=4096
+              run: pnpm run build
+
+            # Unsigned (ad-hoc identity in electron-builder.yml, no notarization).
+            - name: Package (dmg, unsigned)
+              env:
+                  CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+              run: pnpm exec electron-builder --mac dmg --arm64 --x64 --publish never
+
+            - name: Keep the files
+              uses: actions/upload-artifact@v4
+              with:
+                  name: macos
+                  if-no-files-found: error
+                  path: dist/*.dmg
+
+    release:
+        needs: [linux, windows, macos]
+        if: github.repository == 'illuminator69/feishin-gaps' && startsWith(github.ref, 'refs/tags/v')
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Fetch the files
+              uses: actions/download-artifact@v4
+              with:
+                  path: files
+                  merge-multiple: true
+
+            - name: Draft a release on this fork
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+                  TAG: ${{ github.ref_name }}
+              run: |
+                  gh release create "$TAG" files/* \
+                    --repo "$GITHUB_REPOSITORY" \
+                    --draft \
+                    --verify-tag \
+                    --title "Feishin $TAG" \
+                    --notes "Feishin (Worbus fork) $TAG. Draft: not published until the owner says so."

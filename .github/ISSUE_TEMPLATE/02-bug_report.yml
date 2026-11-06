@@ -1,55 +1,57 @@
 name: Bug report
-description: You're having technical issues.
+description: Something in Feishin does not work.
 title: '[Bug]: '
 labels: ['bug']
 body:
-    - type: checkboxes
-      id: check-duplicate
+    - type: markdown
       attributes:
-          label: I have already checked through the existing (both open AND closed) bug reports and found no duplicates
-          options:
-              - label: 'Yes'
-                required: true
+          value: |
+              Worbus keeps every bug in one place: https://github.com/illuminator69/navi-connect/issues.
+              Filing here is fine too when you know it is Feishin.
 
     - type: input
       id: version
       attributes:
-          label: App Version
-          description: What version of the app are you running?
-          placeholder: ex. 1.0.0
+          label: Feishin version
+          description: The app menu's Version line, with its commit.
+          placeholder: ex. 0.4.0 (abc1234)
+      validations:
+          required: true
+
+    - type: input
+      id: worbus-server-version
+      attributes:
+          label: Worbus Server version
+          description: Settings › Server shows it while connected. Write "none" without a Worbus Server.
+          placeholder: ex. 0.4.0 (abc1234)
       validations:
           required: true
 
     - type: input
       id: server-version
       attributes:
-          label: Music Server and Version
-          description: What music server are you using?
-          placeholder: ex. Navidrome v0.55.0, LMS v3.67.0, Jellyfin v10.10.7, etc.
+          label: Music server and version
+          placeholder: ex. Navidrome 0.58.0
       validations:
           required: true
 
     - type: dropdown
       id: environments
       attributes:
-          label: What local environments are you seeing the problem on?
+          label: Where do you see it?
           multiple: true
           options:
               - Desktop Windows
               - Desktop macOS
               - Desktop Linux
-              - Web Firefox
-              - Web Chrome
-              - Web Safari
-              - Web Microsoft Edge
-              - Other (please specify in the next field)
+              - Web
+              - Other (say which below)
 
     - type: textarea
       id: what-happened
       attributes:
-          label: What happened?
-          description: Also tell us, what did you expect to happen?
-          placeholder: Include screenshots and error logs if possible. The browser devtools can be opened using CTRL + SHIFT + I (Windows/Linux) or CMD + SHIFT + I (macOS).
+          label: What happened, and what did you expect?
+          placeholder: Screenshots help.
       validations:
           required: true
 
@@ -57,18 +59,15 @@ body:
       id: reproduction
       attributes:
           label: Steps to reproduce
-          description: How can we reproduce this issue? Are there any specific settings that are enabled that could be the cause?
           placeholder: |
               1. Go to '...'
               2. Click on '....'
-              3. Scroll down to '....'
-              4. See error
+              3. See error
       validations:
           required: true
 
     - type: textarea
       id: logs
       attributes:
-          label: Relevant log output
-          description: Please copy and paste any relevant log output. This will be automatically formatted into code.
-          render: shell
+          label: The logs file
+          description: Settings › Advanced › Logger › Export diagnostics makes a zip with passwords, tokens and secrets removed. Attach it here.

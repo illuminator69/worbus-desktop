@@ -69,12 +69,13 @@ toolsets:
 
 npmRebuild: false
 afterAllArtifactBuild: scripts/after-all-artifact-build.mjs
-# Left as upstream wrote it until the rename gives the fork its own release channel (S-090 D).
-# Nothing reads it at run time: a packaged build never constructs the updater (src/main/index.ts), so
-# the app-update.yml this writes into the build is not consulted. Do not publish from here.
+# Worbus P4 (design §6.9): the fork, never upstream. CI builds with `--publish never` and its own
+# job drafts the release (.github/workflows/release.yml). Nothing reads this at run time: a packaged
+# build never constructs the updater (src/main/index.ts), so the app-update.yml it writes into the
+# build is not consulted.
 publish:
     provider: github
-    owner: jeffvli
-    repo: feishin
+    owner: illuminator69
+    repo: feishin-gaps
     channel: latest
     releaseType: draft

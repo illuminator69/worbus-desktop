@@ -2,11 +2,11 @@
 
 Thanks for your interest in contributing!
 
-Check the existing [issues](https://github.com/jeffvli/feishin/issues).
+This is the Worbus fork of Feishin. Bugs and ideas for every Worbus piece live in one place: [the Worbus issues](https://github.com/illuminator69/navi-connect/issues).
 
 ## IMPORTANT
 
-For feature contributions that do not have an existing feature request, please open an issue, discussion, or ask [Feishin discord server](https://discord.gg/FVKpcMDy5f) **BEFORE** beginning to implement it to determine whether or not the feature would be acceptable for the app. Simply submitting a large feature with thousands of new or changed lines of code without asking if the feature is desired for the application will run the risk of instant closure.
+For feature contributions that do not have an existing feature request, please open an issue there **BEFORE** beginning to implement it to determine whether or not the feature would be acceptable for the app. Simply submitting a large feature with thousands of new or changed lines of code without asking if the feature is desired for the application will run the risk of instant closure.
 
 Bug fixes are likely to be accepted without discussion.
 
