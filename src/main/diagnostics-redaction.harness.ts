@@ -4,7 +4,18 @@ import path from 'node:path';
 import test from 'node:test';
 import { inflateRawSync } from 'node:zlib';
 
-import { diagnosticsEntries, diagnosticsHeader, redact, REDACTED } from './redact.ts';
+import {
+    clearServerVersion,
+    noteServerVersion,
+    serverVersionNow,
+} from './features/core/hub/server-version.ts';
+import {
+    diagnosticsEntries,
+    diagnosticsHeader,
+    redact,
+    redactSettings,
+    REDACTED,
+} from './redact.ts';
 import { createZipBuffer } from './utils/zip.ts';
 
 /**
@@ -79,6 +90,7 @@ const exportFiles = (serverVersion: null | string) => {
         __internal__: { migrations: { version: '0.4.0' } },
         hubAuth: { deviceIds: { 'id:abc': 'd-1' }, secret: DEVICE_SECRET, signedIn: true },
         ignore_cors: false,
+        password_store: 'gnome-libsecret',
         // Electron's safeStorage ciphertext of the Navidrome password, keyed by server id: the
         // field rule cannot see it (the key is an id), so Feishin's own rule names the record.
         server: { 'b1c2d3e4-server-id': ND_PASSWORD_CIPHERTEXT, plain: ND_PASSWORD },
@@ -146,6 +158,8 @@ test('export_has_no_planted_secret', () => {
     assert.deepEqual(config.server, { 'b1c2d3e4-server-id': REDACTED, plain: REDACTED });
     assert.equal(config.hubAuth.signedIn, true);
     assert.equal(config.window_window_bar_style, 'linux');
+    // The keyring backend choice is not a secret and explains a Linux keyring problem.
+    assert.equal(config.password_store, 'gnome-libsecret');
     const renderer = JSON.parse(files.get('renderer-settings.json')!);
     assert.equal(renderer.audioMuse.url, 'http://am.local:8000');
     assert.equal(renderer.hub.url, 'ws://192.168.1.20:4790');
@@ -181,4 +195,56 @@ test('the export in Settings › Advanced › Logger writes every file through t
         'utf8',
     );
     assert.match(settings, /utils\.exportDiagnostics\(/, 'the button stays where it was');
+});
+
+test('password_store stays visible, and only that key holding a backend name', () => {
+    assert.deepEqual(
+        redactSettings({ password_store: 'basic', hubAuth: { password_store: 'basic' } }),
+        { hubAuth: { password_store: REDACTED }, password_store: 'basic' },
+        'only the top-level key',
+    );
+    for (const backend of ['basic', 'gnome-libsecret', 'kwallet5', 'kwallet6']) {
+        assert.equal(
+            (redactSettings({ password_store: backend }) as Record<string, string>).password_store,
+            backend,
+        );
+    }
+    // A secret that landed under that name is still removed, and so is every other password name.
+    assert.deepEqual(
+        redactSettings({
+            password: 'basic',
+            password_store: 'planted-nd-pass-7f3a',
+            password_store2: 'basic',
+        }),
+        { password: REDACTED, password_store: REDACTED, password_store2: REDACTED },
+    );
+});
+
+test('the header says the server version is unknown once the connection is dropped', () => {
+    clearServerVersion();
+    assert.equal(serverVersionNow(), null);
+    noteServerVersion({ version: '0.4.0 (678af87)' });
+    assert.equal(serverVersionNow(), '0.4.0 (678af87)');
+    clearServerVersion();
+    assert.equal(serverVersionNow(), null);
+    const header = diagnosticsHeader({
+        appVersion: '0.4.0 (c812df4)',
+        arch: 'x64',
+        electron: '43.7.0',
+        exportedAt: '2026-11-06T10:00:06.000Z',
+        os: 'Linux 6.8.0',
+        serverVersion: serverVersionNow(),
+    });
+    assert.match(header, /\nserver version unknown\n/);
+    // main clears it where it drops the socket (scheduleReconnect, which every close ends in)
+    // and where it stops the transport (Connect off, settings changed, sign-out).
+    const hub = readFileSync(path.join(ROOT, 'src/main/features/core/hub/index.ts'), 'utf8');
+    const body = (name: string) => {
+        const at = hub.indexOf(`function ${name}(`);
+        assert.ok(at >= 0, name);
+        return hub.slice(at, hub.indexOf('\n}\n', at));
+    };
+    assert.match(body('scheduleReconnect'), /clearServerVersion\(\)/);
+    assert.match(body('stop'), /clearServerVersion\(\)/);
+    assert.match(hub, /if \(msg\?\.t === 'welcome'\) noteServerVersion\(msg\.server\)/);
 });

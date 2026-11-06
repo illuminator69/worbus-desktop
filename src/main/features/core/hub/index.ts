@@ -33,7 +33,7 @@ import {
     SweepDeps,
 } from './finder';
 import { kickAction } from './kick';
-import { noteServerVersion } from './server-version';
+import { clearServerVersion, noteServerVersion } from './server-version';
 
 import { getMainWindow } from '/@/main/index';
 
@@ -561,6 +561,8 @@ function scheduleReconnect(socket: undefined | WebSocket, gen: number): void {
     if (gen !== generation) return;
     if (socket !== undefined && socket !== ws) return;
     ws = undefined;
+    // The server this connection spoke to is gone until the next welcome says otherwise.
+    clearServerVersion();
     // The registry we snooped belongs to a connection that no longer exists. Cast
     // arbitration reads it to decide whether a speaker is already bridged (§12.2), and an
     // empty list is the "unknown, do not claim yet" state — which is the truth here. Left
@@ -615,6 +617,7 @@ function stop(): void {
     const closing = ws;
     ws = undefined;
     knownDevices = [];
+    clearServerVersion();
     activeAddress.reset();
     if (closing) emitServer();
     try {

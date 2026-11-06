@@ -1,4 +1,4 @@
-import { serverVersionOf } from '/@/shared/utils/version-line';
+import { serverVersionOf } from '../../../../shared/utils/version-line.ts';
 
 /**
  * Worbus P4 (design §6.7): the Worbus Server's version as the last `welcome.server.version` said
@@ -12,3 +12,7 @@ export const noteServerVersion = (server: unknown): void => {
 };
 
 export const serverVersionNow = (): null | string => version;
+
+export const clearServerVersion = (): void => {
+    version = null;
+};

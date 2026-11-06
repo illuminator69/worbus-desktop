@@ -40,6 +40,21 @@ const E = /(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)[^/\s:@"]+:[^/\s@"]+@/g;
 // Settings objects also drop `credential` and `cookie` fields, as the sanitizer this replaced did.
 const SENSITIVE_NAME = /password|secret|token|apikey|key|authorization|credential|cookie/i;
 
+// Electron's safeStorage backend choice (`localSettings.set('password_store', …)`, main-config.json
+// top level): not a secret, and the one setting that explains a Linux keyring problem. Exempt only
+// that key, at that depth, holding one of Chromium's backend names; any other value stays removed.
+const PASSWORD_STORE_BACKENDS = new Set([
+    'basic',
+    'gnome',
+    'gnome-keyring',
+    'gnome-libsecret',
+    'kwallet',
+    'kwallet5',
+    'kwallet6',
+]);
+const isPasswordStoreChoice = (key: string, value: string, depth: number): boolean =>
+    depth === 0 && key === 'password_store' && PASSWORD_STORE_BACKENDS.has(value);
+
 /** One line, redacted. */
 export const redact = (line: string): string =>
     line
@@ -90,6 +105,8 @@ export const redactSettings = (value: unknown, serverRecord = false, depth = 0):
                 nested && typeof nested === 'object' && !Array.isArray(nested)
                     ? Object.fromEntries(Object.keys(nested).map((id) => [id, REDACTED]))
                     : REDACTED;
+        } else if (typeof nested === 'string' && isPasswordStoreChoice(key, nested, depth)) {
+            out[key] = nested;
         } else if (typeof nested === 'string' && SENSITIVE_NAME.test(key)) {
             out[key] = REDACTED;
         } else {
