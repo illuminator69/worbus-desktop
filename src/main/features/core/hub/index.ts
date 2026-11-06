@@ -33,6 +33,7 @@ import {
     SweepDeps,
 } from './finder';
 import { kickAction } from './kick';
+import { noteServerVersion } from './server-version';
 
 import { getMainWindow } from '/@/main/index';
 
@@ -371,6 +372,8 @@ function dial(url: string, gen: number): void {
             if (msg?.t === 'error' && msg?.code === 'auth' && helloHadSecret) return;
             // P3: `welcome.server` - the id, the name and the learned address. The socket stays.
             if (msg?.t === 'welcome') noteWelcomeServer(url, msg.server);
+            // P4: `welcome.server.version`, for Export diagnostics' header.
+            if (msg?.t === 'welcome') noteServerVersion(msg.server);
             if (msg?.t === 'welcome' || msg?.t === 'devices') {
                 if (Array.isArray(msg.devices)) {
                     knownDevices = msg.devices;
