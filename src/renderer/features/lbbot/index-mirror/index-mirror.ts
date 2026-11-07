@@ -741,7 +741,7 @@ export const useLbBotIndexSync = (): void => {
 /**
  * Whether the mirror is shown at all: the hub is switched on in settings and
  * has a URL and a credential (Ruling R21; Worbus P2: a device secret held, or a
- * typed token - hub-credential.ts) — the same definition as Navic's
+ * typed token - hub-credential.ts) — the same definition as Worbus for Android's
  * `LbBotManager.isConfigured`, and as `hubRouteConfigured` in the AudioMuse
  * client here. A preference read, not a probe.
  *

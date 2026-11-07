@@ -8,7 +8,7 @@ import type {
 /**
  * I-022 "Fix album match": the logic that has no React in it.
  *
- * Pure, so `album-override.harness.ts` can run it. Navic mirrors this by hand
+ * Pure, so `album-override.harness.ts` can run it. Worbus for Android mirrors this by hand
  * (`navi-connect/CLAUDE.md`, PROTOCOL §15.5):
  * the sentences and the poll's rules below are the shared behaviour.
  */
@@ -463,10 +463,10 @@ export const landingNote = (kind: 'apply' | 'remove', albumId: string): null | s
 export type AlbumCommit = 'apply' | 'cover-only' | 'nothing';
 
 /**
- * Mirrors Navic's `albumCommit`: the album's own release with nothing to change and
+ * Mirrors Worbus for Android's `albumCommit`: the album's own release with nothing to change and
  * a cover chosen is a cover-only save (`POST /lb/album/cover`), so it stays
  * reachable after an edition was previewed. One divergence, kept on purpose: a
- * DIFFERENT release with zero changes is `nothing` here (Navic asks lb-bot).
+ * DIFFERENT release with zero changes is `nothing` here (Worbus for Android asks lb-bot).
  * `changing` is null until the preview is in.
  */
 export const albumCommit = (input: {

@@ -6,7 +6,7 @@ import type { StationCharacterId } from '/@/shared/types/station-types';
 
 // navi-connect (I-041): the queue's chip row (Off, Close, Balanced, Explore; or Off, Auto DJ
 // without the hub's station engine), as pure decisions so they can be replayed in
-// station-chips.harness.ts. The same spec is implemented in Navic.
+// station-chips.harness.ts. The same spec is implemented in Worbus for Android.
 //
 // A chip is a choice about the queue that is playing, and it takes effect now: Off takes out
 // what the station queued that has not played, a character replaces it with a batch in that

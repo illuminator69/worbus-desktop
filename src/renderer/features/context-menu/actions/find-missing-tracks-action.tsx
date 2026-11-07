@@ -22,7 +22,7 @@ interface FindMissingTracksActionProps {
  *
  * It lives in the context menu rather than on the tile on purpose: tapping an
  * incomplete album opens the album, because the gap is the exception and not the
- * headline. Navic shipped it the other way round first and it was wrong.
+ * headline. Worbus for Android shipped it the other way round first and it was wrong.
  *
  * Renders nothing at all unless lb-bot knows this exact album is incomplete —
  * same fail-soft contract as the rest of the surface, only stricter: not

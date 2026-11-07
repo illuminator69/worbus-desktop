@@ -1,9 +1,9 @@
 /**
- * F6: what the Library field sends lb-bot's MusicBrainz artist lookup, ported from Navic's
+ * F6: what the Library field sends lb-bot's MusicBrainz artist lookup, ported from Worbus for Android's
  * `MusicBrainzQuery.kt`. The term reaches MusicBrainz verbatim as a Lucene query, so typo tolerance
  * there costs no request: a word of four or more Latin letters or digits gets "~1", one edit. Not "~"
  * (distance 2): on short words that ranked strangers first ("boy~ genuis~" put Bob Dylan above
- * boygenius, probed for Navic 2026-10-20). A word with a symbol in it is escaped and left exact; text
+ * boygenius, probed for Worbus for Android 2026-10-20). A word with a symbol in it is escaped and left exact; text
  * that already reads as Lucene is sent as typed. Pure, for the harness.
  */
 

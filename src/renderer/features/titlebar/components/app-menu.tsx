@@ -124,6 +124,10 @@ export const AppMenu = () => {
         browser?.quit();
     };
 
+    const handleAbout = () => {
+        browser?.about();
+    };
+
     const handleSetSideQueueLayout = (sideQueueLayout: 'horizontal' | 'vertical') => {
         setSettings({
             general: {
@@ -256,6 +260,19 @@ export const AppMenu = () => {
             id: 'version',
             label: t('page.appMenu.version', { version: appVersionLine(currentVersion) }),
             type: 'item',
+        },
+        {
+            // Worbus P5 (design §6.8): the version, the credit and the Navidrome line.
+            condition: isElectron(),
+            id: 'about',
+            item: {
+                icon: 'info',
+                id: 'about-app',
+                label: t('page.appMenu.about'),
+                onClick: handleAbout,
+                type: 'item',
+            },
+            type: 'conditional-item',
         },
         {
             condition: isElectron(),

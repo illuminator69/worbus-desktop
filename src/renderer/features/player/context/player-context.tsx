@@ -260,7 +260,7 @@ const isReplaceQueueType = (type: AddToQueueType): boolean => {
 const announceNewQueueSession = (type: AddToQueueType): void => {
     if (!isReplaceQueueType(type)) return;
     // navi-connect (B-058): and a replace starts playback the user asked for (Play.NOW / SHUFFLE,
-    // from every play button, menu and Feishin's remote) - use-hub's guards must not pause it.
+    // from every play button, menu and Worbus for desktop's remote) - use-hub's guards must not pause it.
     notePlayRequest();
     if (isNewQueueSessionPending()) return; // a call site already named it
     beginQueueSession('manual');

@@ -370,7 +370,7 @@ let ownershipHead: null | string = null;
  * with it the one signal that a Fresh row, a Deezer tile or a similar artist
  * now says "owned"; the hub dropped its own copies when it happened, but these
  * (Fresh and the Deezer rows restored from disk among them) would stand until
- * their `staleTime` ran out, an hour or more. Navic does the same on every
+ * their `staleTime` ran out, an hour or more. Worbus for Android does the same on every
  * welcome (Ruling R28).
  *
  * Not a library event: nothing in Navidrome's cache is touched. Only what is on

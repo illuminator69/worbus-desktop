@@ -1,4 +1,4 @@
-/* A request's steps (after Navic's RequestSteps): a 20 px mark, the label, the count at the end. */
+/* A request's steps (after Worbus for Android's RequestSteps): a 20 px mark, the label, the count at the end. */
 .steps {
     display: flex;
     flex-direction: column;

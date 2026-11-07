@@ -20,7 +20,7 @@ import {
 import { currentStep } from './request-steps.ts';
 
 /**
- * R11 (B-223): which state the album page's gaps box is in, ported case for case from Navic's
+ * R11 (B-223): which state the album page's gaps box is in, ported case for case from Worbus for Android's
  * `GapStageTest`. A transfer in flight beats everything; a finished fill shows its result for a few
  * seconds and then the box goes; files waiting on lb-bot's workspace are their own state; the
  * sources view searches, chooses or says nothing was found; a failed fill keeps the box open;

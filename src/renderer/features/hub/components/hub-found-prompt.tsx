@@ -11,7 +11,7 @@ import { displayAddress, hostOfAddress } from '/@/shared/utils/hub-addresses';
 
 /**
  * Worbus P3 (design §6.4): after a Navidrome sign-in whose look beside Navidrome found exactly
- * one server, Feishin's own confirm modal: the server's name and address, Sign in as <name>, and
+ * one server, Worbus for desktop's own confirm modal: the server's name and address, Sign in as <name>, and
  * Not now (remembered per server id, or per address for an older server, so it is asked once).
  */
 export const openFoundPrompt = (opts: {

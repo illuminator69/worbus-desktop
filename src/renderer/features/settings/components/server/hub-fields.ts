@@ -1,16 +1,21 @@
+import { savedDeviceName } from '../../../../../shared/utils/client-name.ts';
+
 /**
  * The two text fields of the Server tab that used to lose their meaning (F2, audit finding 4).
- * Pure and import-free (`device-name-clear.harness.ts`). Each returns the `draft` the field must
- * show afterwards as well as the value to store, so the field and the store cannot disagree.
+ * Pure (`device-name-clear.harness.ts`). Each returns the `draft` the field must show afterwards
+ * as well as the value to store, so the field and the store cannot disagree.
  */
-export const DEFAULT_DEVICE_NAME = 'Feishin';
 
+/**
+ * Worbus P5 (design §6.7): a cleared field stores '' and shows '', and the placeholder names the
+ * device's default (the computer's name), so the field and the store still agree.
+ */
 export const resolveDeviceName = (
     input: string,
     current: string,
 ): { changed: boolean; draft: string; name: string } => {
-    const name = input.trim() || DEFAULT_DEVICE_NAME;
-    return { changed: name !== current, draft: name, name };
+    const name = input.trim();
+    return { changed: name !== savedDeviceName(current), draft: name, name };
 };
 
 /** Hostname of a web address, or null if it is not one (no scheme, no host). */

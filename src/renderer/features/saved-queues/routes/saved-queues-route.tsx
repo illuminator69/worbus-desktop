@@ -169,8 +169,8 @@ const SavedQueueRow = ({ entry, isActive, serverId }: RowProps) => {
                         type="button"
                     >
                         {/* Art of the track this queue resumes on, built from its id with OUR credentials.
-                        Passing a peer's `coverImageUrl` as `src` meant rendering Navic's authed URL
-                        against Navic's server - which is why these were empty placeholders. */}
+                        Passing a peer's `coverImageUrl` as `src` meant rendering Worbus for Android's authed URL
+                        against Worbus for Android's server - which is why these were empty placeholders. */}
                         <ItemImage
                             containerClassName={styles.cover}
                             id={savedQueueCoverSongId(entry)}
@@ -235,7 +235,7 @@ const SavedQueuesRoute = () => {
     };
 
     // Current queue pinned to the top, then most-recently-updated. A record with no serverId is
-    // NOT filtered out: Navic's rows carry none (single-server setup, no such column over there),
+    // NOT filtered out: Worbus for Android's rows carry none (single-server setup, no such column over there),
     // and a strict equality test silently hid every queue the phone had captured.
     const entries = (serverId ? queues.filter((q) => !q.serverId || q.serverId === serverId) : [])
         .slice()

@@ -8,7 +8,7 @@ import { indexBarState, indexBarText } from './index-progress.ts';
  * Worbus P1, lane F (F5):  node --test src/renderer/features/home/index-progress.harness.ts
  *
  * Home's index bar: shown while lb-bot is there and still has artists to index, its count text
- * (Navic's words; the keys are resolved against en.json here), and a source guard that Home's
+ * (Worbus for Android's words; the keys are resolved against en.json here), and a source guard that Home's
  * route itself never reads the progress (only the bar does, so a push re-renders the bar alone).
  */
 

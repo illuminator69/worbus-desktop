@@ -240,7 +240,7 @@ const regenerateLocally = async (
             return resolveSongsByIds(serverId, ids);
         }
         case 'genre': {
-            // `getRandomSongList` takes a genre NAME, and so does Navic: a recipe holds the
+            // `getRandomSongList` takes a genre NAME, and so does Worbus for Android: a recipe holds the
             // name (B-151). One from before that holds Navidrome's genre id; with no stored
             // name beside it, the id is looked up in the genre list.
             const genres = mix.seedName.trim()

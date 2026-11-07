@@ -8,9 +8,9 @@ import { LbBotFillState } from '/@/shared/types/lbbot-types';
  *
  * One state renders the same words and offers the same buttons in every place
  * a fill is shown — the downloads view, the missing-album modal, the tile —
- * and in Navic, which implements the same table in `FillVocabulary.kt`. There
+ * and in Worbus for Android, which implements the same table in `FillVocabulary.kt`. There
  * is no shared build between the two clients, so the table in PROTOCOL is the
- * contract and this file is Feishin's copy of it. Change one, change all three.
+ * contract and this file is Worbus for desktop's copy of it. Change one, change all three.
  */
 
 export type FillButton =

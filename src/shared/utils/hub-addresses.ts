@@ -9,7 +9,7 @@
  * (`<base>/hub/info`, `<base>/hub/signin`, `<base>/lb/...`, the socket `<base>`).
  */
 
-/** Feishin's stored default (`hub.url`). Looks like a value but means "never set" (design §6.3). */
+/** Worbus for desktop's stored default (`hub.url`). Looks like a value but means "never set" (design §6.3). */
 export const DEFAULT_HUB_URL = 'ws://localhost:4790';
 
 /** The Worbus Server's one port, where looking probes. */
@@ -27,7 +27,7 @@ export interface HubAddress {
     url: string;
 }
 
-/** The record each client persists, as JSON (Feishin: electron-store `hubServer`). */
+/** The record each client persists, as JSON (Worbus for desktop: electron-store `hubServer`). */
 export interface HubServerRecord {
     addresses: HubAddress[];
     /** The `learned` address is switched off ("Use away from home" off). */
@@ -200,7 +200,7 @@ export const probeTimeoutMs = (address: string): number =>
 /** Whether a found or learned address may be kept: private, or `wss://`. */
 const carriesSafely = (url: string): boolean => url.startsWith('wss://') || isPrivateAddress(url);
 
-/** "Is a server set", Feishin's way (design §6.4): never an empty-string test. */
+/** "Is a server set", Worbus for desktop's way (design §6.4): never an empty-string test. */
 export const hubConfiguredFrom = (s: {
     enabled: boolean;
     hasCredential: boolean;
@@ -209,7 +209,7 @@ export const hubConfiguredFrom = (s: {
 
 /**
  * Upgrade: today's typed address becomes the one `typed` entry, unless the hub was never
- * configured (Feishin's default `ws://localhost:4790`, judged by `isHubConfigured`).
+ * configured (Worbus for desktop's default `ws://localhost:4790`, judged by `isHubConfigured`).
  */
 export const migrateFrom = (url: string, configured: boolean): HubServerRecord => {
     const typed = configured ? normaliseHubAddress(url) : null;

@@ -35,7 +35,7 @@ export const fetchFingerprintIds = async (
     const api = bridge();
     if (!api || !audioMuseConfigured(settings)) return [];
     // Pass the username; the AudioMuse core supplies the password from its own
-    // NAVIDROME_PASSWORD config (Feishin stores a salted token, not the password).
+    // NAVIDROME_PASSWORD config (Worbus for desktop stores a salted token, not the password).
     return api.fingerprint(settings.url, settings.token, server?.username ?? '', '', count);
 };
 

@@ -2398,7 +2398,7 @@ ipcMain.handle('lbbot-gap-rescan', async (_event, args: { groupId: string }) =>
 );
 
 /**
- * Tell the user a fill landed while Feishin was in the background.
+ * Tell the user a fill landed while Worbus for desktop was in the background.
  *
  * The renderer raises a toast unconditionally; this is the half a toast cannot do,
  * and it is deliberately suppressed when the window is focused so a fill that
@@ -2413,7 +2413,7 @@ ipcMain.handle('lbbot-notify', (event, args: { body: string; title: string }) =>
     if (window?.isFocused()) return;
     try {
         const notification = new Notification({ body: args.body, title: args.title });
-        // Bring Feishin forward on click — the album is on an artist page somewhere,
+        // Bring Worbus for desktop forward on click — the album is on an artist page somewhere,
         // and the notification is the only handle the user has on it.
         notification.on('click', () => {
             window?.show();

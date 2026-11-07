@@ -150,7 +150,7 @@ const firstGuardPause = (tl: Timeline): null | { at: number; why: string } => {
 const user = (at: number): PlayRequest => ({ at, source: 'user' });
 const hub = (at: number): PlayRequest => ({ at, source: 'hub' });
 
-// --- The incident (2026-10-03 17:46:19Z, transfer t3 -> Feishin @ index 43, 35707 ms) -----
+// --- The incident (2026-10-03 17:46:19Z, transfer t3 -> Worbus for desktop @ index 43, 35707 ms) -----
 
 test('B-058: a play pressed ~0.16 s after a paused transfer is not paused by the re-check', () => {
     // Song change at 17:46:20.357 (= the hardPause at 21.707 - 1350 ms). The play's unpause

@@ -44,6 +44,7 @@ import {
     SortOrder,
 } from '/@/shared/types/domain-types';
 import { ServerFeature, ServerFeatures } from '/@/shared/types/features-types';
+import { CLIENT_NAME } from '/@/shared/utils/client-name';
 
 const getSubsonicImageRequest = ({
     apiClientProps: { server },
@@ -70,7 +71,7 @@ const getSubsonicImageRequest = ({
             `?id=${id}` +
             `&${server.credential}` +
             '&v=1.13.0' +
-            '&c=Feishin' +
+            `&c=${CLIENT_NAME}` +
             (imageSize ? `&size=${imageSize}` : ''),
     };
 };
@@ -254,7 +255,7 @@ function buildGetTranscodeStreamUrl(
     },
 ): string {
     const params = new URLSearchParams({
-        c: 'Feishin',
+        c: CLIENT_NAME,
         mediaId: args.mediaId,
         mediaType: args.mediaType,
         offset: String(args.offset),
@@ -352,7 +353,7 @@ export const SubsonicController: InternalControllerEndpoint = {
 
         const resp = await ssApiClient({ server: null, url: cleanServerUrl }).authenticate({
             query: {
-                c: 'Feishin',
+                c: CLIENT_NAME,
                 f: 'json',
                 username: body.username,
                 v: '1.13.0',
@@ -981,7 +982,7 @@ export const SubsonicController: InternalControllerEndpoint = {
             `?id=${query.id}` +
             `&${apiClientProps.server?.credential}` +
             '&v=1.13.0' +
-            '&c=Feishin'
+            `&c=${CLIENT_NAME}`
         );
     },
     getFavoriteSongs: async (args) => {
@@ -2027,7 +2028,7 @@ export const SubsonicController: InternalControllerEndpoint = {
         const { server } = apiClientProps;
         const { bitrate, format, id, mediaType = 'song', skipAutoTranscode, transcode } = query;
 
-        const streamUrl = `${server?.url}/rest/stream.view?id=${id}&v=1.13.0&c=Feishin&${server?.credential}`;
+        const streamUrl = `${server?.url}/rest/stream.view?id=${id}&v=1.13.0&c=${CLIENT_NAME}&${server?.credential}`;
 
         // If transcoding is explicitly enabled, just return the direct transcoded stream URL
         if (transcode) {
@@ -2052,7 +2053,7 @@ export const SubsonicController: InternalControllerEndpoint = {
                     directPlayProfiles,
                     maxAudioBitrate: 0,
                     maxTranscodingAudioBitrate,
-                    name: 'Feishin',
+                    name: CLIENT_NAME,
                     platform: navigator.userAgent,
                     transcodingProfiles,
                 },

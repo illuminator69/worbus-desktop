@@ -10,7 +10,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
 
 /**
  * One card in a Discover row, shaped like the poster cards the rest of the app
- * uses rather than like Navic's tiles.
+ * uses rather than like Worbus for Android's tiles.
  *
  * It is not `ItemCard`, and the reason is routing rather than looks: `ItemCard`
  * derives its link from `getTitlePath(itemType, data.id)`, so every card it can

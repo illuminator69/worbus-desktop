@@ -22,7 +22,7 @@ export const indexBarState = (
     return { current, fraction, left: unindexed, show: true, total };
 };
 
-/** "Indexing your library · {left} of {total} artists left · {current}" (Navic's words); the last
+/** "Indexing your library · {left} of {total} artists left · {current}" (Worbus for Android's words); the last
  *  part only when lb-bot names the artist it is reading. */
 export const indexBarText = (
     state: Extract<IndexBarState, { show: true }>,

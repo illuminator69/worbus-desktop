@@ -1,8 +1,8 @@
 /**
  * lb-bot's downloads mode and index progress, as the hub relays them (Worbus P1).
  *
- * Pure and import-free (tested by `lbbot-mode.harness.ts`). The rules are Navic's (lane N
- * ruling 3), adopted for Feishin:
+ * Pure and import-free (tested by `lbbot-mode.harness.ts`). The rules are Worbus for Android's (lane N
+ * ruling 3), adopted for Worbus for desktop:
  *
  * - `welcome.lb.downloads` is `"on"` or `"off"`; absent means an older hub or lb-bot, read as
  *   `unknown`, which behaves exactly as today (downloads shown, no P1-only offers).
@@ -140,7 +140,7 @@ export const parseProgress = (raw: unknown): LbIndexProgress | null => {
 
 /**
  * An `index` frame that moved nothing but the progress: the same epoch as the mirror's and a
- * seq it has already pulled. Such a frame updates the bar only (Navic ruling 9). Without a
+ * seq it has already pulled. Such a frame updates the bar only (Worbus for Android ruling 9). Without a
  * mirror cursor every frame is a reason to pull.
  */
 export const isProgressOnlyFrame = (

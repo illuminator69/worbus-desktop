@@ -419,7 +419,7 @@ export const useHub = () => {
         myId.current !== null && activeId.current !== null && activeId.current !== myId.current;
 
     // When the hub tells us another device is the active receiver while our
-    // local player is (auto)playing — e.g. Feishin restored its queue and
+    // local player is (auto)playing — e.g. Worbus for desktop restored its queue and
     // started playing on launch before the `welcome` arrived — silence the
     // local audio. Otherwise it runs away invisibly: the bar shows the remote
     // session and there's no local pause control reachable.
@@ -715,7 +715,7 @@ export const useHub = () => {
 
     // Publish our local queue to the hub when it changes. This is how the hub
     // learns what's playing (and claims us as the active device) when the user
-    // starts playback in Feishin directly. Gated so we never hijack playback
+    // starts playback in Worbus for desktop directly. Gated so we never hijack playback
     // from another active device — only publish when we're active or nothing is.
     const publishQueue = useCallback(() => {
         if (!hub) return;
@@ -734,7 +734,7 @@ export const useHub = () => {
         const state = usePlayerStore.getState();
         const items = state.getQueue().items;
         const sig = items.map((item) => item.id).join(',');
-        // Unclaimed-session escape (mirrors Navic's publishQueueIfOurs): nobody is the
+        // Unclaimed-session escape (mirrors Worbus for Android's publishQueueIfOurs): nobody is the
         // active receiver and WE are playing, so this client IS the live receiver — but
         // the signature dedupe would suppress the publish forever (adopting the hub's
         // queue pins the signature to it). Without a publish the hub never promotes us,
@@ -768,7 +768,7 @@ export const useHub = () => {
         lastQueueSig.current = sig;
         if (!items.length) {
             // Clearing the queue has to reach the hub, or the session keeps serving the
-            // queue we just threw away — open Navic afterwards and the whole list is back.
+            // queue we just threw away — open Worbus for Android afterwards and the whole list is back.
             // Only once we've actually published something, though: the queue is empty for
             // a moment at startup before the persisted one hydrates, and publishing THAT
             // would wipe a session another device is happily playing.
@@ -1348,7 +1348,7 @@ export const useHub = () => {
                 // Loaded PAUSED outright, as the branch below does. mediaPlayByIndex STARTS the
                 // engine, asynchronously, so the pause after it could land first and the track
                 // played for a moment: the blip when another device dropped out of the session
-                // (seen 2026-09-30 — a `timeupdate` then a `pause` scrobble as Navic reinstalled).
+                // (seen 2026-09-30 — a `timeupdate` then a `pause` scrobble as Worbus for Android reinstalled).
                 if (targetIndex !== state2.player.index) {
                     setQueue(state2.getQueue().items, targetIndex, targetSec, false);
                 }
@@ -1718,7 +1718,7 @@ export const useHub = () => {
                 });
                 // A `library` frame sent while this socket was down is lost, so
                 // every cached lb-bot answer that marks ownership (Fresh, the
-                // Deezer rows, similar artists) is re-asked — as Navic does on
+                // Deezer rows, similar artists) is re-asked — as Worbus for Android does on
                 // every welcome (R28). Not a library event: no library refetch.
                 // After the adopt: it reads the new verdict, and with lb-bot down
                 // only marks stale. `lbIndex` lets it skip a reconnect across
@@ -1828,7 +1828,7 @@ export const useHub = () => {
                     // Worbus P1: the frame carries the index build's countdown (absent = none).
                     setStore({ lbProgress: parseProgress(msg.progress) });
                     // A progress-only frame (the head did not move past what the mirror holds)
-                    // updates the bar alone: no mirror pull, no overrides re-read (Navic
+                    // updates the bar alone: no mirror pull, no overrides re-read (Worbus for Android
                     // ruling 9). lb-bot sends one every few seconds during a build.
                     const frame = { epoch: msg.epoch, seq: msg.seq };
                     if (!isProgressOnlyFrame(frame, indexMirrorCursor())) {
@@ -2051,7 +2051,7 @@ export const useHub = () => {
                             // hardPause forces the engine by flipping the store to
                             // PLAYING and back — against a track that loaded paused and
                             // is silent, which every adopt/transfer path now does, that
-                            // flip IS the blip (Navic force-stopped while playing,
+                            // flip IS the blip (Worbus for Android force-stopped while playing,
                             // 2026-09-30). A runaway shows as advancing progress within
                             // ~1 s, which is what audioIsRolling measures.
                             // B-058: ...and that nobody asked for since the load armed it.

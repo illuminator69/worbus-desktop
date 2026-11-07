@@ -14,8 +14,8 @@ import type {
  * and reviewed without IndexedDB, IPC or React in the way. Nothing here touches
  * state; every function answers a question about the values it is handed.
  *
- * Feishin has no test runner, so nothing exercises these at runtime except the
- * app itself. Navic implements the same rules in Kotlin; the contract, not
+ * Worbus for desktop has no test runner, so nothing exercises these at runtime except the
+ * app itself. Worbus for Android implements the same rules in Kotlin; the contract, not
  * either implementation, is the reference.
  */
 
@@ -197,7 +197,7 @@ export const ndIdsOf = (artist: LbBotIndexArtist): string[] => {
  * Deliberately `<`/`>`, never `localeCompare`: lb-bot compares keys as bytes,
  * and a locale-aware compare can order two keys differently, which during the
  * brief two-rows state of an `nd:` → MBID swap would resolve the same page to a
- * different artist here than on the server and on Navic. (UTF-16 order equals
+ * different artist here than on the server and on Worbus for Android. (UTF-16 order equals
  * UTF-8 byte order for everything but astral characters; keys are MBIDs and
  * `nd:` ids, which are ASCII.)
  */

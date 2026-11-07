@@ -157,7 +157,7 @@ export type LbBotQuality = 'flac-16-44' | 'flac-any' | 'highest-bitrate' | 'pref
  * probe and the discography read — those hide their surface — and wrong for a
  * button: pressing it and getting nothing back, no message and no log, is
  * indistinguishable from the app being broken. It cost a full round of feedback
- * on the Navic side, where the real cause was a hub that hadn't been restarted
+ * on the Worbus for Android side, where the real cause was a hub that hadn't been restarted
  * and was 404ing every new route.
  */
 export interface LbBotResult<T> {
@@ -571,7 +571,7 @@ export interface LbBotFillStatus {
 
 /**
  * One album the library holds only part of, as lb-bot's Fill-gaps workspace sees
- * it. Ported field-for-field from Navic's `LbBotManager.kt`, which mirrors
+ * it. Ported field-for-field from Worbus for Android's `LbBotManager.kt`, which mirrors
  * lb-bot's Python verbatim so any field can be checked against its source by
  * name. lb-bot speaks camelCase for its screen-shaped views (this one) and
  * snake_case for index rows (the discography).
@@ -677,7 +677,7 @@ export interface LbBotGap {
      * `DOWNLOADED_STALE_SECS`) — a search cannot fix this, only lb-bot's own
      * match workspace can. `failDetail` carries the human sentence; render
      * this as PROTOCOL §15.2's `needs_match` row (headline, `failDetail`,
-     * Dismiss — no Retry), the same as Navic.
+     * Dismiss — no Retry), the same as Worbus for Android.
      */
     stalledPlacement: boolean;
     status: LbBotGapStatus;
@@ -778,7 +778,7 @@ export interface LbBotGapTrack {
  *  failed to be) filled. A backwards transition is normal — lb-bot reports
  *  `downloading` for as long as a transfer group is pending. */
 export type LbBotGapTrackState =
-    /** B-004 (Feishin): the track's own fetch was cancelled — terminal, but
+    /** B-004 (Worbus for desktop): the track's own fetch was cancelled — terminal, but
      *  neither a success nor a failure. See `SETTLED_TRACK_STATES` in
      *  gap-stage.ts and `useTrackLabel` in gap-box.tsx (`common.cancelled`). */
     | 'cancelled'

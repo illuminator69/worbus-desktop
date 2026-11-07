@@ -40,7 +40,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
  * unsettled row in one request whether or not this page is open — this view used
  * to watch only the rows that passed its filter, so choosing "Didn't land" stopped
  * the fills in flight from being polled at all. Every word and every button comes
- * from `describeFill` (PROTOCOL §15.2), the table Navic renders from too.
+ * from `describeFill` (PROTOCOL §15.2), the table Worbus for Android renders from too.
  */
 
 /** A one-second clock for the countdowns and "last checked Ns ago". */

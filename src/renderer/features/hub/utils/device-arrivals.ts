@@ -9,7 +9,7 @@
 // offline or missing for ARRIVAL_MIN_ABSENCE_MS. `lastSeen` is bumped by every inbound frame, so
 // it says nothing about presence and is not read.
 //
-// The minimum is short on purpose. Navic keeps its hub socket while it is in the background, so
+// The minimum is short on purpose. Worbus for Android keeps its hub socket while it is in the background, so
 // bringing it forward is not a connection at all; it reconnects when its process restarts or the
 // network changes, and its backoff starts at 1 s, so it is back within seconds. A 15 s minimum
 // hid exactly those arrivals.

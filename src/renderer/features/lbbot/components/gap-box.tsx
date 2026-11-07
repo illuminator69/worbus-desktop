@@ -70,8 +70,8 @@ import { Album } from '/@/shared/types/domain-types';
 import { LbBotGapSource, LbBotGapTrackState, LbBotResult } from '/@/shared/types/lbbot-types';
 
 /*
- * navi-connect R11 (B-223): the gaps box on the owned album page, after Navic's `GapBox`, which
- * retired its `GapFillSheet` as this retires Feishin's gap modal. What the modal did and where each
+ * navi-connect R11 (B-223): the gaps box on the owned album page, after Worbus for Android's `GapBox`, which
+ * retired its `GapFillSheet` as this retires Worbus for desktop's gap modal. What the modal did and where each
  * thing went:
  *
  * | The modal                                         | The box                                       |
@@ -345,10 +345,10 @@ const GapBox = ({
         root.current?.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest' });
     }, [asked, groupId, location.key]);
 
-    // The tracklist follows a fill that lands during the visit (Navic's `watchGapLanding`): the
+    // The tracklist follows a fill that lands during the visit (Worbus for Android's `watchGapLanding`): the
     // album is read again a few seconds on, and again while it holds fewer songs than lb-bot counts.
     // The re-reads are kept apart from the record (review minor 5): a later poll changing the gap
-    // must not cancel them; only a new landing or leaving the page does, as Navic's job.
+    // must not cancel them; only a new landing or leaving the page does, as Worbus for Android's job.
     const queryClient = useQueryClient();
     const server = useCurrentServer();
     const held = gap ? heldTracks(gap) : 0;
@@ -424,7 +424,7 @@ const GapBox = ({
         setPicked(null);
         try {
             const ok = await act(() => searchGapSources(groupId, (gap?.sources.length ?? 0) > 0));
-            // A search makes the ledger row too, as Navic's does: waiting for a pick is worth
+            // A search makes the ledger row too, as Worbus for Android's does: waiting for a pick is worth
             // listing, and a search that ends with nothing is worth announcing.
             if (ok) startGap(groupId, { album: gap?.album, artist: gap?.artist });
             await refetch();

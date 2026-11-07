@@ -51,7 +51,7 @@ interface AlbumRequestBoxProps {
 }
 
 /**
- * The missing album's one box (Call 8, then R11 / B-222 after Navic's request box): Find sources
+ * The missing album's one box (Call 8, then R11 / B-222 after Worbus for Android's request box): Find sources
  * turns it into the search, then lb-bot's ranked folders as radio cards with Download right under
  * the chosen one; the request turns the same box into the steps, the bar and Cancel; a failure into
  * the recovery card, the reason in lb-bot's own words and exactly the buttons that are true for it
@@ -113,7 +113,7 @@ export const AlbumRequestBox = ({
                     </div>
                 </div>
             </GrowBox>
-            {/* Under the box, as Navic says it: the fill goes on without the page. */}
+            {/* Under the box, as Worbus for Android says it: the fill goes on without the page. */}
             <Fold name="request-leave" open={running}>
                 <p className={styles.leave}>{t('naviConnect.request.leaveAnyTime')}</p>
             </Fold>

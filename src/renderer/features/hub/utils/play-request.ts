@@ -12,7 +12,7 @@
 // above set it too - so the plays that are asked for are marked where they are asked for.
 //
 // Marked sources: the user's transport (player-context, hotkeys, media session, the main
-// process's play / play-pause commands except mpv's echo, Feishin's remote, a queue row) and the
+// process's play / play-pause commands except mpv's echo, Worbus for desktop's remote, a queue row) and the
 // hub's own play directives (do:play, do:jump, do:load with play). A play requested AFTER a
 // guard was armed is that guard's audio, so the guard stands down; one requested before it (the
 // newer load or adopt overrode it) does not count. A pause asked for at the same places

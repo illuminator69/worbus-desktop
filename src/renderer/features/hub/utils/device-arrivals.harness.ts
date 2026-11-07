@@ -68,7 +68,7 @@ test('aDeviceMissingForTheMinimumThenBackIsAnArrival', () => {
     assert.equal(proposedId(tracker, 1_000 + ARRIVAL_MIN_ABSENCE_MS), 'pixel');
 });
 
-// Navic keeps its hub socket while backgrounded; it reconnects when its process restarts, and
+// Worbus for Android keeps its hub socket while backgrounded; it reconnects when its process restarts, and
 // is back within seconds (its backoff starts at 1 s). That is the arrival the pill is for.
 test('anAppRestartAFewSecondsLongIsAnArrival', () => {
     const tracker = createArrivalTracker();

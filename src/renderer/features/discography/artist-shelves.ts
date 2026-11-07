@@ -5,7 +5,7 @@ import { DEFAULT_VIEW } from './discography-view.ts';
 
 /**
  * The artist page's short shape: a "Popular releases" line and one line per release kind, picked
- * from the discography model's items. Popular releases is Navic's rule translated to this model.
+ * from the discography model's items. Popular releases is Worbus for Android's rule translated to this model.
  *
  * Pure: plain data in, plain data out; nothing from `/@/`.
  */
@@ -105,7 +105,7 @@ const CHIP_OF: Partial<Record<ReleaseKind, DiscographyChipKind>> = {
 const onShelf = (items: DiscographyItem[]) => items.filter((item) => item.kind !== 'appears-on');
 
 /**
- * Popular releases' pool: Navic's rule over the kinds the chips show (never Appears on, never a kind
+ * Popular releases' pool: Worbus for Android's rule over the kinds the chips show (never Appears on, never a kind
  * switched off in Settings, so Popular holds nothing the chip row beside it leaves out); when that
  * picks nothing (an artist with only missing singles, say), those kinds in the default order.
  */

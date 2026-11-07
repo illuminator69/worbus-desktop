@@ -218,7 +218,7 @@ test('exclude carries at most 1000 distinct ids, the newest ones', () => {
 // --- Play order under shuffle ------------------------------------------------------------------
 
 test('local: remaining counts the play order, which is what player.index walks', () => {
-    // Shuffled or not, Feishin's index is a position in the order being played.
+    // Shuffled or not, Worbus for desktop's index is a position in the order being played.
     assert.equal(remainingLocal(8, 10), 1);
     assert.equal(remainingLocal(9, 10), 0);
     assert.equal(remainingLocal(0, 10), 9);
@@ -253,7 +253,7 @@ test('album seeds are spread over the album, first and last included', () => {
     assert.deepEqual(spreadPick([1, 2, 3], 5), [1, 2, 3]);
 });
 
-// --- An artist radio's seed (B-149, Navic's `artistSeedSongs`) ---------------------------------
+// --- An artist radio's seed (B-149, Worbus for Android's `artistSeedSongs`) ---------------------------------
 
 const song = (id: string, albumId: string, playCount: number, artistId = 'oya') => ({
     albumId,
@@ -942,7 +942,7 @@ test('paused: autoplay waits, but a chip tap asks now (continuation still only u
 });
 
 test('a station another device bound to the session is waited for, not topped up at once', () => {
-    // Walk W7: Navic continued an album as a new station; Feishin, controlling, saw the session
+    // Walk W7: Worbus for Android continued an album as a new station; Worbus for desktop, controlling, saw the session
     // bound to it with the queue still one track long and asked `next`: two batches, one top-up.
     assert.equal(boundByAnotherDevice(null, bound(), false), true);
     assert.equal(boundByAnotherDevice(bound({ stationId: 'st_0' }), bound(), false), true);

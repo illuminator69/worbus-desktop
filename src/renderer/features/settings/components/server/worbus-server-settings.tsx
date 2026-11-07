@@ -1,13 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
+import isElectron from 'is-electron';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-    DEFAULT_DEVICE_NAME,
-    hostOf,
-    resolveDeviceName,
-    resolvePublicServerUrl,
-} from './hub-fields';
+import { hostOf, resolveDeviceName, resolvePublicServerUrl } from './hub-fields';
 import {
     addressFieldValue,
     capabilityLines,
@@ -60,8 +56,11 @@ import { Switch } from '/@/shared/components/switch/switch';
 import { TextInput } from '/@/shared/components/text-input/text-input';
 import { Text } from '/@/shared/components/text/text';
 import { toast } from '/@/shared/components/toast/toast';
+import { savedDeviceName } from '/@/shared/utils/client-name';
 import { displayAddress } from '/@/shared/utils/hub-addresses';
 import { parseSubsonicPair } from '/@/shared/utils/hub-signin';
+
+const hubApi = isElectron() ? window.api.hub : null;
 
 /** A sentence from en.json `setting.worbus.*` (Worbus P3). */
 const useSay = () => {
@@ -267,13 +266,18 @@ export const WorbusServerSettings = memo(() => {
     const sweeping = finder.kind === 'looking' && finder.scope !== 'beside';
     const foundWhere = say({ key: finder.scope === 'network' ? 'foundOnNetwork' : 'foundBeside' });
     const [address, setAddress] = useState(addressFieldValue(settings.url, configured));
-    const [name, setName] = useState(settings.name);
+    const [name, setName] = useState(savedDeviceName(settings.name));
+    // Worbus P5 (design §6.7): no saved name means the computer's own name, shown as the hint.
+    const [defaultName, setDefaultName] = useState('Worbus');
+    useEffect(() => {
+        void hubApi?.defaultName().then(setDefaultName);
+    }, []);
 
     // Reset to default (or anything else that writes these) must show in the fields.
     useEffect(() => {
         setAddress(addressFieldValue(settings.url, configured));
     }, [settings.url, configured]);
-    useEffect(() => setName(settings.name), [settings.name]);
+    useEffect(() => setName(savedDeviceName(settings.name)), [settings.name]);
 
     const options = [
         {
@@ -530,7 +534,7 @@ export const WorbusServerSettings = memo(() => {
                         if (result.changed) setSettings({ hub: { name: result.name } });
                     }}
                     onChange={(e) => setName(e.currentTarget.value)}
-                    placeholder={DEFAULT_DEVICE_NAME}
+                    placeholder={defaultName}
                     value={name}
                 />
             ),

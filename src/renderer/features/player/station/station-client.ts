@@ -332,7 +332,7 @@ export const ownSongsOf = async (serverId: string, artistId: string): Promise<So
 };
 
 /**
- * An artist radio's seed songs, the rule Navic uses (`artistSeedSongs`, B-149): up to five of
+ * An artist radio's seed songs, the rule Worbus for Android uses (`artistSeedSongs`, B-149): up to five of
  * the artist's own songs in the library, the most played (this user's play counts), one per
  * album first. Not `getTopSongs` (Last.fm's list matched to the library through Navidrome): it
  * answered nothing for Radiohead's 17 songs here. Asked in album order, so equal play counts fall
@@ -370,7 +370,7 @@ export const artistRadioSeed = async (
 };
 
 /**
- * An artist radio without a station (Navic's `artistSimilarQueue`): the seed songs, then
+ * An artist radio without a station (Worbus for Android's `artistSimilarQueue`): the seed songs, then
  * `count` of Navidrome's similar songs for the artist (`getSimilarSongs2`), cut at `cap` when
  * given. Never a shuffle of the artist's own songs.
  */

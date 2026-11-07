@@ -7,7 +7,7 @@ import type { Mix } from '../../store/mixes.store.ts';
 /**
  * B-149, B-151:  node --test src/renderer/features/mixes/mix-recipe.harness.ts
  *
- * "Mixed for You", the spec shared with Navic: the form's kinds, their order and words with and
+ * "Mixed for You", the spec shared with Worbus for Android: the form's kinds, their order and words with and
  * without the station engine; the recipe each kind saves; what every stored kind plays as,
  * legacy kinds included; a genre recipe's name from an old id; and the pickers' rule that there
  * is no list until something is typed.
@@ -363,7 +363,7 @@ test('the artist dropdown: nothing without a term; searching, then what the serv
     assert.equal(artistPickerEmpty({ ...state, term: 'a' }), 'Keep typing...');
 });
 
-// --- The row's words (B-149, Navic's `mixKindLabel`) ----------------------------------------------
+// --- The row's words (B-149, Worbus for Android's `mixKindLabel`) ----------------------------------------------
 
 const words = (id: string) => ({ balanced: 'Balanced', close: 'Close', explore: 'Explore' })[id]!;
 
@@ -408,7 +408,7 @@ test('a stored character: an id, a legacy name or an old preset id, else none', 
     assert.equal(storedCharacter({ character: 'nonsense', moodCharacter: '' }), null);
 });
 
-test('rows read as Navic words them: legacy kinds that play as Your mix are Your mix', () => {
+test('rows read as Worbus for Android words them: legacy kinds that play as Your mix are Your mix', () => {
     const words = (id: string) =>
         ({ balanced: 'Balanced', close: 'Close', explore: 'Explore' })[id] ?? id;
     assert.equal(
@@ -502,7 +502,7 @@ test('a custom radio plays every artist, with its variety, under its own name', 
     );
 });
 
-test('a recipe from Navic round-trips; one without seedIds is the artist radio it always was', () => {
+test('a recipe from Worbus for Android round-trips; one without seedIds is the artist radio it always was', () => {
     assert.deepEqual(mixArtistIds(mix({ kind: 'artist', seedId: 'ar1' })), ['ar1']);
     assert.deepEqual(
         mixArtistIds(mix({ kind: 'artist', seedId: 'ar1', seedIds: ['ar1', 'ar2', 'ar2'] })),

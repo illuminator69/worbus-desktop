@@ -73,7 +73,7 @@ export const scanPhase = (input: ScanInput): ScanPhase => {
     // Not known yet is not "never scanned": nothing is said or offered until the read answers.
     if (!input.indexed && input.loading) return 'unavailable';
     if (!input.indexed) return input.available ? 'never' : 'unavailable';
-    // Shown even when library albums fill the page (Navic ruling 6): lb-bot has nothing to add.
+    // Shown even when library albums fill the page (Worbus for Android ruling 6): lb-bot has nothing to add.
     if (input.unresolved) return 'unresolved';
     return input.releaseCount === 0 ? 'empty' : 'idle';
 };

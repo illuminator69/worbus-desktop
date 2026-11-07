@@ -1,5 +1,5 @@
 /**
- * F6: typo-tolerant matching for the Library field, ported rule for rule from Navic's Find
+ * F6: typo-tolerant matching for the Library field, ported rule for rule from Worbus for Android's Find
  * (`FuzzyMatch.kt`), so both clients find the same artist for the same typo.
  *
  * Navidrome's search matches substrings, so a typo finds nothing there; the whole artist list is held
@@ -94,7 +94,7 @@ const prepareQuery = (query: string): null | PreparedQuery => {
 };
 
 // A token's match, best first: exact, a prefix, one edit, two edits. Two edits on a seven-letter word
-// let "beetles" find "Nettles" and "Besties" (seen on Navic's AVD), so they rank below one.
+// let "beetles" find "Nettles" and "Besties" (seen on Worbus for Android's AVD), so they rank below one.
 const TIER_EXACT = 4;
 const TIER_PREFIX = 3;
 const TIER_FUZZY = 2;

@@ -22,7 +22,7 @@ import {
 /**
  * Worbus P2 lane F, F1:  node --test src/main/features/core/hub/auth.harness.ts
  *
- * Feishin signs in to the Worbus Server with the current Navidrome server's `u`/`s`/`t` instead of
+ * Worbus for desktop signs in to the Worbus Server with the current Navidrome server's `u`/`s`/`t` instead of
  * a typed hub token. The device secret the hub issues is kept in main only (safeStorage-encrypted
  * in electron-store, or in memory when the OS offers no encryption, R7); every main client and
  * the cast bridge read one accessor; an older hub (404, 405, not this route's JSON) is told apart

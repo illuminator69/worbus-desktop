@@ -13,8 +13,8 @@ import {
     diagnosticsEntries,
     diagnosticsHeader,
     redact,
-    redactSettings,
     REDACTED,
+    redactSettings,
 } from './redact.ts';
 import { createZipBuffer } from './utils/zip.ts';
 
@@ -22,9 +22,9 @@ import { createZipBuffer } from './utils/zip.ts';
  * Worbus P4 lane F, F2:  node --test src/main/diagnostics-redaction.harness.ts
  *
  * Export diagnostics (Settings › Advanced › Logger) is the file a tester attaches to an issue
- * (design §6.8). Every file in its zip goes through one redaction rule, the same as Navic's
+ * (design §6.8). Every file in its zip goes through one redaction rule, the same as Worbus for Android's
  * Share logs (`redaction-vectors.json`, copied verbatim from the controller's ruling R2), plus
- * Feishin's own: every value under main-config.json's `server` record, the saved passwords.
+ * Worbus for desktop's own: every value under main-config.json's `server` record, the saved passwords.
  */
 
 const ROOT = path.resolve(import.meta.dirname, '../..');
@@ -92,18 +92,18 @@ const exportFiles = (serverVersion: null | string) => {
         ignore_cors: false,
         password_store: 'gnome-libsecret',
         // Electron's safeStorage ciphertext of the Navidrome password, keyed by server id: the
-        // field rule cannot see it (the key is an id), so Feishin's own rule names the record.
+        // field rule cannot see it (the key is an id), so Worbus for desktop's own rule names the record.
         server: { 'b1c2d3e4-server-id': ND_PASSWORD_CIPHERTEXT, plain: ND_PASSWORD },
         window_window_bar_style: 'linux',
     };
     const renderer = {
         audioMuse: { token: AUDIOMUSE_TOKEN, url: 'http://am.local:8000' },
-        hub: { enabled: true, name: 'Feishin', token: HUB_TOKEN, url: 'ws://192.168.1.20:4790' },
+        hub: { enabled: true, name: 'Desk-PC', token: HUB_TOKEN, url: 'ws://192.168.1.20:4790' },
         lastPlayed: `https://nd.example.org/rest/stream?u=bob&t=${SUBSONIC_T}&s=${SUBSONIC_S}&id=1`,
     };
     const log = [
-        `2026-11-06T10:00:00.000Z INFO  [renderer] GET https://nd.example.org/rest/stream?u=bob&t=${SUBSONIC_T}&s=${SUBSONIC_S}&v=1.16.1&c=feishin&id=tr-1`,
-        `2026-11-06T10:00:01.000Z DEBUG [main]     hub hello {"t":"hello","deviceSecret":"${DEVICE_SECRET}","name":"Feishin"}`,
+        `2026-11-06T10:00:00.000Z INFO  [renderer] GET https://nd.example.org/rest/stream?u=bob&t=${SUBSONIC_T}&s=${SUBSONIC_S}&v=1.16.1&c=Worbus-Desktop&id=tr-1`,
+        `2026-11-06T10:00:01.000Z DEBUG [main]     hub hello {"t":"hello","deviceSecret":"${DEVICE_SECRET}","name":"Desk-PC"}`,
         `2026-11-06T10:00:02.000Z DEBUG [main]     audiomuse request Authorization: Bearer ${BEARER}`,
         `2026-11-06T10:00:03.000Z DEBUG [renderer] audiomuse apiKey=${AUDIOMUSE_TOKEN} ok`,
         `2026-11-06T10:00:04.000Z DEBUG [renderer] sign in {"username":"bob","password":"${ND_PASSWORD}"}`,
@@ -111,7 +111,7 @@ const exportFiles = (serverVersion: null | string) => {
         `2026-11-06T10:00:05.000Z DEBUG [main]     hub auth {`,
         `  deviceSecret: '${INSPECTED_SECRET}',`,
         `  'api-key': '${INSPECTED_SECRET}',`,
-        `  name: 'Feishin'`,
+        `  name: 'Desk-PC'`,
         `}`,
         `2026-11-06T10:00:06.000Z INFO  [main]     Player: track changed to 3 of 12 (id=tr-1)`,
         '',
@@ -119,7 +119,7 @@ const exportFiles = (serverVersion: null | string) => {
     const entries = diagnosticsEntries({
         configRaw: JSON.stringify(config),
         diagnostics: {
-            app: { name: 'Feishin', version: '0.4.0 (c812df4)' },
+            app: { name: 'Worbus', version: '0.4.0 (c812df4)' },
             server: { name: 'Home', type: 'navidrome', url: REDACTED },
             serverVersion,
         },
@@ -166,7 +166,7 @@ test('export_has_no_planted_secret', () => {
     assert.match(files.get('logs/main.log')!, /Player: track changed to 3 of 12 \(id=tr-1\)/);
     assert.match(
         files.get('logs/main.log')!,
-        /\n {2}deviceSecret: '\[removed\]',\n {2}'api-key': '\[removed\]',\n {2}name: 'Feishin'\n/,
+        /\n {2}deviceSecret: '\[removed\]',\n {2}'api-key': '\[removed\]',\n {2}name: 'Desk-PC'\n/,
     );
     assert.match(
         files.get('logs/main.log')!,
@@ -176,7 +176,7 @@ test('export_has_no_planted_secret', () => {
 
 test('the header names the app, the system and the server version, or says it is unknown', () => {
     const unknown = exportFiles(null).get('header.txt')!;
-    assert.match(unknown, /^Feishin 0\.4\.0 \(c812df4\)\n/);
+    assert.match(unknown, /^Worbus 0\.4\.0 \(c812df4\)\n/);
     assert.match(unknown, /\nLinux 6\.8\.0 \(x64\)\n/);
     assert.match(unknown, /\nElectron 43\.7\.0\n/);
     assert.match(unknown, /\nserver version unknown\n/);
@@ -199,7 +199,7 @@ test('the export in Settings › Advanced › Logger writes every file through t
 
 test('password_store stays visible, and only that key holding a backend name', () => {
     assert.deepEqual(
-        redactSettings({ password_store: 'basic', hubAuth: { password_store: 'basic' } }),
+        redactSettings({ hubAuth: { password_store: 'basic' }, password_store: 'basic' }),
         { hubAuth: { password_store: REDACTED }, password_store: 'basic' },
         'only the top-level key',
     );

@@ -1,6 +1,6 @@
 /**
  * Worbus P4 (design §6.8): the one redaction rule for everything that leaves through Export
- * diagnostics. A port of the controller's reference (`redact_ref.py`, ruling R2); Navic applies
+ * diagnostics. A port of the controller's reference (`redact_ref.py`, ruling R2); Worbus for Android applies
  * the same rule, and `diagnostics-redaction.harness.ts` holds both apps to the same vectors.
  *
  * Applied per line, in this order:
@@ -12,7 +12,7 @@
  *   d. the Subsonic `u`, `t`, `s`, `p` query parameters;
  *   e. `user:password@` in a URL.
  *
- * Feishin adds one rule of its own: every value under main-config.json's `server` record (the
+ * Worbus for desktop adds one rule of its own: every value under main-config.json's `server` record (the
  * saved passwords, keyed by server id, a name the field rule does not catch).
  *
  * Known limit: a credential split across two lines is not caught by a per-line rule.
@@ -70,14 +70,14 @@ export const redact = (line: string): string =>
         .replace(D, (_m, lead: string, param: string) => `${lead}${param}=${REDACTED}`)
         .replace(E, (_m, scheme: string) => `${scheme}${REDACTED}@`);
 
-// Feishin's log lines print objects with `util.inspect` (logger.ts): `secret: 'abc'`, the name
+// Worbus for desktop's log lines print objects with `util.inspect` (logger.ts): `secret: 'abc'`, the name
 // bare or in single quotes and the value in single quotes, which rule b's run does not take.
 const INSPECTED = new RegExp(
     `(?<![A-Za-z0-9_.\\-"'])('?)(${NAME})\\1(\\s*:\\s*)'(?:[^'\\\\]|\\\\.)*'`,
     'gi',
 );
 
-/** {@link redact}, plus the `util.inspect` form of a sensitive field (Feishin's own logs). */
+/** {@link redact}, plus the `util.inspect` form of a sensitive field (Worbus for desktop's own logs). */
 export const redactLogLine = (line: string): string =>
     redact(line).replace(
         INSPECTED,
@@ -132,7 +132,7 @@ export const diagnosticsHeader = (h: {
     serverVersion: null | string;
 }): string =>
     [
-        `Feishin ${h.appVersion}`,
+        `Worbus ${h.appVersion}`,
         `${h.os} (${h.arch})`,
         `Electron ${h.electron}`,
         h.serverVersion ? `Worbus Server ${h.serverVersion}` : 'server version unknown',

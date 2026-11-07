@@ -16,7 +16,7 @@ import {
 
 /**
  * R11 (B-222): which source card a box selects on the user's behalf, and what a card says. Ported
- * from Navic's `preselectedSource` rule (RequestStageTest / GapStageTest's sources case).
+ * from Worbus for Android's `preselectedSource` rule (RequestStageTest / GapStageTest's sources case).
  *
  *     node --test src/renderer/features/lbbot/components/source-cards-model.harness.ts
  */
@@ -107,7 +107,7 @@ test('rank and folder name', () => {
     assert.equal(folderName(source({ folder: '' })), 'p');
 });
 
-test("a gap preselects by Navic's three terms: its sources carry no coverage", () => {
+test("a gap preselects by Worbus for Android's three terms: its sources carry no coverage", () => {
     // Review minor 4: lb-bot's gap sources have no coverageFull, so the album's rule never fired.
     assert.equal(initialGapSelection([source({ coverageFull: false, id: 2 })]), 2);
     assert.equal(initialGapSelection([source({ artistVerified: undefined, id: 3 })]), 3);

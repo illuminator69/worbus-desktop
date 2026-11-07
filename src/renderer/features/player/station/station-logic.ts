@@ -83,7 +83,7 @@ export const toCharacterId = (value: unknown): null | StationCharacterId =>
 
 /**
  * A character from anything that may have stored one: a new id, the hub's legacy MoodCharacter
- * name, or Feishin's own old preset id. Anything else is Balanced, the hub's default.
+ * name, or Worbus for desktop's own old preset id. Anything else is Balanced, the hub's default.
  */
 export const characterFromAny = (value: unknown): StationCharacterId => {
     const id = toCharacterId(value);
@@ -118,7 +118,7 @@ const OLD_LABELS = new Set(['Balanced', 'Close', 'Explore']);
 /**
  * The characters to render: the hub's, or the bundled copy when it has given none. The words
  * before P5 (Close, Balanced, Explore) read as today's (Familiar, Blend, Discover); a hub's own
- * other words win. Navic's `StationCatalogue.infoFor` is the twin.
+ * other words win. Worbus for Android's `StationCatalogue.infoFor` is the twin.
  */
 export const charactersOf = (catalog: null | StationCatalog): readonly StationCharacter[] =>
     catalog && catalog.characters.length > 0
@@ -169,7 +169,7 @@ export const stationMode = (args: {
 // --- Play order ---------------------------------------------------------------------------------
 
 /**
- * Tracks left after the current one in PLAY order, for this client's own player. Feishin's
+ * Tracks left after the current one in PLAY order, for this client's own player. Worbus for desktop's
  * `player.index` is a position in the shuffled order while shuffle is on, so this is the same
  * arithmetic either way.
  */
@@ -238,7 +238,7 @@ export interface ArtistSeedCandidate {
 
 /**
  * The artist's own songs among `songs` (an artist filter that also matched them as album artist
- * or as a guest): those whose primary track artist is `artistId`, which is what Navic's library
+ * or as a guest): those whose primary track artist is `artistId`, which is what Worbus for Android's library
  * holds a song under. A song that names no track artist is kept.
  */
 export const ownArtistSongs = <T extends ArtistSeedCandidate>(
@@ -247,7 +247,7 @@ export const ownArtistSongs = <T extends ArtistSeedCandidate>(
 ): T[] => songs.filter((song) => !song.artists?.length || song.artists[0].id === artistId);
 
 /**
- * An artist radio's seed, Navic's `artistSeedSongs` (B-149): up to `max` of the artist's songs,
+ * An artist radio's seed, Worbus for Android's `artistSeedSongs` (B-149): up to `max` of the artist's songs,
  * the most played first, one per album before a second from any album. Equal play counts keep
  * the order given. A song with no album counts as an album of its own.
  */
@@ -277,7 +277,7 @@ export const artistSeedSongs = <T extends ArtistSeedCandidate>(
 };
 
 /**
- * What an artist radio plays without a station (Navic's `artistSimilarQueue`, B-149): the seed
+ * What an artist radio plays without a station (Worbus for Android's `artistSimilarQueue`, B-149): the seed
  * songs, then Navidrome's similar songs for the artist (`getSimilarSongs2`) in the order it gave
  * them, without repeats, cut at `cap` when one is given (a mix's length). Never a shuffle.
  */
@@ -298,7 +298,7 @@ export const artistFallbackQueue = <T extends { id: string }>(
 };
 
 /**
- * Seed songs per artist for a custom radio (P5): twelve shared out, one to five each. Navic's
+ * Seed songs per artist for a custom radio (P5): twelve shared out, one to five each. Worbus for Android's
  * `seedsPerArtist` is the twin.
  */
 export const seedsPerArtist = (artists: number): number =>
@@ -540,7 +540,7 @@ export const applySessionStationId = (args: {
  * A `session` frame bound this client's queue to a station it did not ask for while it asked
  * nothing: another device started it, and that device is appending its first batch. It is waited
  * for like a batch served elsewhere (SERVED_ELSEWHERE_GRACE_MS); asking `next` at once added a
- * second batch to the same top-up (walk W7, Navic continuing an album, Feishin controlling).
+ * second batch to the same top-up (walk W7, Worbus for Android continuing an album, Worbus for desktop controlling).
  */
 export const boundByAnotherDevice = (
     before: null | StationBinding,

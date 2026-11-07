@@ -239,7 +239,7 @@ test('sheet_once_per_server', () => {
         ),
         null,
     );
-    // The prompt is Feishin's own confirm modal, with Not now.
+    // The prompt is Worbus for desktop's own confirm modal, with Not now.
     const prompt = read('../../../hub/components/hub-found-prompt.tsx');
     assert.match(prompt, /<ConfirmModal/);
     assert.match(prompt, /t\('setting\.worbus\.notNow'\)/);

@@ -43,7 +43,7 @@ import { GenreListSort, SortOrder } from '/@/shared/types/domain-types';
 import { StationCharacterId, StationVariety } from '/@/shared/types/station-types';
 
 /**
- * Creating a recipe (B-149, B-151; the same spec as Navic's form).
+ * Creating a recipe (B-149, B-151; the same spec as Worbus for Android's form).
  *
  * Four kinds, in this order: Radio (around the playing song), Your mix (the hub's station from
  * what you play most; only with the station engine, which is what builds it), Genre and Artist.
@@ -56,7 +56,7 @@ import { StationCharacterId, StationVariety } from '/@/shared/types/station-type
  * once and is small enough to hold.
  *
  * Artist takes up to eight artists (P5): with more than one the recipe is a custom radio, as
- * Navic's pick-and-tune flow makes it. Artist variety is offered when the hub's probe lists it,
+ * Worbus for Android's pick-and-tune flow makes it. Artist variety is offered when the hub's probe lists it,
  * and the count line ("N songs to draw from") when it lists `count`.
  */
 
@@ -187,7 +187,7 @@ const GenrePicker = ({
             serverId,
         }),
     );
-    // By NAME: a recipe holds the genre's name, which Navic and getRandomSongs both take.
+    // By NAME: a recipe holds the genre's name, which Worbus for Android and getRandomSongs both take.
     const options = useMemo(
         () =>
             matchGenres(term, genres.data?.items ?? []).map((name) => ({
@@ -232,7 +232,7 @@ type CountWords = { blocks: boolean; line: string; muted: boolean };
 /**
  * The count line for an Artist recipe (P5): how many songs the picked artists' radio could draw
  * from at this character. Asked 250 ms after the artists or the character change; Artist variety
- * is not part of it. A count of 0 and "AudioMuse knows none of these" block the save, as on Navic;
+ * is not part of it. A count of 0 and "AudioMuse knows none of these" block the save, as on Worbus for Android;
  * a count that is not to be had does not.
  */
 const useCountWords = (

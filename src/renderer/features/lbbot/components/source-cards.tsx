@@ -138,7 +138,7 @@ interface SourceCardsProps {
 
 /**
  * lb-bot's ranked folders as radio cards in one box (R11, B-222), the same for a missing album and
- * for an album's gaps, after Navic's `SourceCards`. Every card answers, in order of how badly a
+ * for an album's gaps, after Worbus for Android's `SourceCards`. Every card answers, in order of how badly a
  * wrong answer hurts: is this the right album (the verdict, the one failure that is silent), does it
  * hold every track (coverage against the canonical tracklist, never a file count), and what quality.
  * Choosing a card opens its files, and the box's action folds in right under it.

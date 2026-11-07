@@ -99,7 +99,7 @@ export const sidebarGroups = (
 
     const you: SidebarEntry[] = [];
     // Downloading off: nothing new is fetched, so Activity goes; Needs attention stays only for
-    // the failures an earlier "on" period left in the ledger (Feishin's page is that ledger).
+    // the failures an earlier "on" period left in the ledger (Worbus for desktop's page is that ledger).
     const admin = ctx.admin !== false;
     if (lb && admin && (ctx.downloadsShown || ctx.attentionCount > 0)) {
         you.push({

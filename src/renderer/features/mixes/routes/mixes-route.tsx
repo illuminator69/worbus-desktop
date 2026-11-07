@@ -46,7 +46,7 @@ import { StationCharacterId } from '/@/shared/types/station-types';
  * navi-connect: "Mixed for You" — the recipes, not the results.
  *
  * The name avoids both words this stack has already spent. "Station" is
- * Subsonic internet radio in Navic (`Screen.RadioList`) and in Feishin's
+ * Subsonic internet radio in Worbus for Android (`Screen.RadioList`) and in Worbus for desktop's
  * create/edit-station forms; "radio" is the ephemeral similarity mix
  * (`RadioManager.startRadio`, `SavedQueueSource.RADIO`); and Navidrome's own
  * "Instant Mix" is ephemeral too — which is precisely what these are not. In

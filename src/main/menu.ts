@@ -101,7 +101,7 @@ export default class MenuBuilder {
         const isRepeatEnabled = repeatMode !== PlayerRepeat.NONE;
 
         const subMenuAbout: MenuItemConstructorOptions = {
-            label: 'Electron',
+            label: 'Worbus',
             submenu: [
                 { role: 'about' },
                 { type: 'separator' },
@@ -185,7 +185,7 @@ export default class MenuBuilder {
             submenu: [
                 {
                     click: this.showMainWindow,
-                    label: 'Show Feishin',
+                    label: 'Show Worbus',
                 },
             ],
         };
@@ -315,9 +315,9 @@ export default class MenuBuilder {
                 {
                     click() {
                         // The fork's own page; upstream's repository is not offered.
-                        shell.openExternal('https://github.com/illuminator69/feishin-gaps');
+                        shell.openExternal('https://github.com/illuminator69/worbus');
                     },
-                    label: 'Feishin (fork) on GitHub',
+                    label: 'Worbus on GitHub',
                 },
                 { type: 'separator' },
                 {
@@ -410,10 +410,11 @@ export default class MenuBuilder {
                 submenu: [
                     {
                         click() {
-                            shell.openExternal('https://github.com/illuminator69/feishin-gaps');
+                            shell.openExternal('https://github.com/illuminator69/worbus');
                         },
-                        label: 'Feishin (fork) on GitHub',
+                        label: 'Worbus on GitHub',
                     },
+                    { label: 'About Worbus', role: 'about' },
                 ],
             },
         ];

@@ -51,7 +51,7 @@ export const isLbRefusal = (code: string | undefined): boolean =>
  *   404 means *the hub proxies no such route* — it is older than this app and
  *   needs restarting. `hub.py` is a long-running process; editing it changes
  *   nothing until it restarts, which alone accounted for a whole round of "the
- *   button does nothing" on the Navic side.
+ *   button does nothing" on the Worbus for Android side.
  * - **502 is usually "busy", not "refused".** Every lb-bot route takes its
  *   process-wide `_review_lock`, and the hub's default 20s proxy timeout is the
  *   only thing separating slow from failed. The hub's own body reads
@@ -59,7 +59,7 @@ export const isLbRefusal = (code: string | undefined): boolean =>
  *   a large search holds that lock.
  *
  * Anything else prefers lb-bot's own `error`, which it writes for humans - except P1's two
- * refusals, whose sentences are the client's (Navic's words for the first).
+ * refusals, whose sentences are the client's (Worbus for Android's words for the first).
  */
 export const describeFailure = (status: number, body: Json | null): string => {
     const refusal = refusalCode(status, body);
@@ -98,7 +98,7 @@ export const describeFailure = (status: number, body: Json | null): string => {
 /**
  * Worbus P1 (F6): Scan now without an MBID refused by an lb-bot from before P1, which answers
  * `POST /lb/artist/discography {nd_id}` 400 "mbid is required". Only that sentence reads as an older
- * lb-bot (Navic ruling 4); any other 400 is an ordinary failure.
+ * lb-bot (Worbus for Android ruling 4); any other 400 is an ordinary failure.
  */
 export const isOlderScanRefusal = (status: number, error: string | undefined): boolean =>
     status === 400 && error === 'mbid is required';

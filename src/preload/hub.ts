@@ -87,6 +87,9 @@ const finderCancel = () => ipcRenderer.send('hub-finder-cancel');
 
 const finderState = (): Promise<HubFinderState> => ipcRenderer.invoke('hub-finder-state');
 
+/** Worbus P5: the name this device goes by while none is saved (the computer's, else Worbus). */
+const defaultName = (): Promise<string> => ipcRenderer.invoke('hub-default-name');
+
 const onFinderState = (cb: (state: HubFinderState) => void): (() => void) => {
     const handler = (_event: unknown, state: HubFinderState) => cb(state);
     ipcRenderer.on('hub-finder-state', handler);
@@ -99,6 +102,7 @@ const removeListeners = () => {
 
 export const hub = {
     authState,
+    defaultName,
     finderCancel,
     finderLook,
     finderState,

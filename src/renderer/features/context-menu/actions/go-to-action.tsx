@@ -47,7 +47,7 @@ export const GoToAction = ({ items }: GoToActionProps) => {
      * another device, and those rows are built from the hub's wire track rather
      * than from a library read. That track carries the album's *name* and the
      * artist's *name*, and the ids only if the publisher happened to send them —
-     * Navic's `trackJson` sends neither, and the hub's saved-queue whitelist
+     * Worbus for Android's `trackJson` sends neither, and the hub's saved-queue whitelist
      * (`SQ_TRACK_FIELDS`) drops `albumId` in any case. So this submenu had no
      * "Go to album" entry at all, and its artist entry navigated to an empty id.
      *

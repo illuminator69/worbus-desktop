@@ -348,7 +348,7 @@ const metaRefresh = (args: {
     rgid?: string;
 }): Promise<LbBotResult<LbBotMeta>> => ipcRenderer.invoke('lbbot-meta-refresh', args);
 
-/** Post a system notification for a fill that landed while Feishin was in the
+/** Post a system notification for a fill that landed while Worbus for desktop was in the
  *  background. The main process suppresses it when the window is focused — the
  *  renderer's toast has that case covered. */
 const notify = (title: string, body: string): Promise<void> =>

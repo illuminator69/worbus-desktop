@@ -36,6 +36,7 @@ import { kickAction } from './kick';
 import { clearServerVersion, noteServerVersion } from './server-version';
 
 import { getMainWindow } from '/@/main/index';
+import { defaultDeviceName, deviceName } from '/@/shared/utils/client-name';
 
 /**
  * navi-connect hub client (transport only).
@@ -75,7 +76,7 @@ const CLOSE_BAD_TOKEN = 4001;
 // renderer makes one silent sign-in; until a sign-in works the transport stands down.
 const CLOSE_SIGNED_OUT = 4005;
 
-const config: HubConfig = { enabled: false, legacyToken: '', name: 'Feishin', url: '' };
+const config: HubConfig = { enabled: false, legacyToken: '', name: '', url: '' };
 
 /**
  * Whether this machine can encrypt the secret at rest. On Linux with no keyring Electron falls
@@ -101,7 +102,7 @@ export const hubAuth = createHubAuth({
     device: () => ({
         id: deviceId(),
         kind: 'computer',
-        name: config.name || 'Feishin',
+        name: deviceName(config.name, os.hostname()),
         platform: 'desktop',
     }),
     fetch: (url, init) => fetch(url, init),
@@ -340,7 +341,7 @@ function dial(url: string, gen: number): void {
                 // What this device is, for the icon its row gets in every picker. An older
                 // hub ignores the key.
                 kind: 'computer',
-                name: config.name || 'Feishin',
+                name: deviceName(config.name, os.hostname()),
                 platform: 'desktop',
             },
             t: 'hello',
@@ -654,7 +655,7 @@ ipcMain.handle(
         config.enabled = enabled;
         config.url = url;
         config.legacyToken = token;
-        config.name = name || 'Feishin';
+        config.name = name;
         // P3: the typed address joins the server record (migrated on the first push); "no server
         // set" forgets it. `hub.url` itself stays the typed address (design §6.3).
         const auth = hubAuth.state();
@@ -779,6 +780,9 @@ ipcMain.on('hub-navidrome-urls', (_event, urls: unknown) => {
 });
 
 ipcMain.handle('hub-finder-state', () => finderState);
+
+// Worbus P5 (design §6.7): what the Server tab shows while no name is saved.
+ipcMain.handle('hub-default-name', () => defaultDeviceName(os.hostname()));
 
 // A sign-in tap stops a sweep still running (design §7 RACES).
 // M4: also the Server tab closing - a finished "Find home address" answer is not said again.

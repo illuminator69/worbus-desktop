@@ -102,8 +102,8 @@ test('advancedListsNoUpdateOrAnalyticsSection', () => {
 });
 
 test('noCodePathNamesUpstreamsRepositoryOrCallsGithubsApi', () => {
-    // The one allowed mention: lrclib's User-Agent string, an identifier the fork leaves alone (F1).
-    const strip = (code: string) => code.replace(/^.*LRCGET v.*$/gm, '');
+    // The one allowed mention (Worbus P5, design §6.8): the credit line's link to upstream.
+    const strip = (code: string) => code.replace(/^.*is a fork of Feishin by Jeff Li.*$/gm, '');
     const hitsOutsideUserAgent = (pattern: RegExp) =>
         files.filter((f) => pattern.test(strip(f.code))).map((f) => f.path);
     assert.deepEqual(hitsOutsideUserAgent(/api\.github\.com\/repos\/jeffvli/), []);

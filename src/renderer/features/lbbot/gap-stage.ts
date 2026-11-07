@@ -10,17 +10,17 @@ import { gapAwaitingMatch, gapFailReason } from './hooks/fill-announce-logic.ts'
 import { type RequestStep, requestSteps } from './request-steps.ts';
 
 /*
- * navi-connect R11 (B-223): the album page's gaps box, after Navic's `GapBox` (which retired its
- * `GapFillSheet`, as this retires Feishin's gap modal). The "N tracks missing" line unfolds to the
+ * navi-connect R11 (B-223): the album page's gaps box, after Worbus for Android's `GapBox` (which retired its
+ * `GapFillSheet`, as this retires Worbus for desktop's gap modal). The "N tracks missing" line unfolds to the
  * missing songs; Fill gaps turns the same box into the ranked sources for them; a request turns it
  * into the steps; the finish folds it to a result row and then to nothing. A failure keeps it open,
  * saying why.
  *
  * Which of those it shows is one function of what is known (lb-bot's gap record, this device's
  * ledger row for the group, where the user has the box, a tap in flight), so the box cannot be in
- * two states at once and every precedence is a case in `gap-stage.harness.ts`, ported from Navic's
+ * two states at once and every precedence is a case in `gap-stage.harness.ts`, ported from Worbus for Android's
  * `GapStageTest`. A transfer in flight is the truth whatever else is set: it may have been started
- * on another client. Pure: Navic's copy is `GapStage.kt`, written by hand (no shared build).
+ * on another client. Pure: Worbus for Android's copy is `GapStage.kt`, written by hand (no shared build).
  */
 
 /** Where the user has put the box. */

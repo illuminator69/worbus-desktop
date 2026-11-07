@@ -19,7 +19,7 @@ import {
  *
  * What lb-bot's downloads mode and index progress mean to this client, read once from the
  * hub's `welcome.lb` / `t:"lb"` / `/lb/status` and `welcome.lbIndex` / `t:"index"`. The mode
- * rules are Navic's (lane N ruling 3): every welcome restates it, a frame without the key keeps
+ * rules are Worbus for Android's (lane N ruling 3): every welcome restates it, a frame without the key keeps
  * what a 409 taught, and an older peer (no key at all) behaves as today.
  */
 

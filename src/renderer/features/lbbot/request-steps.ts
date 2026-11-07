@@ -1,6 +1,6 @@
 /**
  * navi-connect R11: the steps a request walks through, drawn in the missing album's box and the
- * album page's gaps box while a fill moves (Navic's `requestSteps`, RequestStage.kt). PROTOCOL
+ * album page's gaps box while a fill moves (Worbus for Android's `requestSteps`, RequestStage.kt). PROTOCOL
  * section 15.2 names states, not steps, so the captions are the clients' own, in en.json; a state
  * that is not a step of a running request gives no steps at all. Pure, so
  * `request-steps.harness.ts` runs it.

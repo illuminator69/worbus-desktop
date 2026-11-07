@@ -32,7 +32,7 @@ import { Platform } from '/@/shared/types/types';
  * fine all looked different.
  *
  * The rows come from a catalogue (`discover-rows.ts`) whose ids are duplicated
- * in Navic on purpose — see that file for why "shared" can only mean "written
+ * in Worbus for Android on purpose — see that file for why "shared" can only mean "written
  * twice". The dispatch below is the one part that cannot be data: each row
  * renders its own content type. It is a `switch` over a closed union rather
  * than the home page's `if` chain, so adding a row to the catalogue without

@@ -7,9 +7,11 @@ import {
     LyricSearchQuery,
     LyricSource,
 } from '.';
+import packageJson from '../../../../../package.json';
 import { orderSearchResults } from './shared';
 
 import log from '/@/main/logger';
+import { userAgent } from '/@/shared/utils/client-name';
 
 const FETCH_URL = 'https://lrclib.net/api/get';
 const SEEARCH_URL = 'https://lrclib.net/api/search';
@@ -100,7 +102,8 @@ export async function query(
     try {
         result = await axios.get<LrcLibTrackResponse>(FETCH_URL, {
             headers: {
-                'User-Agent': 'LRCGET v0.2.0 (https://github.com/jeffvli/feishin)',
+                // lrclib asks every client to name itself and where it lives.
+                'User-Agent': `${userAgent(packageJson.version)} (https://github.com/illuminator69/worbus-desktop)`,
             },
             params: {
                 album_name: params.album,

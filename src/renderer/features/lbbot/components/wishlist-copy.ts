@@ -4,7 +4,7 @@
  * (`wishlist-copy.harness.ts` resolves the keys against en.json): the component passes each line
  * to `t(key, values)`.
  *
- * While downloading is off lb-bot does not search, so nothing here may say it does (Navic's
+ * While downloading is off lb-bot does not search, so nothing here may say it does (Worbus for Android's
  * sentence, lane N ruling 1): a row says the album is kept for later, with no attempts and no
  * reason. While on - or unknown, an older peer - the copy is what the page always said.
  */

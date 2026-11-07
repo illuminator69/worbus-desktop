@@ -186,7 +186,7 @@ export const useMPRIS = () => {
     }, [currentSong, imageUrl, isRadioActive, isRemote, radioSong]);
 
     // navi-connect (B-050): MPRIS must describe the SESSION, not this client's local engine.
-    // While another device plays (a cast from here, Navic), the local player sits paused on
+    // While another device plays (a cast from here, Worbus for Android), the local player sits paused on
     // the pre-transfer track — so the desktop's media widget read "paused" on a stale song and
     // never followed a track change. Same rule as use-media-session's `publish`. The hub store
     // carries the ~1 Hz progress mirror, so each field is published only on an actual change.

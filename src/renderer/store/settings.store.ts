@@ -770,7 +770,8 @@ const HubSettingsSchema = z
         enabled: z.boolean().default(false),
         // Device ids the user has manually hidden from the device picker (persisted).
         hiddenDeviceIds: z.array(z.string()).default([]),
-        name: z.string().default('Feishin'),
+        // Worbus P5: '' = no name saved; the device goes by the computer's name (design §6.7).
+        name: z.string().default(''),
         // When set, published stream/cover URLs get their origin rewritten to
         // this base — so cast devices get URLs they can reach even when this
         // machine talks to the server over a VPN (e.g. Tailscale).
@@ -781,7 +782,7 @@ const HubSettingsSchema = z
     .default({
         enabled: false,
         hiddenDeviceIds: [],
-        name: 'Feishin',
+        name: '',
         publicServerUrl: '',
         token: '',
         url: 'ws://localhost:4790',
@@ -1559,7 +1560,7 @@ const initialState: SettingsState = {
     hub: {
         enabled: false,
         hiddenDeviceIds: [],
-        name: 'Feishin',
+        name: '',
         publicServerUrl: '',
         token: '',
         url: 'ws://localhost:4790',
@@ -2224,7 +2225,7 @@ const initialState: SettingsState = {
         enabled: false,
         password: randomString(8),
         port: 4333,
-        username: 'feishin',
+        username: 'worbus',
     },
     station: {
         character: 'balanced',

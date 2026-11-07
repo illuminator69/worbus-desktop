@@ -46,7 +46,7 @@ const fakeStore = (initial: Record<string, unknown> = {}) => {
 };
 
 test('default_address_not_migrated', () => {
-    // Feishin's untouched profile: Connect off, no credential, the stored default address.
+    // Worbus for desktop's untouched profile: Connect off, no credential, the stored default address.
     const configured = hubConfiguredFrom({
         enabled: false,
         hasCredential: false,

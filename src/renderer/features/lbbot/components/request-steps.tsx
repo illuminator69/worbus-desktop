@@ -26,7 +26,7 @@ const useStepCaption = () => {
     };
 };
 
-/** A request's steps, one row each (Navic's `RequestSteps`): done ticked, the moving one spinning. */
+/** A request's steps, one row each (Worbus for Android's `RequestSteps`): done ticked, the moving one spinning. */
 export const RequestSteps = ({ steps }: { steps: RequestStep[] }) => {
     const { t } = useTranslation();
     const caption = useStepCaption();

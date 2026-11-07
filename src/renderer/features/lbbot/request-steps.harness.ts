@@ -4,7 +4,7 @@ import test from 'node:test';
 import { currentStep, requestSteps } from './request-steps.ts';
 
 /**
- * R11: a request's five steps, after Navic's `requestSteps`.
+ * R11: a request's five steps, after Worbus for Android's `requestSteps`.
  *
  *     node --test src/renderer/features/lbbot/request-steps.harness.ts
  */

@@ -17,7 +17,7 @@ import {
  * Worbus P4 lane F, F3:  node --test src/renderer/features/lbbot/lb-page-link.harness.ts
  *
  * A failed import that used to arrive as a Telegram message shows in Needs attention as one row
- * linking to lb-bot's page (design §6.4, §6.5). The same seven cases as Navic's N4, with the same
+ * linking to lb-bot's page (design §6.4, §6.5). The same seven cases as Worbus for Android's N4, with the same
  * inputs and outputs. `counts.imports` comes from `/lb/attention`; absent means 0.
  */
 
@@ -38,7 +38,7 @@ test('imports_counted_in_to_fix', () => {
             picks: 3,
         },
     };
-    // Feishin's to-fix number is its own ledger's failures (the sidebar badge) plus the imports.
+    // Worbus for desktop's to-fix number is its own ledger's failures (the sidebar badge) plus the imports.
     assert.equal(toFixCount([SETTLED_FAILED, RUNNING], answer), 3);
     assert.equal(toFixCount([SETTLED_FAILED], null), 1, 'no answer: the ledger alone');
     assert.equal(toFixCount([], { counts: { failedGaps: 4 } }), 0, 'an older lb-bot: no imports');

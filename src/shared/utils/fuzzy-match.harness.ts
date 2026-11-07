@@ -6,7 +6,7 @@ import { buildFuzzyIndex, fuzzyScore, fuzzyTier, normalizeForSearch } from './fu
 /**
  * F6:  node --test src/shared/utils/fuzzy-match.harness.ts
  *
- * The Library field's typo-tolerant matching, ported rule for rule from Navic's Find
+ * The Library field's typo-tolerant matching, ported rule for rule from Worbus for Android's Find
  * (`FuzzyMatch.kt`, its plan's Task 1), so both clients find the same artist for the same typo.
  */
 

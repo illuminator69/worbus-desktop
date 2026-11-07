@@ -3,7 +3,7 @@ import type { LbBotGapSource } from '/@/shared/types/lbbot-types';
 /**
  * navi-connect R11 (B-222): what a source card says and which card the box may choose on the user's
  * behalf, shared by the missing album's box and the album page's gaps box. Pure, so
- * `source-cards-model.harness.ts` runs it; Navic's copy is `preselectedSource` (RequestStage.kt) and
+ * `source-cards-model.harness.ts` runs it; Worbus for Android's copy is `preselectedSource` (RequestStage.kt) and
  * `coverageText` (SourceCards.kt), written by hand (no shared build).
  */
 
@@ -37,7 +37,7 @@ export const initialSelection = (
 ): null | number => sources.find(isSafeSource)?.id ?? null;
 
 /**
- * A gap's source the box may select without being asked: Navic's three terms (`preselectedSource`),
+ * A gap's source the box may select without being asked: Worbus for Android's three terms (`preselectedSource`),
  * no coverage term. lb-bot's gap sources (`_source_view`) carry no `coverageFull`, so the album's
  * rule never fired for a gap (review minor 4); a gap's folder is judged against the missing tracks
  * only, which the card's coverage line shows.

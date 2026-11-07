@@ -442,7 +442,21 @@ const getAssetPath = (...paths: string[]): string => {
     return path.join(RESOURCES_PATH, ...paths);
 };
 
-const BASE_APP_USER_MODEL_ID = 'org.jeffvli.feishin';
+// Worbus P5 (design §6.8): the About panel (the app menu's About, the Help menu's About Worbus)
+// names the app, its version, where it comes from and what it is not.
+app.setAboutPanelOptions({
+    applicationName: 'Worbus',
+    applicationVersion: appVersionLine(packageJson.version),
+    copyright: [
+        'Worbus for desktop is a fork of Feishin by Jeff Li (https://github.com/jeffvli/feishin).',
+        'Licensed GPL-3.0, like the original.',
+        'Worbus is not affiliated with Navidrome.',
+    ].join('\n'),
+    iconPath: getAssetPath('icons/icon.png'),
+    website: 'https://github.com/illuminator69/worbus',
+});
+
+const BASE_APP_USER_MODEL_ID = 'app.worbus.desktop';
 
 // Windows resolves a taskbar button's icon, grouping and pin identity through the
 // AppUserModelID, NOT through the window icon. Claiming the installer's id from a copy that
@@ -640,7 +654,7 @@ const createTray = () => {
         });
     }
 
-    tray.setToolTip('Feishin');
+    tray.setToolTip('Worbus');
     tray.setContextMenu(contextMenu);
 };
 
@@ -749,6 +763,10 @@ async function createWindow(first = true): Promise<void> {
 
     ipcMain.on('window-close', () => {
         mainWindow?.close();
+    });
+
+    ipcMain.on('window-about', () => {
+        app.showAboutPanel();
     });
 
     ipcMain.on('window-quit', () => {
@@ -991,7 +1009,7 @@ const shouldDisableMediaFeatures =
     isLinux() || !enableMediaSession || playbackType !== PlayerType.WEB;
 
 const chromiumDisabledFeatures: string[] = [];
-// Fractional scaling on Wayland: https://github.com/jeffvli/feishin/issues/1271#issuecomment-4063326712
+// Fractional scaling on Wayland: upstream's issue 1271 (its comment 4063326712).
 if (isLinux()) {
     chromiumDisabledFeatures.push('WaylandFractionalScaleV1');
 }

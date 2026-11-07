@@ -16,6 +16,10 @@ const unmaximize = () => {
     ipcRenderer.send('window-unmaximize');
 };
 
+const about = () => {
+    ipcRenderer.send('window-about');
+};
+
 const quit = () => {
     ipcRenderer.send('window-quit');
 };
@@ -29,6 +33,7 @@ const clearCache = (): Promise<void> => {
 };
 
 export const browser = {
+    about,
     clearCache,
     devtools,
     exit,

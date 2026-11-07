@@ -99,9 +99,9 @@ test('version_line_formats', () => {
     assert.equal(versionLine('0.4.0', '', true), '0.4.0 (unknown)');
 });
 
-test('package.json is 0.4.0', () => {
+test('package.json is 0.5.0', () => {
     const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-    assert.equal(pkg.version, '0.4.0');
+    assert.equal(pkg.version, '0.5.0');
 });
 
 test('both menus and the startup log use the version line; the build injects the commit', () => {

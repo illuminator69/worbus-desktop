@@ -15,7 +15,7 @@ import {
  * What the Wishlist page says per row and when empty, in both modes. The picker answers en.json
  * keys; this resolves them against en.json itself (i18next's `_one` / `_other` plural and
  * `{{name}}` interpolation), so the words checked are the words shown. While downloading is off
- * nothing says it searches (Navic's sentence, lane N ruling 1); while on (or unknown, an older
+ * nothing says it searches (Worbus for Android's sentence, lane N ruling 1); while on (or unknown, an older
  * peer) the copy is today's, byte for byte.
  */
 

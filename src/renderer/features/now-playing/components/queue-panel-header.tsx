@@ -74,7 +74,7 @@ const useQueueSize = (): { count: number; totalMs: number } => {
 };
 
 /**
- * The side queue's header (F4), Navic's queue sheet as a desktop panel: what the queue is playing
+ * The side queue's header (F4), Worbus for Android's queue sheet as a desktop panel: what the queue is playing
  * from with the Autoplay switch and the button that hides the panel (R14), the line the chip row
  * used to carry, the three characters, the Up
  * next / Related switch, and the count line with search, the `...` menu and Clear. It replaces, in

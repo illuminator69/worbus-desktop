@@ -3,7 +3,7 @@ import { QueueSong } from '/@/shared/types/domain-types';
 
 // navi-connect: session identity + kind/name stamping for saved queues.
 //
-// Feishin's setQueue carries no notion of WHERE a queue came from, so a call site that knows
+// Worbus for desktop's setQueue carries no notion of WHERE a queue came from, so a call site that knows
 // (an album/playlist play, a radio/journey/mood-flow generator) announces it here right before it
 // builds the queue. That announcement does two things:
 //
@@ -92,7 +92,7 @@ const SAME_QUEUE_THRESHOLD = 0.8;
 /**
  * The id of an existing history record that IS this queue, if there is one.
  *
- * Session identity lives in a ref, so it dies with the renderer: relaunching Feishin (or opening
+ * Session identity lives in a ref, so it dies with the renderer: relaunching Worbus for desktop (or opening
  * it and casting) republished the restored queue with a brand-new UUID, minting a fresh card for
  * music that was already in the history — four launches, four identical "Queue · N tracks" rows.
  * Matching the stored history closes that gap; it also means replaying something you already have

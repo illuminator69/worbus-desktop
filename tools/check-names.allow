@@ -1,0 +1,12 @@
+# Worbus P5 (ruling R1): allowed hits of tools/check-names.sh, one per line:
+# <path glob><TAB><extended regex the line must match><TAB><reason>
+tools/check-names.*	.	the check names what it looks for
+CHANGELOG.md	.	upstream history, kept as it is (design 6.8)
+LICENSE	.	upstream GPL text, kept as it is (design 6.8)
+docs/redesign/RESULTS-*-20[0-9][0-9]-[0-9][0-9]-[0-9][0-9].md	.	dated notes are history (design 6.2)
+*	is a fork of Feishin by Jeff Li	the credit line (design 6.8)
+README.md	credit for Feishin itself belongs to	the credit line, continued (design 6.8)
+src/shared/utils/client-name.ts	OLD_DEFAULT_DEVICE_NAME = 'Feishin'	the old app's default device name, recognised as never chosen (design 6.7)
+src/shared/utils/client-name.harness.ts	deviceName\('Feishin'	the old default device name in its test (design 6.7)
+src/renderer/features/settings/components/server/device-name-clear.harness.ts	resolveDeviceName\('', 'Feishin'\)	the old default device name in its test (design 6.7)
+docs/CUSTOM_THEMES.md	copies the themes from an older Feishin folder	the migration's own sentence about Feishin (design 6.4)

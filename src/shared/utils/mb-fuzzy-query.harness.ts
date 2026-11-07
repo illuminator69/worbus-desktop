@@ -6,7 +6,7 @@ import { mbFuzzyQuery } from './mb-fuzzy-query.ts';
 /**
  * F6:  node --test src/shared/utils/mb-fuzzy-query.harness.ts
  *
- * What the Library field sends lb-bot's MusicBrainz artist lookup, ported from Navic's
+ * What the Library field sends lb-bot's MusicBrainz artist lookup, ported from Worbus for Android's
  * `MusicBrainzQuery.kt`: a word of four or more Latin letters or digits gets "~1" (one edit), a word
  * with a symbol is escaped and left exact, text that already reads as Lucene is sent as typed.
  */

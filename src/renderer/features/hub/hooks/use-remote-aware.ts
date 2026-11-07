@@ -129,7 +129,7 @@ export const hubTrackToQueueSong = (
 
 /**
  * The artists of a side-queue row, with ids. A row built from a remote session's wire track
- * (`_uniqueId` `remote:<i>`) carries names only when the publisher sends no ids (Navic), so its
+ * (`_uniqueId` `remote:<i>`) carries names only when the publisher sends no ids (Worbus for Android), so its
  * artists would draw as plain text. The table only mounts the rows near the viewport, so each
  * mounted row resolves its song once (cached, in flight deduped) and swaps in the real artists.
  * A local row, or a remote one whose artists already carry ids, never asks.

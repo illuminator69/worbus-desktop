@@ -24,7 +24,7 @@ const version = packageJson.version;
 
 const time = Math.floor((Date.parse(positionalArgs[1]) || Date.now()) / 1000);
 const metainfoFile =
-    positionalArgs[2] || path.resolve(process.cwd(), 'org.jeffvli.feishin.metainfo.xml');
+    positionalArgs[2] || path.resolve(process.cwd(), 'app.worbus.desktop.metainfo.xml');
 
 const parser = new XMLParser({ ignoreAttributes: false });
 const metainfoContent = fs.readFileSync(metainfoFile, 'utf8');
@@ -36,21 +36,28 @@ const newRelease = {
     '@_version': version,
 };
 
-if (replaceIfVersionMissing) {
-    // Replace all releases with only the current version
-    metainfo.component.releases.release = [newRelease];
-} else {
-    // Default behavior: add new release if it doesn't exist
-    const releaseExists =
-        metainfo.component.releases.release.findIndex(
-            (release) => release['@_version'] === version,
-        ) !== -1;
-    if (!releaseExists) {
-        metainfo.component.releases.release.unshift(newRelease);
-    }
+// One release parses as an object, several as an array.
+const releases = [metainfo.component.releases.release ?? []].flat();
+const releaseExists = releases.some((release) => release['@_version'] === version);
+
+// Worbus P5 (design §6.9, S-084): a version already listed is left as committed, so a build does
+// not dirty the tree. A missing one is added, or with --replace-if-version-missing becomes the
+// only release.
+if (releaseExists) {
+    console.log(`${metainfoFile} already lists version ${version}`);
+    process.exit(0);
 }
 
-const builder = new XMLBuilder({ format: true, ignoreAttributes: false, indentBy: '  ' });
+metainfo.component.releases.release = replaceIfVersionMissing
+    ? [newRelease]
+    : [newRelease, ...releases];
+
+const builder = new XMLBuilder({
+    format: true,
+    ignoreAttributes: false,
+    indentBy: '  ',
+    suppressEmptyNode: true,
+});
 fs.writeFileSync(metainfoFile, builder.build(metainfo), 'utf8');
 
 console.log(`Updated ${metainfoFile} with version ${version}`);

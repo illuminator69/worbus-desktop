@@ -103,7 +103,7 @@ export const useMainPlayerListener = () => {
 
         mpvPlayerListener.rendererPlay((data) => {
             if (!isRadioActive) {
-                // navi-connect (B-058): the app menu, a global shortcut, MPRIS and Feishin's remote
+                // navi-connect (B-058): the app menu, a global shortcut, MPRIS and Worbus for desktop's remote
                 // send this for a person pressing play; mpv's own `resumed` echo says only that
                 // the engine started (a startup auto-resume is one), so it is not marked.
                 if (!(data as undefined | { fromEngine?: boolean })?.fromEngine) notePlayRequest();

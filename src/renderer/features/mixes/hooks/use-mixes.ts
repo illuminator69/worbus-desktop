@@ -102,7 +102,7 @@ export const useMixActions = () => {
  *
  * A new listening session is announced, so the saved-queue history gets its own
  * card. The kind is `radio` rather than a new `mix` value: `SavedQueueKind` is
- * shared with Navic, whose own enum would not recognise a new member, and
+ * shared with Worbus for Android, whose own enum would not recognise a new member, and
  * `radio` already means exactly this - a generated, non-library session.
  */
 export const useMixRunner = () => {

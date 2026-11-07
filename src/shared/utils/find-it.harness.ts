@@ -10,7 +10,7 @@ import { hasMetaFields } from './lbbot-wire.ts';
  *
  * "Find it" on a missing album: lb-bot's `findIt` links (MusicBrainz url-relations it confirmed,
  * then search links it built), filtered, ordered and labelled. They are external URLs a user
- * clicks, so only plain http(s) with a host survive (Navic ruling 8).
+ * clicks, so only plain http(s) with a host survive (Worbus for Android ruling 8).
  */
 
 const confirmed = (service: string, url: string) => ({ kind: 'confirmed', service, url });

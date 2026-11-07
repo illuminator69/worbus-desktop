@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { DEFAULT_DEVICE_NAME, resolveDeviceName, resolvePublicServerUrl } from './hub-fields.ts';
+import { resolveDeviceName, resolvePublicServerUrl } from './hub-fields.ts';
 
 /**
  * F2:  node --test src/renderer/features/settings/components/server/device-name-clear.harness.ts
@@ -9,25 +9,27 @@ import { DEFAULT_DEVICE_NAME, resolveDeviceName, resolvePublicServerUrl } from '
  * Two field bugs of the old hub section (audit finding 4). Clearing "Device name" kept the old
  * name in the store while the field showed blank; a rejected Public server URL stayed in the field
  * while the store kept the old value. In both the field must end up showing what is stored.
+ * Worbus P5 (design §6.7): a cleared name is '' in the store and in the field; the placeholder
+ * names the computer, which is what the device then goes by.
  */
 
-test('clearingTheDeviceNameRestoresTheDefaultInTheFieldAndTheStore', () => {
+test('clearingTheDeviceNameClearsTheFieldAndTheStore', () => {
     const r = resolveDeviceName('', 'Desk');
-    assert.equal(r.draft, DEFAULT_DEVICE_NAME);
-    assert.equal(r.name, DEFAULT_DEVICE_NAME);
+    assert.equal(r.draft, '');
+    assert.equal(r.name, '');
     assert.equal(r.changed, true);
 });
 
 test('aNameOfOnlySpacesCountsAsCleared', () => {
     const r = resolveDeviceName('   ', 'Desk');
-    assert.equal(r.draft, DEFAULT_DEVICE_NAME);
-    assert.equal(r.name, DEFAULT_DEVICE_NAME);
+    assert.equal(r.draft, '');
+    assert.equal(r.name, '');
 });
 
-test('clearingWhileTheNameIsAlreadyTheDefaultChangesNothingButStillFillsTheField', () => {
-    const r = resolveDeviceName('', DEFAULT_DEVICE_NAME);
-    assert.equal(r.draft, DEFAULT_DEVICE_NAME);
-    assert.equal(r.changed, false);
+test('clearingWhileNoNameIsSavedChangesNothing', () => {
+    assert.equal(resolveDeviceName('', '').changed, false);
+    // The old app's default counts as no name saved.
+    assert.equal(resolveDeviceName('', 'Feishin').changed, false);
 });
 
 test('aTypedNameIsTrimmedShownAndStored', () => {

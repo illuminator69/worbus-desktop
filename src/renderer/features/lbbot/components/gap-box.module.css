@@ -1,4 +1,4 @@
-/* The album page's gaps box (R11, after Navic's GapBox): the request box's surface (radius 10, the
+/* The album page's gaps box (R11, after Worbus for Android's GapBox): the request box's surface (radius 10, the
    raised surface, a hairline), above the tracklist's toolbar, which keeps its own 14 px above. */
 .wrap {
     min-width: 0;

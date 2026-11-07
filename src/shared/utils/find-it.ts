@@ -4,7 +4,7 @@
  * built. Pure and import-free (`find-it.harness.ts`); the main client parses with it.
  *
  * These are external URLs from MusicBrainz that a user clicks, so only plain web links survive
- * (Navic ruling 8): `http:` / `https:`, a host, no user info, no backslash, at most 2,048
+ * (Worbus for Android ruling 8): `http:` / `https:`, a host, no user info, no backslash, at most 2,048
  * characters. An unknown service is dropped; `other` (confirmed only) is labelled with its host.
  */
 

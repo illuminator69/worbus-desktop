@@ -45,7 +45,7 @@ import { levelReportStep, NO_LEVEL_REPORT } from '/@/shared/utils/level-report';
  *
  * Every Chromecast discovered via mDNS is registered with the hub as a
  * first-class receiver device — so it appears in EVERY client's device picker
- * (Feishin and Navic alike), and transfer-with-resume just works. The hub
+ * (Worbus for desktop and Worbus for Android alike), and transfer-with-resume just works. The hub
  * needs no changes: a virtual receiver is simply another connection.
  *
  * Audio: published track metadata carries `streamUrl` (+ `mime`), so the
@@ -78,7 +78,7 @@ const HEARTBEAT_MS = 10000;
 // each supersedes the other; reconnecting on the normal backoff makes that an
 // endless register/evict war, and because `open` resets the backoff it never
 // even slows down. PROTOCOL §12.2's circuit breaker: the superseded bridge stays
-// down long enough for the winner to keep the speaker. Navic already does this.
+// down long enough for the winner to keep the speaker. Worbus for Android already does this.
 const SUPERSEDED_CODE = 4003;
 const STAND_DOWN_MS = 5 * 60 * 1000;
 // The hub refused this bridge's credential: 4001 a bad shared token, 4005 a device secret it no
@@ -91,7 +91,7 @@ const REFUSED_CODES = new Set([4001, 4005]);
 const CLAIM_JITTER_MS = 3000;
 // An empty registry is ambiguous: nobody is bridging this speaker, OR the main hub
 // client hasn't delivered `welcome` yet. Claiming during that window is how the desktop
-// would steal a speaker Navic was already serving on every single launch. Wait for the
+// would steal a speaker Worbus for Android was already serving on every single launch. Wait for the
 // registry, but not forever — a hub that never connects must not disable casting.
 const REGISTRY_WAIT_MS = 10_000;
 // How long a hub connection must survive before it counts as "working" and the
@@ -458,7 +458,7 @@ class CastDeviceBridge {
                             // speaker playback was moved away from keeps its receiver session,
                             // paused on the old track — which matched, so the next launch claimed
                             // it and pulled the session back onto the speaker (seen 2026-09-30:
-                            // Navic, reinstalled, re-adopted a DOGTOOTH paused 12 minutes earlier).
+                            // Worbus for Android, reinstalled, re-adopted a DOGTOOTH paused 12 minutes earlier).
                             // Re-joining a session the hub still names as ours is not a claim and
                             // is unaffected.
                             const live =
@@ -758,7 +758,7 @@ class CastDeviceBridge {
      * socket *is* the device being claimed, so by the time it could read `devices` the
      * claim has already happened and the hub has already evicted somebody. That
      * chicken-and-egg is why the desktop bridge used to register unconditionally while
-     * Navic implemented the full rule — the two then took turns every second.
+     * Worbus for Android implemented the full rule — the two then took turns every second.
      */
     private claimedElsewhere(): boolean {
         const row = getHubDevices().find((d) => d.id === this.hubDeviceId);
@@ -1000,7 +1000,7 @@ class CastDeviceBridge {
     }
 
     private async handleDo(msg: any): Promise<void> {
-        // Logged unconditionally, as Navic's bridge already does: when a transfer misbehaves the
+        // Logged unconditionally, as Worbus for Android's bridge already does: when a transfer misbehaves the
         // first thing worth knowing is what the hub actually asked for and how many times. Two
         // `load`s 150 ms apart and one `load` that took two attempts look identical without this.
         log.info(`[cast-bridge] ${this.friendlyName}: do ${msg.cmd}`);
@@ -1359,7 +1359,7 @@ class CastDeviceBridge {
      * ~1.2 s to the refusal was identical to the ~1.2 s of a successful launch: the device was not
      * racing anything, it was answering.
      *
-     * Navic's bridge has always done this (`CastChannel.launchOrJoin`); Feishin only ever joined on
+     * Worbus for Android's bridge has always done this (`CastChannel.launchOrJoin`); Worbus for desktop only ever joined on
      * the separate adoption path, and this load path went straight to LAUNCH.
      *
      * Joining a session that isn't ours is fine here: this runs for an explicit `do:load`, and the
@@ -1394,7 +1394,7 @@ class CastDeviceBridge {
 
     /**
      * If the hub says THIS cast device is the active receiver but we hold no
-     * cast session (e.g. Feishin was restarted while the Chromecast kept
+     * cast session (e.g. Worbus for desktop was restarted while the Chromecast kept
      * playing on its own), try to re-join the running session instead of
      * leaving the device orphaned. Bootstraps the queue/index from the hub
      * session so auto-advance, release/stop and live reporting all work again.
@@ -1409,8 +1409,8 @@ class CastDeviceBridge {
             return;
         }
         const stillOurs = session.activeDeviceId === this.hubDeviceId;
-        // No live receiver at all. This is the ordinary shape of "Feishin restarted while
-        // the speaker kept playing": the bridge lives IN Feishin's main process, so its
+        // No live receiver at all. This is the ordinary shape of "Worbus for desktop restarted while
+        // the speaker kept playing": the bridge lives IN Worbus for desktop's main process, so its
         // socket died with the app, and the hub relinquishes the active slot whenever the
         // active device drops. Gating adoption on the hub still naming us active therefore
         // never fired in the one case it was written for — the session was left orphaned
@@ -1440,7 +1440,7 @@ class CastDeviceBridge {
     }
 
     /**
-     * B-047 diagnostics: Feishin didn't pick a cast back up after a restart, and the one
+     * B-047 diagnostics: Worbus for desktop didn't pick a cast back up after a restart, and the one
      * branch that says nothing is a skip here. Logged once per distinct reason (this runs
      * on every `session` frame), with what the hub said.
      */

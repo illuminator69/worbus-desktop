@@ -1,5 +1,6 @@
-appId: org.jeffvli.feishin
-productName: Feishin
+appId: app.worbus.desktop
+productName: Worbus
+executableName: worbus
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 electronVersion: 43.7.0
 directories:
@@ -49,8 +50,8 @@ mac:
     gatekeeperAssess: false
     notarize: false
     extendInfo:
-        NSAudioCaptureUsageDescription: 'System audio access is required for mpv visualizer capture in Feishin'
-        NSLocalNetworkUsageDescription: 'Local network is necessary for accessing servers hosted on the same system as Feishin'
+        NSAudioCaptureUsageDescription: 'System audio access is required for mpv visualizer capture in Worbus'
+        NSLocalNetworkUsageDescription: 'Local network is necessary for accessing servers hosted on the same system as Worbus'
 
 dmg:
     contents: [{ x: 130, y: 220 }, { x: 410, y: 220, type: link, path: /Applications }]
@@ -76,6 +77,6 @@ afterAllArtifactBuild: scripts/after-all-artifact-build.mjs
 publish:
     provider: github
     owner: illuminator69
-    repo: feishin-gaps
+    repo: worbus-desktop
     channel: latest
     releaseType: draft
