@@ -2,11 +2,11 @@ import { createHash } from 'node:crypto';
 
 /**
  * Worbus P5 (design §6.9): Discord presence runs on Worbus's own Discord application, never on
- * upstream's. The owner creates it (step D); until then the ID is empty and presence is off. A
- * person's own Application ID (Settings) always wins. Free of Electron, so
- * `application-id.harness.ts` runs it under `node --test`.
+ * upstream's. The owner created it on 2026-11-07 (step D), with the art keys `icon`, `playing` and
+ * `paused`. The ID is not secret. A person's own Application ID (Settings) always wins. Free of
+ * Electron, so `application-id.harness.ts` runs it under `node --test`.
  */
-export const WORBUS_DISCORD_APPLICATION_ID = '';
+export const WORBUS_DISCORD_APPLICATION_ID = '1568623974751936573';
 
 /**
  * Upstream's Application ID was the old app's default `clientId`, so every profile copied from it
@@ -24,15 +24,21 @@ export const connectDiscord = async <
     C extends { destroy: () => Promise<unknown>; login: () => Promise<unknown> },
 >(
     userClientId: string | undefined,
-    deps: { create: (clientId: string) => C; log: { info: (line: string) => void } },
+    deps: {
+        /** The application used when the person set none; Worbus's own unless a test says otherwise. */
+        appId?: string;
+        create: (clientId: string) => C;
+        log: { info: (line: string) => void };
+    },
 ): Promise<C | null> => {
     const own = userClientId?.trim() ?? '';
-    const clientId = own && !isUpstreamDefault(own) ? own : WORBUS_DISCORD_APPLICATION_ID;
+    const fallback = deps.appId ?? WORBUS_DISCORD_APPLICATION_ID;
+    const clientId = own && !isUpstreamDefault(own) ? own : fallback;
     if (!clientId) {
         if (!saidOff) {
             saidOff = true;
             deps.log.info(
-                'Discord presence is off: Worbus has no Discord application yet (an Application ID set in Settings would be used)',
+                'Discord presence is off: no Discord application ID (an Application ID set in Settings would be used)',
             );
         }
         return null;
