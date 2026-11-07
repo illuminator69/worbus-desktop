@@ -1,17 +1,17 @@
 name: Idea
-description: Something Feishin could do.
+description: Something Worbus for desktop could do.
 title: '[Idea]: '
 labels: ['enhancement']
 body:
     - type: markdown
       attributes:
           value: |
-              Worbus keeps every idea in one place: https://github.com/illuminator69/navi-connect/issues.
+              Worbus keeps every idea in one place: https://github.com/illuminator69/worbus/issues.
 
     - type: textarea
       id: solution
       attributes:
-          label: What would you like Feishin to do?
+          label: What would you like Worbus for desktop to do?
           placeholder: I would like to [...]
       validations:
           required: true

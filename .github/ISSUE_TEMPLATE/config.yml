@@ -1,5 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-    - name: Worbus issues (Feishin, Navic and the Worbus Server)
-      url: https://github.com/illuminator69/navi-connect/issues
+    - name: Worbus issues (Worbus for desktop, Worbus for Android and the Worbus Server)
+      url: https://github.com/illuminator69/worbus/issues
       about: One place for every Worbus bug and idea. Not sure which piece is at fault? File it there.

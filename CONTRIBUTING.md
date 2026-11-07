@@ -1,8 +1,8 @@
-# Contributing to Feishin
+# Contributing to Worbus for desktop
 
 Thanks for your interest in contributing!
 
-This is the Worbus fork of Feishin. Bugs and ideas for every Worbus piece live in one place: [the Worbus issues](https://github.com/illuminator69/navi-connect/issues).
+Worbus for desktop is a fork of Feishin by Jeff Li. Bugs and ideas for every Worbus piece live in one place: [the Worbus issues](https://github.com/illuminator69/worbus/issues).
 
 ## IMPORTANT
 
@@ -12,7 +12,7 @@ Bug fixes are likely to be accepted without discussion.
 
 ## Development environment
 
-Feishin is built and tested with Node.js `v23.11.0` and pnpm `11.5.2`. Newer versions of Node.js are also supported.
+Worbus for desktop is built and tested with Node.js 24 and pnpm `11.5.2` (pinned by `packageManager`).
 
 Useful development commands include:
 
@@ -40,4 +40,4 @@ Please include:
 
 ## Translations
 
-Translations are managed through [Weblate](https://hosted.weblate.org/projects/feishin/). You only need to include translation strings for the `en.json` file. Do not manually update the other language files as these are handled directly by volunteer translators.
+Translations come from upstream's [Weblate project](https://hosted.weblate.org/projects/feishin/) and arrive with its releases. You only need to include translation strings for the `en.json` file.

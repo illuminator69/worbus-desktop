@@ -3,7 +3,7 @@ name: Release
 # Worbus P4 (design §6.9): the fork's one release workflow, replacing upstream's per-OS publish
 # workflows. Each OS builds with `--publish never` (electron-builder never uploads anything); the
 # last job makes a DRAFT release on this fork and attaches the files. It runs only here
-# (illuminator69/feishin-gaps) and only for a `v*` tag; a dispatch on a branch builds and keeps
+# (illuminator69/worbus-desktop) and only for a `v*` tag; a dispatch on a branch builds and keeps
 # the files as the run's artifacts, and releases nothing. Nothing is signed (no certificates).
 
 on:
@@ -101,7 +101,7 @@ jobs:
 
     release:
         needs: [linux, windows, macos]
-        if: github.repository == 'illuminator69/feishin-gaps' && startsWith(github.ref, 'refs/tags/v')
+        if: github.repository == 'illuminator69/worbus-desktop' && startsWith(github.ref, 'refs/tags/v')
         runs-on: ubuntu-latest
         permissions:
             contents: write
@@ -121,5 +121,5 @@ jobs:
                     --repo "$GITHUB_REPOSITORY" \
                     --draft \
                     --verify-tag \
-                    --title "Feishin $TAG" \
-                    --notes "Feishin (Worbus fork) $TAG. Draft: not published until the owner says so."
+                    --title "Worbus for desktop $TAG" \
+                    --notes "Worbus for desktop $TAG. Draft: not published until the owner says so."

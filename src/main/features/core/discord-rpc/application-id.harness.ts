@@ -53,7 +53,7 @@ test('discord_user_client_id_wins', async () => {
 test('discord_upstream_default_is_not_a_choice', async () => {
     const { connectDiscord } = await load();
     const fake = fakeDeps();
-    // Feishin's default, saved in every copied profile (built here so the ID is in no file).
+    // The old app's default, saved in every copied profile (built here so the ID is in no file).
     const upstream = ['11659576687', '58900787'].join('');
     assert.equal(await connectDiscord(upstream, fake.deps), null);
     assert.deepEqual(fake.created, [], "never upstream's application");

@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 export const WORBUS_DISCORD_APPLICATION_ID = '';
 
 /**
- * Upstream's Application ID was Feishin's default `clientId`, so every profile copied from Feishin
+ * Upstream's Application ID was the old app's default `clientId`, so every profile copied from it
  * carries it as if a person had typed it. It counts as unset. Held as its SHA-256, so the ID itself
  * appears nowhere in the source.
  */
