@@ -64,6 +64,11 @@ linux:
         - tar.xz
     category: AudioVideo;Audio;Player
     icon: assets/icons/icon.png
+    # Worbus P5 (walk): the window's WM_CLASS is ("worbus", "worbus"); electron-builder would write
+    # StartupWMClass=Worbus (productName), and the taskbar would not group the window with its entry.
+    desktop:
+        entry:
+            StartupWMClass: worbus
     artifactName: ${productName}-${os}-${arch}.${ext}
 
 toolsets:

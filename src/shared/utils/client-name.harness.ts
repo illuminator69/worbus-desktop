@@ -87,6 +87,8 @@ test('builder_config_ids', () => {
     assert.equal(pkg.name, 'worbus');
     assert.equal(pkg.version, '0.5.0');
     assert.match(builder, /^\s+repo:\s*worbus-desktop\s*$/m, 'the publish block is the fork');
+    // The packaged entry groups the window: its WM_CLASS is ("worbus", "worbus") (walk, X11).
+    assert.match(builder, /^\s+StartupWMClass:\s*worbus\s*$/m);
 
     const desktop = read('worbus.desktop.tmpl');
     assert.match(desktop, /^Name=Worbus$/m);
