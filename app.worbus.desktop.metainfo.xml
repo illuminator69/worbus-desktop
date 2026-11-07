@@ -28,6 +28,16 @@
   <url type="homepage">https://github.com/illuminator69/worbus</url>
   <url type="bugtracker">https://github.com/illuminator69/worbus/issues</url>
   <url type="vcs-browser">https://github.com/illuminator69/worbus-desktop</url>
+  <screenshots>
+    <screenshot type="default">
+      <image type="source">https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-1.png</image>
+      <caption>Home</caption>
+    </screenshot>
+    <screenshot>
+      <image type="source">https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-2.png</image>
+      <caption>An artist page with its missing albums</caption>
+    </screenshot>
+  </screenshots>
   <categories>
     <category>AudioVideo</category>
     <category>Audio</category>
@@ -35,6 +45,11 @@
     <category>Music</category>
   </categories>
   <releases>
+    <release date="2026-11-07" type="stable" version="0.6.0">
+      <description>
+        <p>A single-colour icon, screenshots in the store listings, and checksums beside the downloads.</p>
+      </description>
+    </release>
     <release date="2026-11-07" type="stable" version="0.5.0"/>
   </releases>
 </component>

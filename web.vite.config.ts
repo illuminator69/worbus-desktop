@@ -21,8 +21,8 @@ export default defineConfig({
                 '1024x1024': normalizePath(path.resolve(__dirname, './assets/icons/1024x1024.png')),
                 favicon: normalizePath(path.resolve(__dirname, './assets/icons/favicon.ico')),
                 index: normalizePath(path.resolve(__dirname, './src/renderer/index.html')),
-                preview_full_screen_player: normalizePath(
-                    path.resolve(__dirname, './media/preview_full_screen_player.webp'),
+                'screenshot-wide': normalizePath(
+                    path.resolve(__dirname, './media/screenshot-wide.webp'),
                 ),
             },
             output: {
@@ -35,7 +35,7 @@ export default defineConfig({
                         '512x512.png',
                         '1024x1024.png',
                         'favicon.ico',
-                        'preview_full_screen_player.webp',
+                        'screenshot-wide.webp',
                     ];
 
                     if (assetInfo.names.length === 1 && stableNames.includes(assetInfo.names[0])) {
@@ -119,9 +119,9 @@ export default defineConfig({
                 screenshots: [
                     {
                         form_factor: 'wide',
-                        label: 'Full screen player showing music player and lyrics',
-                        sizes: '720x450',
-                        src: 'preview_full_screen_player.webp',
+                        label: 'Worbus for desktop: an artist page with its missing albums',
+                        sizes: '1440x900',
+                        src: 'screenshot-wide.webp',
                         type: 'image/webp',
                     },
                 ],

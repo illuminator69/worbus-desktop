@@ -112,12 +112,15 @@ jobs:
                   path: files
                   merge-multiple: true
 
+            - name: Write the checksums
+              run: (cd files && sha256sum -- * > ../SHA256SUMS)
+
             - name: Draft a release on this fork
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   TAG: ${{ github.ref_name }}
               run: |
-                  gh release create "$TAG" files/* \
+                  gh release create "$TAG" files/* SHA256SUMS \
                     --repo "$GITHUB_REPOSITORY" \
                     --draft \
                     --verify-tag \

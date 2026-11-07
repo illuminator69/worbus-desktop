@@ -35,12 +35,19 @@ test('icon_files_are_mono', () => {
     const svg = read('media/worbus.svg').toString('utf8');
     assert.doesNotMatch(svg, /linearGradient/i, 'the logo is one flat colour pair, no gradient');
     // Built from parts so that this file is not itself a hit for `git grep -i` on the name.
-    assert.doesNotMatch(svg, new RegExp(['c2', 'pa'].join(''), 'i'), 'no content-credentials manifest in what ships');
+    assert.doesNotMatch(
+        svg,
+        new RegExp(['c2', 'pa'].join(''), 'i'),
+        'no content-credentials manifest in what ships',
+    );
 });
 
 test('discord_art_present', () => {
     for (const name of ['icon', 'playing', 'paused']) {
-        assert.ok(existsSync(new URL(`assets/discord/${name}.png`, ROOT)), `assets/discord/${name}.png`);
+        assert.ok(
+            existsSync(new URL(`assets/discord/${name}.png`, ROOT)),
+            `assets/discord/${name}.png`,
+        );
     }
     assert.deepEqual(pngSize('assets/discord/icon.png'), { height: 1024, width: 1024 });
     assert.deepEqual(pngSize('assets/discord/playing.png'), { height: 512, width: 512 });

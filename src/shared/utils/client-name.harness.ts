@@ -54,7 +54,7 @@ test('client_name_is_worbus', async () => {
 
     const { CLIENT_NAME, userAgent } = await load();
     assert.equal(CLIENT_NAME, 'Worbus-Desktop');
-    assert.equal(userAgent('0.5.0'), 'Worbus-Desktop/0.5.0');
+    assert.equal(userAgent('0.6.0'), 'Worbus-Desktop/0.6.0');
 });
 
 test('default_device_name', async () => {
@@ -85,7 +85,7 @@ test('builder_config_ids', () => {
     assert.equal(yamlValue(builder, 'executableName'), 'worbus');
     assert.equal(pkg.productName, 'Worbus', 'package.json productName names the settings folder');
     assert.equal(pkg.name, 'worbus');
-    assert.equal(pkg.version, '0.5.0');
+    assert.equal(pkg.version, '0.6.0');
     assert.match(builder, /^\s+repo:\s*worbus-desktop\s*$/m, 'the publish block is the fork');
     // The packaged entry groups the window: its WM_CLASS is ("worbus", "worbus") (walk, X11).
     assert.match(builder, /^\s+StartupWMClass:\s*worbus\s*$/m);
@@ -105,8 +105,16 @@ test('metainfo_id_matches_app_id', () => {
     assert.match(xml, /<name>Worbus<\/name>/);
     assert.match(xml, new RegExp(`<launchable type="desktop-id">${appId}\\.desktop</launchable>`));
     assert.match(xml, /<developer id="[^"]*">\s*<name>illuminator69<\/name>/);
-    assert.doesNotMatch(xml, /<screenshots>/);
-    assert.match(xml, /<release [^>]*version="0\.5\.0"/);
+    // P6: the two screenshots are Worbus's own, at the umbrella's raw URLs (upstream's are gone).
+    const urls = [...xml.matchAll(/<image\b[^>]*>([^<]+)<\/image>/g)].map((m) => m[1].trim());
+    assert.equal(urls.length, 2);
+    for (const url of urls) {
+        assert.match(
+            url,
+            /^https:\/\/raw\.githubusercontent\.com\/illuminator69\/worbus\/main\/docs\/screenshots\/0\.6\//,
+        );
+    }
+    assert.match(xml, /<release [^>]*version="0\.6\.0"/);
     for (const script of [
         'scripts/after-all-artifact-build.mjs',
         'scripts/update-app-stream.mjs',
