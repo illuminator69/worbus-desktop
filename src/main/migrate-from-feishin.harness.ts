@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
     existsSync,
     lstatSync,
+    lutimesSync,
     mkdirSync,
     mkdtempSync,
     readdirSync,
@@ -12,6 +14,7 @@ import {
     symlinkSync,
     writeFileSync,
 } from 'node:fs';
+import { createServer } from 'node:net';
 import { hostname, tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -302,17 +305,209 @@ test('no_old_folder_is_fresh_start', async () => {
 test('lock_names_a_live_process', async () => {
     const { isOldAppLive } = await load();
     const root = mkdtempSync(path.join(tmpdir(), 'worbus-lock-'));
+    const lock = path.join(root, 'SingletonLock');
+    const minuteAgo = new Date(Date.now() - 60_000);
+    const relock = (target: string, at?: Date) => {
+        rmSync(lock, { force: true });
+        symlinkSync(target, lock);
+        if (at) lutimesSync(lock, at, at);
+    };
     try {
         assert.equal(isOldAppLive(root), false, 'no lock: not running');
+        relock(`${hostname()}-2147483646`, minuteAgo);
+        assert.equal(isOldAppLive(root), false, 'a pid that is gone: a crash left the lock');
+        relock(`another-host.example-${process.pid}`, minuteAgo);
+        assert.equal(isOldAppLive(root), false, 'another machine (a synced folder)');
+        relock(`${hostname()}-${process.pid}`);
+        assert.equal(isOldAppLive(root), true, 'just taken: the app is opening its socket');
+    } finally {
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test(
+    'stale_lock_with_a_reused_pid_is_not_live',
+    { skip: process.platform !== 'linux' },
+    async () => {
+        const { isOldAppLive } = await load();
+        const root = mkdtempSync(path.join(tmpdir(), 'worbus-lock-'));
+        const lock = path.join(root, 'SingletonLock');
+        const minuteAgo = new Date(Date.now() - 60_000);
+        try {
+            // A power cut left Chromium's lock and socket link; after the reboot the pid is some
+            // other live process (here: this test runner), and nothing listens on the socket.
+            symlinkSync(`${hostname()}-${process.pid}`, lock);
+            lutimesSync(lock, minuteAgo, minuteAgo);
+            symlinkSync(
+                path.join(root, 'gone', 'SingletonSocket'),
+                path.join(root, 'SingletonSocket'),
+            );
+            assert.equal(isOldAppLive(root), false, 'a live pid with no listening socket');
+            rmSync(path.join(root, 'SingletonSocket'));
+            assert.equal(isOldAppLive(root), false, 'a live pid and no socket link at all');
+        } finally {
+            rmSync(root, { force: true, recursive: true });
+        }
+    },
+);
+
+test('a_listening_socket_is_live', { skip: process.platform !== 'linux' }, async () => {
+    const { isOldAppLive } = await load();
+    const root = mkdtempSync(path.join(tmpdir(), 'worbus-lock-'));
+    const socketDir = mkdtempSync(path.join(tmpdir(), 'worbus-sock-'));
+    const socketPath = path.join(socketDir, 'SingletonSocket');
+    const server = createServer();
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve));
+    try {
         const lock = path.join(root, 'SingletonLock');
         symlinkSync(`${hostname()}-${process.pid}`, lock);
-        assert.equal(isOldAppLive(root), true, 'this host, a live pid');
-        rmSync(lock);
-        symlinkSync(`${hostname()}-2147483646`, lock);
-        assert.equal(isOldAppLive(root), false, 'a pid that is gone: a crash left the lock');
-        rmSync(lock);
-        symlinkSync(`another-host.example-${process.pid}`, lock);
-        assert.equal(isOldAppLive(root), false, 'another machine (a synced folder)');
+        const minuteAgo = new Date(Date.now() - 60_000);
+        lutimesSync(lock, minuteAgo, minuteAgo);
+        symlinkSync(socketPath, path.join(root, 'SingletonSocket'));
+        assert.equal(isOldAppLive(root), true, 'a live pid and its socket listening');
+    } finally {
+        await new Promise((resolve) => server.close(resolve));
+        rmSync(root, { force: true, recursive: true });
+        rmSync(socketDir, { force: true, recursive: true });
+    }
+});
+
+/** A process that stays alive (for a lock to name) until it is killed. */
+const liveProcess = (command = process.execPath, args = ['-e', 'setTimeout(() => {}, 60000)']) =>
+    spawn(command, args, { stdio: 'ignore' });
+
+test('copy_waits_for_a_live_copy', async () => {
+    const { migrateFromFeishin } = await load();
+    const { root } = rootWithOld();
+    const holder = liveProcess();
+    try {
+        // Another Worbus is copying: its lock, its half-made copy, a Worbus folder without marker.
+        writeFileSync(path.join(root, 'Worbus.migrating.lock'), `${hostname()}-${holder.pid}`);
+        mkdirSync(path.join(root, 'Worbus.migrating'));
+        writeFileSync(path.join(root, 'Worbus.migrating', 'config.json'), '{"half');
+        mkdirSync(path.join(root, 'Worbus'));
+        writeFileSync(path.join(root, 'Worbus', 'Preferences'), '{}');
+        const before = treeHash(root);
+        const out = migrateFromFeishin({
+            configRoot: root,
+            dev: false,
+            isOldAppLive: notLive,
+            waitMs: 300,
+        });
+        assert.equal(out.result, 'busy', 'it waited, then gave way');
+        assert.equal(treeHash(root), before, 'nothing deleted, moved or created');
+    } finally {
+        holder.kill();
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test('copy_lock_left_by_a_crash_is_taken_over', async () => {
+    const { migrateFromFeishin } = await load();
+    const other = liveProcess('sleep', ['60']);
+    const holders: [string, number | undefined][] = [
+        ['a dead pid', 2147483646],
+        ['a pid now running another program', other.pid],
+    ];
+    try {
+        for (const [why, pid] of holders) {
+            const { root } = rootWithOld();
+            try {
+                const lock = path.join(root, 'Worbus.migrating.lock');
+                writeFileSync(lock, `${hostname()}-${pid}`);
+                mkdirSync(path.join(root, 'Worbus.migrating'));
+                writeFileSync(path.join(root, 'Worbus.migrating', 'config.json'), '{"tr');
+                const out = migrateFromFeishin({
+                    configRoot: root,
+                    dev: false,
+                    isOldAppLive: notLive,
+                    waitMs: 5000,
+                });
+                assert.equal(out.result, 'copied', why);
+                assert.equal(
+                    JSON.parse(readFileSync(path.join(out.newDir, 'config.json'), 'utf8')).theme,
+                    'dark',
+                    why,
+                );
+                assert.deepEqual(readdirSync(root).sort(), ['Worbus', 'feishin'], why);
+            } finally {
+                rmSync(root, { force: true, recursive: true });
+            }
+        }
+    } finally {
+        other.kill();
+    }
+});
+
+test('two_concurrent_copies_copy_once', async () => {
+    const { old, root } = rootWithOld();
+    const scripts = mkdtempSync(path.join(tmpdir(), 'worbus-race-'));
+    try {
+        // Big enough that the two copies overlap.
+        const blobs = path.join(old, 'IndexedDB', 'app_0.indexeddb.blob');
+        mkdirSync(blobs);
+        const chunk = Buffer.alloc(100 * 1024, 7);
+        for (let i = 0; i < 400; i += 1) writeFileSync(path.join(blobs, `${i}`), chunk);
+        const script = path.join(scripts, 'copy.mjs');
+        writeFileSync(
+            script,
+            `import { migrateFromFeishin } from ${JSON.stringify(new URL('./migrate-from-feishin.ts', import.meta.url).href)};
+const go = Number(process.argv[2]);
+while (Date.now() < go);
+try {
+    const out = migrateFromFeishin({ configRoot: process.argv[3], dev: false, isOldAppLive: () => false });
+    process.stdout.write(out.result);
+} catch (error) {
+    process.stdout.write('ERROR ' + error);
+}
+`,
+        );
+        const go = Date.now() + 1500;
+        const run = () =>
+            new Promise<string>((resolve) => {
+                const child = spawn(process.execPath, [script, String(go), root]);
+                let out = '';
+                child.stdout.on('data', (data) => (out += data));
+                child.on('close', () => resolve(out));
+            });
+        const results = (await Promise.all([run(), run()])).sort();
+        assert.deepEqual(results, ['already', 'copied'], 'one copies, the other waits for it');
+        assert.deepEqual(readdirSync(root).sort(), ['Worbus', 'feishin'], 'nothing moved aside');
+        assert.ok(existsSync(path.join(root, 'Worbus', MARKER)));
+        assert.equal(
+            readdirSync(path.join(root, 'Worbus', 'IndexedDB', 'app_0.indexeddb.blob')).length,
+            400,
+        );
+    } finally {
+        rmSync(scripts, { force: true, recursive: true });
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test('copy_counts_only_what_it_wrote', async () => {
+    const { migrateFromFeishin } = await load();
+    const { old, root } = rootWithOld();
+    try {
+        writeFileSync(path.join(old, 'config.json'), '{"truncated');
+        const out = migrateFromFeishin({ configRoot: root, dev: false, isOldAppLive: notLive });
+        assert.equal(out.result, 'copied');
+        assert.ok(!existsSync(path.join(out.newDir, 'config.json')), 'not written (F-R11)');
+        let files = 0;
+        let bytes = 0;
+        const walk = (at: string) => {
+            for (const name of readdirSync(at)) {
+                const full = path.join(at, name);
+                const st = lstatSync(full);
+                if (st.isDirectory()) walk(full);
+                else if (name !== MARKER) {
+                    files += 1;
+                    bytes += st.size;
+                }
+            }
+        };
+        walk(out.newDir);
+        assert.equal(out.files, files, 'the log counts the files that arrived');
+        assert.equal(out.bytes, bytes, 'and their bytes');
     } finally {
         rmSync(root, { force: true, recursive: true });
     }
@@ -368,6 +563,13 @@ test('the fixed sentences are said where the plan puts them', () => {
     const handler = settings.slice(settings.indexOf("ipcMain.handle('password-get'"));
     const getter = handler.slice(0, handler.indexOf('\n});'));
     assert.match(getter, /if \(!migratedFrom\(storePath\)\) throw error;/);
+    // Said once per server and session, the log line too (the 401 paths ask again and again).
+    const once = getter.indexOf('if (!unreadableAfterMove.has(server))');
+    assert.ok(once > 0, 'a once-per-server guard');
+    assert.ok(
+        getter.indexOf("log.warn('Saved password unreadable") > once,
+        'the warning is logged inside the once-per-server guard',
+    );
     assert.match(getter, /return null;\s*\}\s*\}/);
     assert.doesNotMatch(getter, /delete |store\.set|store\.delete/);
 });

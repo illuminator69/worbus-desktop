@@ -41,7 +41,12 @@ import './features';
 import { hotkeyToElectronAccelerator } from './utils';
 
 import { disableAutoUpdates, isLinux, isMacOS, isWindows } from '/@/main/env';
-import { blockedByOldApp, COPY_FAILED_BODY, firstStart, firstStartLine } from '/@/main/first-start';
+import {
+    COPY_FAILED_BODY,
+    firstStart,
+    firstStartLine,
+    stopsAtFirstStart,
+} from '/@/main/first-start';
 import {
     clampWindowBoundsToDisplay,
     DEFAULT_WINDOW_BOUNDS,
@@ -1226,8 +1231,8 @@ if (!singleInstance) {
 
     app.whenReady()
         .then(() => {
-            // The old Feishin is running: first-start.ts shows its dialog and quits.
-            if (blockedByOldApp) return;
+            // The old Feishin is running, or another Worbus is copying: first-start.ts quits.
+            if (stopsAtFirstStart) return;
             log.info(firstStartLine());
             if ('error' in firstStart) {
                 void dialog.showMessageBox({

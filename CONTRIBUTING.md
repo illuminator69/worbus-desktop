@@ -12,7 +12,7 @@ Bug fixes are likely to be accepted without discussion.
 
 ## Development environment
 
-Worbus for desktop is built and tested with Node.js 24 and pnpm `11.5.2` (pinned by `packageManager`).
+Worbus for desktop is built with pnpm `11.5.2` (pinned by `packageManager` in `package.json`). No Node.js version is pinned: CI uses the runner's own. The `*.harness.ts` tests run `.ts` files directly under `node --test`, which needs a Node.js that strips types by default (22.18 or 23.6 and later).
 
 Useful development commands include:
 

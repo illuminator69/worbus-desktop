@@ -22,7 +22,7 @@ const fakeDeps = () => {
         deps: {
             create: (clientId: string) => {
                 created.push(clientId);
-                return { login: async () => undefined };
+                return { destroy: async () => undefined, login: async () => undefined };
             },
             log: { info: (line: string) => lines.push(line) },
         },
@@ -57,6 +57,24 @@ test('discord_upstream_default_is_not_a_choice', async () => {
     const upstream = ['11659576687', '58900787'].join('');
     assert.equal(await connectDiscord(upstream, fake.deps), null);
     assert.deepEqual(fake.created, [], "never upstream's application");
+});
+
+test('discord_failed_login_destroys_client', async () => {
+    const { connectDiscord } = await load();
+    let destroyed = 0;
+    const deps = {
+        create: () => ({
+            destroy: async () => {
+                destroyed += 1;
+            },
+            login: async () => {
+                throw new Error('Could not connect');
+            },
+        }),
+        log: { info: () => undefined },
+    };
+    await assert.rejects(connectDiscord('123456789012345678', deps), /Could not connect/);
+    assert.equal(destroyed, 1, 'the client that failed to log in is closed, not leaked');
 });
 
 test('no_upstream_discord_id', () => {

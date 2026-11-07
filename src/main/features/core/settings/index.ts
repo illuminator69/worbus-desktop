@@ -180,9 +180,12 @@ ipcMain.handle('password-get', (_event, server: string): null | string => {
             // old Feishin saved may not read here. Say so and ask for the sign-in (no password ->
             // the server's sign-in), never clearing it silently: the old app still reads it.
             if (!migratedFrom(storePath)) throw error;
-            log.warn('Saved password unreadable after the move from Feishin', { serverId: server });
+            // Once per server and session: the edit form and the 401 paths ask again and again.
             if (!unreadableAfterMove.has(server)) {
                 unreadableAfterMove.add(server);
+                log.warn('Saved password unreadable after the move from Feishin', {
+                    serverId: server,
+                });
                 _event.sender.send(
                     'password-unreadable-after-move',
                     PASSWORD_UNREADABLE_AFTER_MOVE,

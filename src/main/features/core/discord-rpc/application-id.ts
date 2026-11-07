@@ -20,7 +20,9 @@ const isUpstreamDefault = (id: string) =>
 let saidOff = false;
 
 /** Log in to Discord as `userClientId`, else as Worbus's application; null when there is none. */
-export const connectDiscord = async <C extends { login: () => Promise<unknown> }>(
+export const connectDiscord = async <
+    C extends { destroy: () => Promise<unknown>; login: () => Promise<unknown> },
+>(
     userClientId: string | undefined,
     deps: { create: (clientId: string) => C; log: { info: (line: string) => void } },
 ): Promise<C | null> => {
@@ -36,6 +38,12 @@ export const connectDiscord = async <C extends { login: () => Promise<unknown> }
         return null;
     }
     const client = deps.create(clientId);
-    await client.login();
+    try {
+        await client.login();
+    } catch (error) {
+        // Never handed out, so nobody else would close it.
+        await client.destroy().catch(() => undefined);
+        throw error;
+    }
     return client;
 };
