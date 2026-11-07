@@ -151,6 +151,13 @@ remote named `upstream` and merge or cherry-pick from its tags.
 Translations come from upstream's [Weblate project](https://hosted.weblate.org/projects/feishin/)
 and arrive with its releases; the brand word is changed here.
 
+## Icons
+
+The icons in `assets/icons/`, `resources/icon.png`, `media/worbus.svg` and the Discord images in
+`assets/discord/` are Worbus's own (Kelp and clay), generated on the maintainer's workstation by
+`worbus-icons/tools/make_icons.py` and committed as generated. The macOS `.icns` is made by
+electron-builder from `assets/icons/1024x1024.png`.
+
 ## License
 
 [GNU General Public License v3.0](LICENSE), like the original.

@@ -1381,7 +1381,8 @@ const initialState: SettingsState = {
         enabled: false,
     },
     discord: {
-        clientId: '1165957668758900787',
+        // Worbus P5 (design §6.9): '' = Worbus's own Discord application.
+        clientId: '',
         displayType: DiscordDisplayType.FEISHIN,
         enabled: false,
         linkType: DiscordLinkType.NONE,
