@@ -21,12 +21,12 @@ and the two are kept in step.
 
 **The albums you don't own, on the artist page next to the ones you do.**
 
-![The artist page showing owned albums alongside greyed-out ones marked NOT IN LIBRARY, with a +38 MISSING badge](docs/screenshots/feishin-artist-missing-albums.png)
+![An artist page with its missing albums](https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-2.png)
 
 **Downloads are reviewed, not fired blind:** pick the edition, check it against the canonical
 MusicBrainz tracklist, choose a quality, then look at real Soulseek sources ranked by coverage.
 
-![Missing-album dialog showing edition tabs, media-format tabs, the tracklist, a quality selector and a Find sources button](docs/screenshots/feishin-missing-album-review.png)
+![A missing album's page, its tracklist and Find sources, before sources are fetched](https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-3.png)
 
 Also:
 
@@ -154,8 +154,9 @@ and arrive with its releases; the brand word is changed here.
 ## Icons
 
 The icons in `assets/icons/`, `resources/icon.png`, `media/worbus.svg` and the Discord images in
-`assets/discord/` are Worbus's own (Kelp and clay), generated on the maintainer's workstation by
-`worbus-icons/tools/make_icons.py` and committed as generated. The macOS `.icns` is made by
+`assets/discord/` are Worbus's own: the monochrome Worbus icon (the off-white disc on an Ink `#18211F`
+rounded square), generated on the maintainer's workstation by
+`worbus-icons/tools/make_icons.py` from `worbus-icons/mono/` and committed as generated. The macOS `.icns` is made by
 electron-builder from `assets/icons/1024x1024.png`.
 
 ## License
