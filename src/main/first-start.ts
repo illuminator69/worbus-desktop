@@ -12,12 +12,16 @@ import { isOldAppLive, migrateFromFeishin, type Migration } from './migrate-from
  *
  * While the old app runs, its databases are open: nothing is copied or created. Every later module
  * is pointed at a scratch folder, and the app shows one dialog and quits before any window opens.
- * A second Worbus started during the copy waits for it (`migrate-from-feishin.ts`'s copy lock).
+ * A second Worbus started during the copy waits for it (`migrate-from-feishin.ts`'s copy lock); if
+ * the copy is still running when the wait ends, it says so the same way and quits.
  */
 
 export const OLD_APP_LIVE_TITLE = 'Close Feishin first';
 export const OLD_APP_LIVE_BODY =
     'Worbus copies your Feishin settings the first time it starts. Close Feishin, then start Worbus again.';
+export const BUSY_TITLE = 'Worbus is already starting';
+export const BUSY_BODY =
+    'Another Worbus is still copying your Feishin settings. Its window opens when the copy is done. If none opens, start Worbus again.';
 export const COPY_FAILED_BODY =
     "Worbus couldn't copy your Feishin settings, so it started fresh. Your Feishin folder is untouched.";
 
@@ -35,31 +39,33 @@ const run = (): Migration | { error: string } => {
 
 export const firstStart = run();
 
-export const blockedByOldApp = 'result' in firstStart && firstStart.result === 'old-live';
-
 /**
- * Another Worbus started first and is still copying after the wait: this launch quits quietly,
- * as a second instance would. It must not take the app's instance lock on a folder being copied.
+ * The launches that stop here, each with what it says: the old app is running (its databases are
+ * open), or another Worbus is still copying after the wait (this one must not take the app's
+ * instance lock on a folder being copied). Never a silent quit (design §4).
  */
-const anotherCopyRunning = 'result' in firstStart && firstStart.result === 'busy';
+const STOPS: Record<string, undefined | { body: string; title: string }> = {
+    busy: { body: BUSY_BODY, title: BUSY_TITLE },
+    'old-live': { body: OLD_APP_LIVE_BODY, title: OLD_APP_LIVE_TITLE },
+};
+
+const stop = 'result' in firstStart ? STOPS[firstStart.result] : undefined;
 
 /** This launch stops here: `index.ts` does nothing further. */
-export const stopsAtFirstStart = blockedByOldApp || anotherCopyRunning;
+export const stopsAtFirstStart = stop !== undefined;
 
-if (stopsAtFirstStart) {
+if (stop) {
     const scratch = mkdtempSync(path.join(os.tmpdir(), 'worbus-blocked-'));
     app.setPath('userData', path.join(scratch, 'Worbus'));
     app.setAppLogsPath(path.join(scratch, 'logs'));
     void app.whenReady().then(() => {
-        if (blockedByOldApp) {
-            dialog.showMessageBoxSync({
-                buttons: ['Quit'],
-                detail: OLD_APP_LIVE_BODY,
-                message: OLD_APP_LIVE_TITLE,
-                title: OLD_APP_LIVE_TITLE,
-                type: 'info',
-            });
-        }
+        dialog.showMessageBoxSync({
+            buttons: ['Quit'],
+            detail: stop.body,
+            message: stop.title,
+            title: stop.title,
+            type: 'info',
+        });
         rmSync(scratch, { force: true, recursive: true });
         app.exit(0);
     });

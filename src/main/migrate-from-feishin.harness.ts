@@ -12,6 +12,7 @@ import {
     readlinkSync,
     rmSync,
     symlinkSync,
+    utimesSync,
     writeFileSync,
 } from 'node:fs';
 import { createServer } from 'node:net';
@@ -404,17 +405,16 @@ test('copy_waits_for_a_live_copy', async () => {
 
 test('copy_lock_left_by_a_crash_is_taken_over', async () => {
     const { migrateFromFeishin } = await load();
-    const other = liveProcess('sleep', ['60']);
-    const holders: [string, number | undefined][] = [
-        ['a dead pid', 2147483646],
-        ['a pid now running another program', other.pid],
+    const holders: [string, string][] = [
+        ['a dead pid', `${hostname()}-2147483646`],
+        ['another machine (a synced folder)', `another-host.example-${process.pid}`],
     ];
-    try {
-        for (const [why, pid] of holders) {
+    {
+        for (const [why, content] of holders) {
             const { root } = rootWithOld();
             try {
                 const lock = path.join(root, 'Worbus.migrating.lock');
-                writeFileSync(lock, `${hostname()}-${pid}`);
+                writeFileSync(lock, content);
                 mkdirSync(path.join(root, 'Worbus.migrating'));
                 writeFileSync(path.join(root, 'Worbus.migrating', 'config.json'), '{"tr');
                 const out = migrateFromFeishin({
@@ -434,20 +434,108 @@ test('copy_lock_left_by_a_crash_is_taken_over', async () => {
                 rmSync(root, { force: true, recursive: true });
             }
         }
-    } finally {
-        other.kill();
     }
 });
 
-test('two_concurrent_copies_copy_once', async () => {
+test('fresh_lock_of_another_program_is_waited_on', async () => {
+    const { migrateFromFeishin } = await load();
+    const { root } = rootWithOld();
+    // An AppImage mounts at a new path every launch: the copying launch's program path is not
+    // this one's. Its lock is fresh, so it is a live copy all the same.
+    const holder = liveProcess('sleep', ['60']);
+    try {
+        writeFileSync(path.join(root, 'Worbus.migrating.lock'), `${hostname()}-${holder.pid}`);
+        mkdirSync(path.join(root, 'Worbus.migrating'));
+        writeFileSync(path.join(root, 'Worbus.migrating', 'config.json'), '{"half');
+        const before = treeHash(root);
+        const out = migrateFromFeishin({
+            configRoot: root,
+            dev: false,
+            isOldAppLive: notLive,
+            waitMs: 300,
+        });
+        assert.equal(out.result, 'busy', 'waited on, not taken over');
+        assert.equal(treeHash(root), before, 'nothing deleted, moved or created');
+    } finally {
+        holder.kill();
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test('unrefreshed_lock_with_a_live_pid_is_taken_over', async () => {
+    const { migrateFromFeishin } = await load();
+    const { root } = rootWithOld();
+    // A copy that died; its pid now belongs to a live process (here: this runtime, the same
+    // program). Its lock has not been touched for longer than the bound.
+    const reused = liveProcess();
+    try {
+        const lock = path.join(root, 'Worbus.migrating.lock');
+        writeFileSync(lock, `${hostname()}-${reused.pid}`);
+        const untouched = new Date(Date.now() - 120_000);
+        utimesSync(lock, untouched, untouched);
+        mkdirSync(path.join(root, 'Worbus.migrating'));
+        writeFileSync(path.join(root, 'Worbus.migrating', 'config.json'), '{"tr');
+        const out = migrateFromFeishin({
+            configRoot: root,
+            dev: false,
+            isOldAppLive: notLive,
+            waitMs: 300,
+        });
+        assert.equal(out.result, 'copied', 'a lock untouched past the bound is a dead copy');
+        assert.deepEqual(readdirSync(root).sort(), ['Worbus', 'feishin']);
+    } finally {
+        reused.kill();
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test('stray_lock_drafts_are_cleaned', async () => {
+    const { migrateFromFeishin } = await load();
+    const { root } = rootWithOld();
+    const waiting = liveProcess();
+    try {
+        // Launches killed while waiting or taking over left their per-launch files; one launch
+        // is still waiting (alive): its draft stays.
+        writeFileSync(path.join(root, 'Worbus.migrating.lock.2147483646'), 'x');
+        writeFileSync(path.join(root, 'Worbus.migrating.lock.stale-2147483645'), 'x');
+        const live = `Worbus.migrating.lock.${waiting.pid}`;
+        writeFileSync(path.join(root, live), 'x');
+        const out = migrateFromFeishin({ configRoot: root, dev: false, isOldAppLive: notLive });
+        assert.equal(out.result, 'copied');
+        assert.deepEqual(readdirSync(root).sort(), [live, 'Worbus', 'feishin'].sort());
+    } finally {
+        waiting.kill();
+        rmSync(root, { force: true, recursive: true });
+    }
+});
+
+test('busy_says_so_in_a_dialog', () => {
+    const firstStart = readFileSync(new URL('./first-start.ts', import.meta.url), 'utf8');
+    assert.ok(firstStart.includes("'Worbus is already starting'"), 'the busy title');
+    assert.ok(
+        firstStart.includes(
+            "'Another Worbus is still copying your Feishin settings. Its window opens when the copy is done. If none opens, start Worbus again.'",
+        ),
+        'the busy body',
+    );
+    // Every launch that stops at the first start shows its dialog: none quits silently.
+    assert.match(firstStart, /busy: \{ body: BUSY_BODY, title: BUSY_TITLE \}/);
+    const stopped = firstStart.slice(firstStart.indexOf('if (stop) {'));
+    assert.ok(stopped.length > 0 && firstStart.includes('if (stop) {'), 'one stop branch');
+    const ready = stopped.slice(stopped.indexOf('whenReady'), stopped.indexOf('app.exit(0)'));
+    assert.match(ready, /^whenReady\(\)\.then\(\(\) => \{\s*dialog\.showMessageBoxSync\(/);
+});
+
+/** Two copies in two processes, started together on a big old folder; their results. */
+const race = async (files: number, staleMs?: number, kb = 100) => {
     const { old, root } = rootWithOld();
     const scripts = mkdtempSync(path.join(tmpdir(), 'worbus-race-'));
     try {
         // Big enough that the two copies overlap.
         const blobs = path.join(old, 'IndexedDB', 'app_0.indexeddb.blob');
         mkdirSync(blobs);
-        const chunk = Buffer.alloc(100 * 1024, 7);
-        for (let i = 0; i < 400; i += 1) writeFileSync(path.join(blobs, `${i}`), chunk);
+        const chunk = Buffer.alloc(kb * 1024, 7);
+        for (let i = 0; i < files; i += 1) writeFileSync(path.join(blobs, `${i}`), chunk);
         const script = path.join(scripts, 'copy.mjs');
         writeFileSync(
             script,
@@ -455,7 +543,8 @@ test('two_concurrent_copies_copy_once', async () => {
 const go = Number(process.argv[2]);
 while (Date.now() < go);
 try {
-    const out = migrateFromFeishin({ configRoot: process.argv[3], dev: false, isOldAppLive: () => false });
+    const staleMs = process.argv[4] ? Number(process.argv[4]) : undefined;
+    const out = migrateFromFeishin({ configRoot: process.argv[3], dev: false, isOldAppLive: () => false, staleMs });
     process.stdout.write(out.result);
 } catch (error) {
     process.stdout.write('ERROR ' + error);
@@ -465,23 +554,44 @@ try {
         const go = Date.now() + 1500;
         const run = () =>
             new Promise<string>((resolve) => {
-                const child = spawn(process.execPath, [script, String(go), root]);
+                const args = [script, String(go), root];
+                if (staleMs) args.push(String(staleMs));
+                const child = spawn(process.execPath, args);
                 let out = '';
                 child.stdout.on('data', (data) => (out += data));
                 child.on('close', () => resolve(out));
             });
+        const started = Date.now();
         const results = (await Promise.all([run(), run()])).sort();
-        assert.deepEqual(results, ['already', 'copied'], 'one copies, the other waits for it');
-        assert.deepEqual(readdirSync(root).sort(), ['Worbus', 'feishin'], 'nothing moved aside');
-        assert.ok(existsSync(path.join(root, 'Worbus', MARKER)));
-        assert.equal(
-            readdirSync(path.join(root, 'Worbus', 'IndexedDB', 'app_0.indexeddb.blob')).length,
-            400,
-        );
+        return {
+            arrived: existsSync(path.join(root, 'Worbus', MARKER))
+                ? readdirSync(path.join(root, 'Worbus', 'IndexedDB', 'app_0.indexeddb.blob')).length
+                : 0,
+            entries: readdirSync(root).sort(),
+            ms: Date.now() - started - 1500,
+            results,
+        };
     } finally {
         rmSync(scripts, { force: true, recursive: true });
         rmSync(root, { force: true, recursive: true });
     }
+};
+
+test('two_concurrent_copies_copy_once', async () => {
+    const out = await race(400);
+    assert.deepEqual(out.results, ['already', 'copied'], 'one copies, the other waits for it');
+    assert.deepEqual(out.entries, ['Worbus', 'feishin'], 'nothing moved aside');
+    assert.equal(out.arrived, 400);
+});
+
+test('heartbeat_keeps_a_long_copy_held', async () => {
+    // A copy far longer than the stale bound (here 250 ms): only the holder's heartbeat keeps the
+    // waiting launch from taking its lock over.
+    const out = await race(6000, 250, 4);
+    assert.ok(out.ms > 500, `the copy outlasts the bound twice or more (${out.ms} ms)`);
+    assert.deepEqual(out.results, ['already', 'copied'], 'one copies, the other waits for it');
+    assert.deepEqual(out.entries, ['Worbus', 'feishin'], 'nothing moved aside');
+    assert.equal(out.arrived, 6000);
 });
 
 test('copy_counts_only_what_it_wrote', async () => {

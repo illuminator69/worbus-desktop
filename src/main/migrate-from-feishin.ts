@@ -13,6 +13,7 @@ import {
     renameSync,
     rmSync,
     symlinkSync,
+    utimesSync,
     writeFileSync,
 } from 'node:fs';
 import { hostname } from 'node:os';
@@ -40,7 +41,7 @@ export interface Migration {
     result: MigrationResult;
 }
 
-/** `busy`: another Worbus has been copying for longer than this one waited. */
+/** `busy`: another Worbus is still copying (its lock kept fresh) after this one's wait. */
 export type MigrationResult = 'already' | 'busy' | 'copied' | 'no-old' | 'old-live';
 
 export const MARKER = '.migrated-from-feishin';
@@ -191,9 +192,11 @@ const copyTree = (
     to: string,
     top: boolean,
     count: { bytes: number; files: number },
+    beat: () => void,
 ) => {
     mkdirSync(to);
     for (const name of readdirSync(from)) {
+        beat();
         if (top && skipped(name)) continue;
         const src = path.join(from, name);
         const dest = path.join(to, name);
@@ -201,7 +204,7 @@ const copyTree = (
         if (st.isSymbolicLink()) {
             symlinkSync(readlinkSync(src), dest);
         } else if (st.isDirectory()) {
-            copyTree(src, dest, false, count);
+            copyTree(src, dest, false, count, beat);
         } else if (st.isFile()) {
             let size = st.size;
             if (top && name === SETTINGS_FILE) {
@@ -236,31 +239,59 @@ const writeSettingsWithoutHub = (src: string, dest: string): null | number => {
     return Buffer.byteLength(text);
 };
 
-/** How long a second Worbus waits for another one's copy before it quits quietly. */
+/**
+ * How long a second Worbus waits for another one's copy before it says so and quits. A normal copy
+ * (the walk's 301 MB folder: 6 s) ends well inside it, and then the first launch's window opens.
+ */
 const COPY_WAIT_MS = 60_000;
+
+/**
+ * The copy's holder touches its lock about once a second while it copies (between files). A lock
+ * untouched for this long is a dead copy's, whatever process now has its pid. The longest gap
+ * between two touches is one file: the old folder's files are LevelDB tables (2 MB at most) and
+ * stored blobs, and 30 s is a 1 GB file on a 35 MB/s disk.
+ */
+const STALE_MS = 30_000;
 
 const sleep = (ms: number) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-const exeOf = (pid: 'self' | number): null | string => {
-    try {
-        return readlinkSync(`/proc/${pid}/exe`).replace(/ \(deleted\)$/, '');
-    } catch {
-        return null;
-    }
-};
-
 /**
- * Whether the copy lock (`<host>-<pid>`) is held by a Worbus that is copying now. A crashed copy's
- * lock names a dead pid or (Linux) a pid now running another program; where the program cannot be
- * read, a lock from before the last boot. Those are stale and taken over.
+ * Whether the copy lock (`<host>-<pid>`) is held by a Worbus that is copying now: its pid is alive
+ * on this host and it was touched within `staleMs`. Anything else is a crashed copy's lock (also
+ * when its pid now belongs to another program) and is taken over. No program path is compared:
+ * an AppImage runs from a new mount path at every launch.
  */
-const copyHolderAlive = (content: string, written: number): boolean => {
+const copyHolderAlive = (content: string, touched: number, staleMs: number): boolean => {
     const pid = holderPid(content);
     if (pid === null || pid === process.pid || !pidAlive(pid)) return false;
-    const theirs = exeOf(pid);
-    const mine = exeOf('self');
-    if (theirs !== null && mine !== null) return theirs === mine;
-    return !fromBeforeBoot(written);
+    return Math.abs(Date.now() - touched) <= staleMs;
+};
+
+/** Touch `lock` at most every `everyMs`: the holder's heartbeat, called between files. */
+const heartbeat = (lock: string, everyMs: number) => {
+    let last = Date.now();
+    return () => {
+        const at = Date.now();
+        if (at - last < everyMs) return;
+        last = at;
+        try {
+            utimesSync(lock, new Date(at), new Date(at));
+        } catch {
+            // Gone or taken over: the copy goes on; the marker still decides.
+        }
+    };
+};
+
+/** Remove the per-launch drafts (`<lock>.<pid>`, `<lock>.stale-<pid>`) of launches that died. */
+const sweepDrafts = (lock: string) => {
+    const dir = path.dirname(lock);
+    const base = path.basename(lock);
+    for (const name of readdirSync(dir)) {
+        if (!name.startsWith(`${base}.`)) continue;
+        const pid = Number(name.slice(base.length + 1).replace(/^stale-/, ''));
+        if (!Number.isInteger(pid) || pid <= 0 || pid === process.pid || pidAlive(pid)) continue;
+        rmSync(path.join(dir, name), { force: true });
+    }
 };
 
 /** Take over a stale lock, unless another Worbus replaced it after it was read. */
@@ -287,6 +318,7 @@ const takeOver = (lock: string, stale: string) => {
 const acquireCopyLock = (
     lock: string,
     waitMs: number,
+    staleMs: number,
     finished: () => boolean,
 ): 'busy' | 'done' | 'held' => {
     const mine = `${hostname()}-${process.pid}`;
@@ -297,20 +329,23 @@ const acquireCopyLock = (
         for (;;) {
             try {
                 linkSync(draft, lock);
+                // The draft may be as old as the wait: start the heartbeat from now.
+                const at = new Date();
+                utimesSync(lock, at, at);
                 return 'held';
             } catch (error) {
                 if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
             }
             if (finished()) return 'done';
             let holder: string;
-            let written: number;
+            let touched: number;
             try {
                 holder = readFileSync(lock, 'utf8');
-                written = lstatSync(lock).mtimeMs;
+                touched = lstatSync(lock).mtimeMs;
             } catch {
                 continue; // released between the two calls
             }
-            if (!copyHolderAlive(holder, written)) {
+            if (!copyHolderAlive(holder, touched, staleMs)) {
                 takeOver(lock, holder);
                 continue;
             }
@@ -327,6 +362,8 @@ export const migrateFromFeishin = (opts: {
     dev: boolean;
     isOldAppLive: (oldDir: string) => boolean;
     now?: () => Date;
+    /** How long a copy lock may go untouched before it is a dead copy's (default 30 s). */
+    staleMs?: number;
     /** How long to wait for another Worbus's copy (default a minute). */
     waitMs?: number;
 }): Migration => {
@@ -352,10 +389,14 @@ export const migrateFromFeishin = (opts: {
     // instance lock): one copies, the other waits for it and then finds the marker.
     const temp = `${newDir}.migrating`;
     const lock = `${temp}.lock`;
-    const got = acquireCopyLock(lock, opts.waitMs ?? COPY_WAIT_MS, () => existsSync(marker));
+    const staleMs = opts.staleMs ?? STALE_MS;
+    const got = acquireCopyLock(lock, opts.waitMs ?? COPY_WAIT_MS, staleMs, () =>
+        existsSync(marker),
+    );
     if (got === 'done') return { ...done, result: 'already' };
     if (got === 'busy') return { ...done, result: 'busy' };
     try {
+        sweepDrafts(lock);
         if (existsSync(marker)) return { ...done, result: 'already' };
 
         // Only the lock's holder gets here, so this is a killed copy's leftover: an incomplete
@@ -363,7 +404,7 @@ export const migrateFromFeishin = (opts: {
         rmSync(temp, { force: true, recursive: true });
 
         const count = { bytes: 0, files: 0 };
-        copyTree(oldDir, temp, true, count);
+        copyTree(oldDir, temp, true, count, heartbeat(lock, Math.min(1000, staleMs / 5)));
 
         // R3 (a): a Worbus folder without the marker (a crashed first start, or one Electron made)
         // is moved aside, never deleted.
