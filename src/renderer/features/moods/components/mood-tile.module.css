@@ -1,0 +1,77 @@
+/*
+ * A mood tile (spec/home-board.md): a square with the variant's diagonal gradient under a fine
+ * stripe, its text at the bottom in white, and a 40 px play button at the bottom right. The
+ * colours come in as custom properties computed from the variant's hues (mood-mix tileColors).
+ */
+.tile {
+    position: relative;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background:
+        repeating-linear-gradient(135deg, var(--tile-stripe) 0 2px, transparent 2px 12px),
+        linear-gradient(135deg, var(--tile-from), var(--tile-to));
+    border-radius: 10px;
+}
+
+/* The whole tile opens the preview; its text sits at the bottom. */
+.open {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: flex-end;
+    padding: 14px;
+    color: var(--tile-ink);
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: none;
+    border-radius: 10px;
+
+    &:focus-visible {
+        outline: 2px solid var(--tile-ink);
+        outline-offset: -4px;
+    }
+}
+
+.title {
+    width: 78%;
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: 25px;
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    text-shadow: 0 1px 8px var(--tile-shadow);
+}
+
+.line {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--tile-ink-2);
+}
+
+.play {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    color: var(--tile-to);
+    cursor: pointer;
+    background: var(--tile-ink);
+    border: none;
+    border-radius: 50%;
+
+    &[aria-busy='true'] {
+        cursor: progress;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--tile-ink);
+        outline-offset: 2px;
+    }
+}

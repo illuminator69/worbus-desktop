@@ -1,0 +1,58 @@
+.top-bar {
+    display: flex;
+    grid-area: top-bar;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+    height: var(--top-bar-height);
+    padding: 0 calc(var(--panel-gap, 0px) + 4px);
+    overflow: hidden;
+    background: var(--theme-colors-background);
+    -webkit-app-region: drag;
+
+    /* Drawn over the cover wash: no surface of its own. */
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
+
+    button,
+    input {
+        -webkit-app-region: no-drag;
+    }
+}
+
+.arrows {
+    display: flex;
+    flex-shrink: 0;
+    gap: 6px;
+}
+
+.icon-button {
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+    border-radius: 8px;
+}
+
+.search {
+    flex: 0 1 300px;
+    min-width: 0;
+}
+
+.search-input {
+    height: 34px;
+    min-height: 34px;
+    cursor: pointer;
+    border-radius: 8px;
+}
+
+.hint {
+    font-size: 11.5px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.spacer {
+    flex: 1;
+}

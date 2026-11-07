@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react';
 
+import { scanScannable } from '/@/renderer/features/discography/scan-phase';
 import { openMbidMatchModal } from '/@/renderer/features/lbbot/components/mbid-match-modal';
 import {
     refreshArtistMeta,
     useArtistOverrideKind,
     useIndexArtist,
+    useIsP1Peer,
     useLbBotAvailable,
     useOverrideControls,
+    useScanNeedsMbid,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { isNavidromeArtistId } from '/@/renderer/features/lbbot/utils/artist-override';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
@@ -25,15 +28,11 @@ interface LbBotIndexButtonProps {
 }
 
 /**
- * The only piece of the lb-bot surface that isn't a tile: scan this artist, or
- * rescan a stale index.
+ * The artist's MusicBrainz menu: Wrong artist / Choose MusicBrainz artist, and
+ * Refresh About. The scan moved to the Rescan control beside it (F7).
  *
- * It lives in the album toolbar because that is where the thing it affects is —
- * the missing releases are now mixed into the sections below, so a header of
- * their own would be a heading for nothing.
- *
- * Mounted in **every** index state, disabled where an artist genuinely cannot be
- * scanned. It used to return null without an MBID, which is the one state where
+ * Mounted in **every** index state, saying why where an artist genuinely cannot
+ * be scanned. It used to return null without an MBID, which is the one state where
  * the user most needs to be told something: lb-bot matches artists by MusicBrainz
  * id and its index POST requires `mbid` *and* `name`, so an untagged artist can't
  * be indexed at all — a real, recorded limitation. Vanishing made that read as the
@@ -62,6 +61,8 @@ export const LbBotIndexButton = ({
     const overridesSupported = useOverrideControls() && isNavidromeArtistId(ndId);
     const kind = useArtistOverrideKind(ndId, tagMbid);
     const [refreshing, setRefreshing] = useState(false);
+    const p1Peer = useIsP1Peer();
+    const needsMbid = useScanNeedsMbid();
 
     // A scan's outcome, said once as it arrives: the menu that started it has closed.
     useEffect(() => {
@@ -81,17 +82,18 @@ export const LbBotIndexButton = ({
         else toast.warn({ message: outcome.message });
     };
 
-    // Always offered once an artist can be scanned at all, never hidden on the
-    // strength of `indexed && !stale`. A scan that matched the wrong MusicBrainz
-    // artist, or that MusicBrainz answered thinly, writes a perfectly fresh index
-    // holding nothing — and hiding the button there left the one page that could
-    // fix it with no way to ask. A rescan is idempotent and explicit; the only
-    // cost of an unnecessary one is a minute of MusicBrainz's patience.
-    const empty = discography.releases.length === 0;
     // lb-bot's index POST requires BOTH: the MBID is what it scans, the name is what
     // it matches the library against, and it 400s without either. A virtual artist
-    // page reached by a bookmarked URL has the id and not yet the name.
-    const scannable = Boolean(artistMbid && artistName);
+    // page reached by a bookmarked URL has the id and not yet the name. Worbus P1: a P1
+    // lb-bot scans a library artist by its Navidrome id alone, so the "no MusicBrainz
+    // id" sentence is said only to an older peer.
+    const scannable = scanScannable({
+        mbid: artistMbid,
+        name: artistName,
+        ndId,
+        olderLbBot: needsMbid,
+        p1Peer,
+    });
     const openPicker = () =>
         openMbidMatchModal({
             currentMbid: artistMbid,
@@ -101,41 +103,25 @@ export const LbBotIndexButton = ({
             tagMbid,
         });
 
-    const status = [
+    const status =
         overridesSupported && (kind === 'override' || kind === 'override-same')
             ? 'MusicBrainz match set by you'
-            : '',
-        // What makes an always-offered Rescan actionable rather than decorative:
-        // without it there is no way to tell an index built this morning from one
-        // built in March. `stale` is lb-bot's own verdict on its TTL.
-        discography.indexed && discography.scannedAt > 0
-            ? `${describeScan(discography.scannedAt)}${discography.stale ? ' · out of date' : ''}`
-            : 'Not scanned yet',
-    ].filter(Boolean);
+            : '';
 
-    // One icon among the toolbar's own (search, sort, order, grouping), opening a menu,
-    // the way upstream offers an item's actions. These were up to three text buttons and
-    // as many status lines in a row that would not wrap, wider than the toolbar at narrow
-    // widths. The scan's spinner is the icon's; its outcome is a toast (see above).
+    // One icon after the Rescan control (F7), opening a menu, the way upstream offers an item's
+    // actions. The scan itself is the Rescan control's; this keeps the match and About.
     return (
         <DropdownMenu position="bottom-end">
             <DropdownMenu.Target>
                 <ActionIcon
                     icon="brandMusicBrainz"
-                    loading={pending || refreshing}
-                    tooltip={{ label: 'Missing albums and MusicBrainz match' }}
+                    loading={refreshing}
+                    tooltip={{ label: 'MusicBrainz match' }}
                     variant="subtle"
                 />
             </DropdownMenu.Target>
             <DropdownMenu.Dropdown>
-                <DropdownMenu.Label>{status.join(' · ')}</DropdownMenu.Label>
-                <DropdownMenu.Item
-                    disabled={pending || !scannable}
-                    leftSection={<Icon icon="search" />}
-                    onClick={() => scannable && indexArtist(artistMbid!, artistName)}
-                >
-                    {discography.indexed && !empty ? 'Rescan discography' : 'Find missing albums'}
-                </DropdownMenu.Item>
+                {status && <DropdownMenu.Label>{status}</DropdownMenu.Label>}
                 {overridesSupported && artistName && (
                     <DropdownMenu.Item
                         disabled={pending || !available}
@@ -166,13 +152,4 @@ export const LbBotIndexButton = ({
             </DropdownMenu.Dropdown>
         </DropdownMenu>
     );
-};
-
-const describeScan = (scannedAt: number): string => {
-    const days = Math.floor((Date.now() - scannedAt * 1000) / 86_400_000);
-    if (days <= 0) return 'Scanned today';
-    if (days === 1) return 'Scanned yesterday';
-    if (days < 30) return `Scanned ${days} days ago`;
-    const months = Math.floor(days / 30);
-    return months === 1 ? 'Scanned a month ago' : `Scanned ${months} months ago`;
 };

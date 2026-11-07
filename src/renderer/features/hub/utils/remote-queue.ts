@@ -26,7 +26,7 @@ import { Play } from '/@/shared/types/types';
 
 const hub = isElectron() ? window.api.hub : null;
 
-/** Map Feishin's add-to-queue type to a remote enqueue mode. */
+/** Map Worbus for desktop's add-to-queue type to a remote enqueue mode. */
 export const addToQueueTypeToRemoteMode = (type: AddToQueueType): 'end' | 'next' | 'now' => {
     if (typeof type === 'object' && 'edge' in type) {
         return type.edge === 'top' ? 'next' : 'end';

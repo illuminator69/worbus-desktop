@@ -42,7 +42,7 @@ import { PlayerType } from '/@/shared/types/types';
 
 /**
  * The bar's volume group (F1): the star rating directly above the volume, as the board draws it.
- * Without a rating the volume row stays centred. The rating and volume hotkeys live in these
+ * The stars float above the row, so the volume stays level with the bar's other icons. The rating and volume hotkeys live in these
  * components, so they stay mounted.
  */
 export const VolumeGroup = () => {
@@ -50,7 +50,11 @@ export const VolumeGroup = () => {
     const playbackType = usePlaybackType();
     return (
         <div className={styles.group}>
-            {showRatings && <RatingButton />}
+            {showRatings && (
+                <div className={styles.rating}>
+                    <RatingButton />
+                </div>
+            )}
             <div className={styles.volume}>
                 {playbackType === PlayerType.DLNA ? <DlnaVolumeButton /> : <VolumeButton />}
             </div>

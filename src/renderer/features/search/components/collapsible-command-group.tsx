@@ -1,10 +1,9 @@
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ReactNode, useCallback, useState } from 'react';
 
 import styles from './collapsible-command-group.module.css';
 
 import { DURATION, EASING } from '/@/shared/components/animations/motion-tokens';
-import { useExpressiveMotion } from '/@/shared/components/animations/use-expressive-motion';
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
 import { Paper } from '/@/shared/components/paper/paper';
@@ -27,7 +26,8 @@ export function CollapsibleCommandGroup({
     subtitle,
 }: CollapsibleCommandGroupProps) {
     const [internalExpanded, setInternalExpanded] = useState(defaultExpanded);
-    const motionEnabled = useExpressiveMotion();
+    // The fold always animates, except under reduced motion.
+    const animated = !useReducedMotion();
 
     const isControlled = controlledExpanded !== undefined && onToggle !== undefined;
     const expanded = isControlled ? controlledExpanded : internalExpanded;
@@ -67,7 +67,7 @@ export function CollapsibleCommandGroup({
                     </Group>
                 </div>
             </Paper>
-            {motionEnabled ? (
+            {animated ? (
                 <AnimatePresence initial={false}>
                     {expanded && (
                         <motion.div

@@ -1,0 +1,92 @@
+/* The discography (board ArtistOwned): the bar, then one section per kind. */
+.root {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    min-width: 0;
+}
+
+.sections {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.section {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* `.gh`: 36 px, a chevron, the name in the title face, a muted count. */
+.section-head {
+    margin: 0;
+    font-size: inherit;
+}
+
+.section-toggle {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    height: 36px;
+    padding: 0;
+    color: var(--theme-colors-foreground);
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: none;
+    border-radius: 6px;
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.section-name {
+    flex: none;
+    font-family: var(--theme-title-font-family);
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+}
+
+.section-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground-muted);
+    white-space: nowrap;
+}
+
+/* `.dg`: the grid; `--items-per-row` from the container width (5 at about 1000 px). */
+.grid {
+    display: grid;
+    grid-template-columns: repeat(var(--items-per-row), minmax(0, 1fr));
+    gap: 14px;
+    padding: 4px 0 8px;
+}
+
+.tile {
+    position: relative;
+    min-width: 0;
+}
+
+.more {
+    display: flex;
+    justify-content: center;
+}
+
+.empty {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 0;
+}

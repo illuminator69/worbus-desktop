@@ -19,8 +19,10 @@ export const FavoriteColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <ActionIcon
+                    // Not `disabled` while a save is in flight: a disabled button drops the
+                    // keyboard focus that pressed it. The press is ignored instead.
+                    aria-disabled={isMutatingFavorite || undefined}
                     className={row ? undefined : 'hover-only'}
-                    disabled={isMutatingFavorite}
                     icon="favorite"
                     iconProps={{
                         color: row ? 'primary' : 'muted',
@@ -30,6 +32,7 @@ export const FavoriteColumn = (props: ItemTableListInnerColumn) => {
                     onClick={(event) => {
                         event.stopPropagation();
                         event.preventDefault();
+                        if (isMutatingFavorite) return;
                         const item = rowItem as ItemListItem;
                         const rowId = props.internalState.extractRowId(item);
                         const index = rowId ? props.internalState.findItemIndex(rowId) : -1;

@@ -1,6 +1,8 @@
 import type {
     StationAnswer,
     StationCatalog,
+    StationCount,
+    StationCountBody,
     StationNextBody,
     StationResult,
     StationSignalAnswer,
@@ -21,6 +23,9 @@ const characters = (): Promise<StationResult<StationCatalog>> =>
 const start = (body: StationStartBody): Promise<StationResult<StationAnswer>> =>
     ipcRenderer.invoke('station-start', body);
 
+const count = (body: StationCountBody): Promise<StationResult<StationCount>> =>
+    ipcRenderer.invoke('station-count', body);
+
 const next = (body: StationNextBody): Promise<StationResult<StationAnswer>> =>
     ipcRenderer.invoke('station-next', body);
 
@@ -29,6 +34,7 @@ const signal = (body: StationSignalBody): Promise<StationResult<StationSignalAns
 
 export const station = {
     characters,
+    count,
     next,
     signal,
     start,

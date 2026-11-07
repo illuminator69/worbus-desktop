@@ -2,7 +2,7 @@ import type { PreviewStatus, PreviewTrack } from '/@/shared/types/preview-types'
 
 import { ipcMain } from 'electron';
 
-import { getHubConfig } from '../hub';
+import { getHubConfig, hubAuth } from '../hub';
 
 /**
  * navi-connect preview client (main process).
@@ -28,8 +28,9 @@ import { getHubConfig } from '../hub';
 
 /** `ws://host:4790` → `http://host:4790`; null when the hub isn't configured. */
 const hubBase = (): null | string => {
-    const { enabled, token, url } = getHubConfig();
-    if (!enabled || !url || !token) return null;
+    const { enabled, url } = getHubConfig();
+    // Worbus P2: the device secret, else the typed token (hubAuth); neither means no hub.
+    if (!enabled || !url || !hubAuth.bearer()) return null;
     return url
         .replace(/^ws/, 'http')
         .replace(/\/+$/, '')
@@ -52,7 +53,7 @@ const get = async (path: string, params: Record<string, string> = {}): Promise<J
             if (value) url.searchParams.set(key, value);
         }
         const res = await fetch(url.toString(), {
-            headers: { Authorization: `Bearer ${getHubConfig().token}` },
+            headers: { Authorization: `Bearer ${hubAuth.bearer() ?? ''}` },
             signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
         });
         if (!res.ok) {

@@ -2,11 +2,8 @@ import isElectron from 'is-electron';
 import { memo } from 'react';
 import { Fragment } from 'react/jsx-runtime';
 
-import { AudioMuseSettings } from '/@/renderer/features/settings/components/window/audiomuse-settings';
 import { DiscordSettings } from '/@/renderer/features/settings/components/window/discord-settings';
-import { HubSettings } from '/@/renderer/features/settings/components/window/hub-settings';
 import { PasswordSettings } from '/@/renderer/features/settings/components/window/password-settings';
-import { RemoteSettings } from '/@/renderer/features/settings/components/window/remote-settings';
 import { WindowSettings } from '/@/renderer/features/settings/components/window/window-settings';
 import { Divider } from '/@/shared/components/divider/divider';
 import { Stack } from '/@/shared/components/stack/stack';
@@ -16,18 +13,15 @@ const utils = isElectron() ? window.api.utils : null;
 const sections = [
     { component: WindowSettings, key: 'window' },
     { component: DiscordSettings, key: 'discord' },
-    { component: RemoteSettings, key: 'remote' },
-    { component: HubSettings, key: 'hub' },
-    { component: AudioMuseSettings, hidden: !utils, key: 'audioMuse' },
     { component: PasswordSettings, hidden: !utils?.isLinux(), key: 'password' },
-];
+].filter((section) => !section.hidden);
 
 export const WindowTab = memo(() => {
     return (
         <Stack gap="md">
-            {sections.map(({ component: Section, hidden, key }, index) => (
+            {sections.map(({ component: Section, key }, index) => (
                 <Fragment key={key}>
-                    {!hidden && <Section />}
+                    <Section />
                     {index < sections.length - 1 && <Divider />}
                 </Fragment>
             ))}

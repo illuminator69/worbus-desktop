@@ -74,7 +74,8 @@ const mantineTheme: MantineThemeOverride = createTheme({
     },
     fontSmoothing: true,
     headings: {
-        fontFamily: 'var(--theme-content-font-family)',
+        // The fallback keeps today's look where the title variable is not defined.
+        fontFamily: 'var(--theme-title-font-family, var(--theme-content-font-family))',
         sizes: {
             h1: {
                 fontSize: rem('36px'),

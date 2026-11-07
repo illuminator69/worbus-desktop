@@ -1,39 +1,37 @@
 import { useSuspenseQuery, UseSuspenseQueryResult } from '@tanstack/react-query';
-import { forwardRef, Fragment, useCallback } from 'react';
+import { forwardRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router';
+import { createSearchParams, generatePath, useParams } from 'react-router';
 
 import styles from './album-artist-detail-header.module.css';
 
 import { useItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
-import { getArtistAlbumsGrouped } from '/@/renderer/features/artists/hooks/use-artist-albums-grouped';
+import { usePlayArtistReleases } from '/@/renderer/features/artists/hooks/use-play-artist-releases';
 import { useDeleteArtistImage } from '/@/renderer/features/artists/mutations/delete-artist-image-mutation';
 import { useUploadArtistImage } from '/@/renderer/features/artists/mutations/upload-artist-image-mutation';
 import { ContextMenuController } from '/@/renderer/features/context-menu/context-menu-controller';
-import { usePlayer } from '/@/renderer/features/player/context/player-context';
-import {
-    LibraryHeader,
-    LibraryHeaderMenu,
-} from '/@/renderer/features/shared/components/library-header';
+import { ownedPlayIds } from '/@/renderer/features/discography/artist-shelves';
+import { useDiscographyItems } from '/@/renderer/features/discography/hooks/use-discography-items';
+import { useEffectiveArtistMbid } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
+import { playArtistRadio } from '/@/renderer/features/player/station/station-client';
+import { HeroActions } from '/@/renderer/features/shared/components/hero-actions';
+import { LibraryHeader } from '/@/renderer/features/shared/components/library-header';
 import { useSetFavorite } from '/@/renderer/features/shared/hooks/use-set-favorite';
 import { useSetRating } from '/@/renderer/features/shared/hooks/use-set-rating';
 import { AppRoute } from '/@/renderer/router/routes';
-import { useAppStore, useCurrentServer, useShowFavorites, useShowRatings } from '/@/renderer/store';
-import { useArtistReleaseTypeItems, usePlayButtonBehavior } from '/@/renderer/store/settings.store';
-import { formatDurationString } from '/@/renderer/utils';
-import { hasFeature, SEPARATOR_STRING, sortAlbumList } from '/@/shared/api/utils';
+import { useCurrentServer, useShowFavorites, useShowRatings } from '/@/renderer/store';
+import { useArtistRadioCount } from '/@/renderer/store/settings.store';
+import { hasFeature } from '/@/shared/api/utils';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { FileButton } from '/@/shared/components/file-button/file-button';
 import { Group } from '/@/shared/components/group/group';
-import { Stack } from '/@/shared/components/stack/stack';
-import { Text } from '/@/shared/components/text/text';
 import {
     AlbumArtistDetailResponse,
     AlbumListResponse,
     LibraryItem,
     ServerType,
-    Song,
 } from '/@/shared/types/domain-types';
 import { ServerFeature } from '/@/shared/types/features-types';
 import { Play } from '/@/shared/types/types';
@@ -115,92 +113,73 @@ export const AlbumArtistDetailHeader = forwardRef<HTMLDivElement, AlbumArtistDet
             }),
         );
 
-        const albumCount = detailQuery.data?.albumCount;
-        const songCount = detailQuery.data?.songCount;
-        const duration = detailQuery.data?.duration;
-        const durationEnabled = duration !== null && duration !== undefined;
-
-        const metadataItems = [
-            {
-                enabled: albumCount !== null && albumCount !== undefined,
-                id: 'albumCount',
-                secondary: false,
-                value: t('entity.albumWithCount', { count: albumCount || 0 }),
-            },
-            {
-                enabled: songCount !== null && songCount !== undefined,
-                id: 'songCount',
-                secondary: false,
-                value: t('entity.trackWithCount', { count: songCount || 0 }),
-            },
-            {
-                enabled: durationEnabled,
-                id: 'duration',
-                secondary: true,
-                value: durationEnabled && formatDurationString(duration),
-            },
-        ];
-
-        const { addToQueueByFetch } = usePlayer();
-        const playButtonBehavior = usePlayButtonBehavior();
         const setFavorite = useSetFavorite();
         const setRating = useSetRating();
         const uploadArtistImageMutation = useUploadArtistImage({});
 
-        const albumArtistDetailSort = useAppStore((state) => state.albumArtistDetailSort);
-        const sortBy = albumArtistDetailSort.sortBy;
-        const sortOrder = albumArtistDetailSort.sortOrder;
-        const groupingType = albumArtistDetailSort.groupingType;
-        const artistReleaseTypeItems = useArtistReleaseTypeItems();
+        // Play and Shuffle play every owned album, newest first (the default discography view's
+        // order); the discography page plays its own filtered view.
+        const mbzId = useEffectiveArtistMbid(routeId, detailQuery.data?.mbz);
+        const { items, known } = useDiscographyItems({
+            artistMbid: mbzId,
+            ndId: routeId,
+            owned: albumsQuery.data?.items ?? null,
+        });
+        const playIds = useMemo(() => ownedPlayIds(items), [items]);
+        const playReleases = usePlayArtistReleases({ routeId });
 
-        const handlePlay = useCallback(
-            (type?: Play) => {
-                if (!server?.id || !routeId) return;
-
-                const albums = albumsQuery.data?.items || [];
-                const sortedAlbums = sortAlbumList(albums, sortBy, sortOrder);
-
-                const { flatSortedAlbums } = getArtistAlbumsGrouped(
-                    sortedAlbums,
-                    routeId,
-                    groupingType,
-                    artistReleaseTypeItems,
-                    t,
+        // The board's meta line: songs, then "X of Y releases" when lb-bot knows the artist (X owned
+        // or partly), then at most three genres.
+        const songCount = detailQuery.data?.songCount;
+        const genres = detailQuery.data?.genres;
+        const meta = useMemo(() => {
+            const parts: string[] = [];
+            if (songCount !== null && songCount !== undefined) {
+                parts.push(t('page.albumArtistDetail.songsInLibrary', { count: songCount }));
+            }
+            if (known && items.length > 0) {
+                parts.push(
+                    t('page.albumArtistDetail.releasesOwned', {
+                        owned: items.filter(
+                            (item) => item.ownership === 'owned' || item.ownership === 'partly',
+                        ).length,
+                        total: items.length,
+                    }),
                 );
+            }
+            const names = (genres ?? [])
+                .slice(0, 3)
+                .map((genre) => genre.name)
+                .filter(Boolean);
+            if (names.length > 0) parts.push(names.join(', '));
+            return parts.join(' · ');
+        }, [genres, items, known, songCount, t]);
 
-                const albumIds = flatSortedAlbums.map((album) => album.id);
-                if (albumIds.length === 0) return;
+        const artistRadioCount = useArtistRadioCount();
+        const isPlayerFetching = useIsPlayerFetching();
+        const { addToQueueByData } = usePlayer();
+        const artistName = detailQuery.data?.name;
+        const serverId = server?.id;
+        const handleArtistRadio = useCallback(async () => {
+            if (!serverId || !routeId || !artistName) return;
+            // navi-connect (B-149): the artist's own most played songs, then a station from them
+            // (with the engine) or Navidrome's similar songs.
+            try {
+                await playArtistRadio({
+                    artist: { id: routeId, name: artistName },
+                    count: artistRadioCount,
+                    player: { addToQueueByData },
+                    playType: Play.NOW,
+                    serverId,
+                });
+            } catch (error) {
+                console.error('Failed to load artist radio:', error);
+            }
+        }, [addToQueueByData, artistName, artistRadioCount, routeId, serverId]);
 
-                const filter = (song: Song) => {
-                    if (song.albumArtists.some((artist) => artist.id === albumArtistId)) {
-                        return true;
-                    }
-
-                    return song.artists.some((artist) => artist.id === albumArtistId);
-                };
-
-                addToQueueByFetch(
-                    server.id,
-                    albumIds,
-                    LibraryItem.ALBUM,
-                    type || playButtonBehavior,
-                    { filter },
-                );
-            },
-            [
-                addToQueueByFetch,
-                playButtonBehavior,
-                routeId,
-                server.id,
-                albumsQuery.data?.items,
-                sortBy,
-                sortOrder,
-                groupingType,
-                artistReleaseTypeItems,
-                t,
-                albumArtistId,
-            ],
-        );
+        const artistSongsLink = `${generatePath(AppRoute.LIBRARY_ALBUM_ARTISTS_DETAIL_SONGS, {
+            albumArtistId: routeId,
+        })}?${createSearchParams({ artistId: routeId, artistName: artistName || '' })}`;
 
         const handleFavorite = useCallback(() => {
             if (!detailQuery.data) return;
@@ -278,6 +257,7 @@ export const AlbumArtistDetailHeader = forwardRef<HTMLDivElement, AlbumArtistDet
 
         return (
             <LibraryHeader
+                hero={{ image: 168, round: true, title: 54 }}
                 imageOverlay={
                     <ArtistImageUploadOverlay
                         data={detailQuery.data}
@@ -287,6 +267,7 @@ export const AlbumArtistDetailHeader = forwardRef<HTMLDivElement, AlbumArtistDet
                 imageUrl={headerImageUrl}
                 item={{
                     blurHash: detailQuery.data?.blurHash,
+                    children: t('entity.artist', { count: 1 }),
                     imageId: detailQuery.data?.imageId,
                     imageUrl: detailQuery.data?.imageUrl,
                     route: AppRoute.LIBRARY_ALBUM_ARTISTS,
@@ -297,31 +278,39 @@ export const AlbumArtistDetailHeader = forwardRef<HTMLDivElement, AlbumArtistDet
                 ref={ref}
                 title={detailQuery.data?.name || ''}
             >
-                <Stack gap="md" w="100%">
-                    <Group className={styles.metadataGroup}>
-                        {metadataItems
-                            .filter((i) => i.enabled)
-                            .map((item, index) => (
-                                <Fragment key={`item-${item.id}-${index}`}>
-                                    {index > 0 && (
-                                        <Text isMuted isNoSelect>
-                                            {SEPARATOR_STRING}
-                                        </Text>
-                                    )}
-                                    <Text isMuted={item.secondary}>{item.value}</Text>
-                                </Fragment>
-                            ))}
-                    </Group>
-                    <LibraryHeaderMenu
-                        favorite={detailQuery.data?.userFavorite}
-                        onFavorite={showFavorites ? handleFavorite : undefined}
-                        onMore={handleMoreOptions}
-                        onPlay={(type) => handlePlay(type)}
-                        onRating={showRating ? handleUpdateRating : undefined}
-                        onShuffle={() => handlePlay(Play.SHUFFLE)}
-                        rating={detailQuery.data?.userRating || 0}
-                    />
-                </Stack>
+                {meta && <div className={styles.meta}>{meta}</div>}
+                <HeroActions
+                    actions={[
+                        {
+                            icon: 'mediaShuffle',
+                            key: 'shuffle',
+                            label: t('page.albumArtistDetail.shuffle'),
+                            onClick: () => playReleases(playIds, Play.SHUFFLE),
+                            variant: 'filled',
+                        },
+                        {
+                            busy: isPlayerFetching,
+                            icon: 'radio',
+                            key: 'radio',
+                            label: t('player.artistRadio'),
+                            onClick: () => void handleArtistRadio(),
+                            variant: 'filled',
+                        },
+                        {
+                            icon: 'playlist',
+                            key: 'tracks',
+                            label: t('page.albumArtistDetail.allTracks'),
+                            to: artistSongsLink,
+                            variant: 'outline',
+                        },
+                    ]}
+                    favorite={detailQuery.data?.userFavorite}
+                    onFavorite={showFavorites ? handleFavorite : undefined}
+                    onMore={handleMoreOptions}
+                    onPlay={() => playReleases(playIds, Play.NOW)}
+                    onRating={showRating ? handleUpdateRating : undefined}
+                    rating={detailQuery.data?.userRating || 0}
+                />
             </LibraryHeader>
         );
     },

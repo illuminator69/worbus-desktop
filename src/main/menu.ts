@@ -3,6 +3,7 @@ import { BrowserWindow, Menu, MenuItemConstructorOptions, shell } from 'electron
 import packageJson from '../../package.json';
 
 import { PlayerRepeat, PlayerStatus } from '/@/shared/types/types';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 export type MenuPlaybackState = {
     accelerators?: {
@@ -26,6 +27,8 @@ export type MenuPlaybackState = {
     repeatMode?: PlayerRepeat;
     shuffleEnabled?: boolean;
     sidebarCollapsed?: boolean;
+    /** The sidebar is a rail because the window is narrow (R6): the item is off until it widens. */
+    sidebarFolded?: boolean;
 };
 
 const MENU_ITEM_IDS = {
@@ -92,12 +95,13 @@ export default class MenuBuilder {
         repeatMode = PlayerRepeat.NONE,
         shuffleEnabled = false,
         sidebarCollapsed = false,
+        sidebarFolded = false,
     }: MenuPlaybackState = {}): MenuItemConstructorOptions[] {
         const isPlaying = playbackStatus === PlayerStatus.PLAYING;
         const isRepeatEnabled = repeatMode !== PlayerRepeat.NONE;
 
         const subMenuAbout: MenuItemConstructorOptions = {
-            label: 'Electron',
+            label: 'Worbus',
             submenu: [
                 { role: 'about' },
                 { type: 'separator' },
@@ -163,6 +167,7 @@ export default class MenuBuilder {
                     click: () => {
                         this.mainWindow.webContents.send('renderer-toggle-sidebar');
                     },
+                    enabled: !sidebarFolded,
                     id: MENU_ITEM_IDS.sidebarCollapsed,
                     label: 'Collapse Sidebar',
                     type: 'checkbox',
@@ -180,7 +185,7 @@ export default class MenuBuilder {
             submenu: [
                 {
                     click: this.showMainWindow,
-                    label: 'Show Feishin',
+                    label: 'Show Worbus',
                 },
             ],
         };
@@ -309,36 +314,15 @@ export default class MenuBuilder {
             submenu: [
                 {
                     click() {
-                        shell.openExternal('https://github.com/jeffvli/feishin');
+                        // The fork's own page; upstream's repository is not offered.
+                        shell.openExternal('https://github.com/illuminator69/worbus');
                     },
-                    label: 'Learn More',
-                },
-                {
-                    click() {
-                        shell.openExternal(
-                            'https://github.com/jeffvli/feishin?tab=readme-ov-file#getting-started',
-                        );
-                    },
-                    label: 'Documentation',
-                },
-                {
-                    click() {
-                        shell.openExternal('https://github.com/jeffvli/feishin/discussions');
-                    },
-                    label: 'Community Discussions',
-                },
-                {
-                    click() {
-                        shell.openExternal('https://github.com/jeffvli/feishin/issues');
-                    },
-                    label: 'Search Issues',
+                    label: 'Worbus on GitHub',
                 },
                 { type: 'separator' },
                 {
-                    click: () => {
-                        this.mainWindow.webContents.send('renderer-open-release-notes');
-                    },
-                    label: 'Version ' + packageJson.version,
+                    enabled: false,
+                    label: 'Version ' + appVersionLine(packageJson.version),
                 },
             ],
         };
@@ -426,30 +410,11 @@ export default class MenuBuilder {
                 submenu: [
                     {
                         click() {
-                            shell.openExternal('https://github.com/jeffvli/feishin');
+                            shell.openExternal('https://github.com/illuminator69/worbus');
                         },
-                        label: 'Learn More',
+                        label: 'Worbus on GitHub',
                     },
-                    {
-                        click() {
-                            shell.openExternal(
-                                'https://github.com/jeffvli/feishin?tab=readme-ov-file#getting-started',
-                            );
-                        },
-                        label: 'Documentation',
-                    },
-                    {
-                        click() {
-                            shell.openExternal('https://github.com/jeffvli/feishin/discussions');
-                        },
-                        label: 'Community Discussions',
-                    },
-                    {
-                        click() {
-                            shell.openExternal('https://github.com/jeffvli/feishin/issues');
-                        },
-                        label: 'Search Issues',
-                    },
+                    { label: 'About Worbus', role: 'about' },
                 ],
             },
         ];
@@ -504,6 +469,7 @@ export default class MenuBuilder {
         repeatMode = PlayerRepeat.NONE,
         shuffleEnabled = false,
         sidebarCollapsed = false,
+        sidebarFolded = false,
     }: MenuPlaybackState = {}): void {
         if (process.platform !== 'darwin' || !this.applicationMenu) {
             return;
@@ -517,7 +483,10 @@ export default class MenuBuilder {
         const shuffleItem = this.applicationMenu.getMenuItemById(MENU_ITEM_IDS.shuffle);
 
         if (privateModeItem) privateModeItem.checked = privateMode;
-        if (sidebarItem) sidebarItem.checked = sidebarCollapsed;
+        if (sidebarItem) {
+            sidebarItem.checked = sidebarCollapsed;
+            sidebarItem.enabled = !sidebarFolded;
+        }
         if (pauseItem) pauseItem.visible = playbackStatus === PlayerStatus.PLAYING;
         if (playItem) playItem.visible = playbackStatus !== PlayerStatus.PLAYING;
         if (repeatItem) repeatItem.checked = repeatMode !== PlayerRepeat.NONE;

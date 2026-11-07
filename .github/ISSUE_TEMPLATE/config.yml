@@ -1,11 +1,5 @@
 blank_issues_enabled: false
 contact_links:
-    - name: Questions or help
-      url: https://github.com/jeffvli/feishin/discussions
-      about: Ask questions or get help in the discussions section
-    - name: Discord Community
-      url: https://discord.gg/FVKpcMDy5f
-      about: The discord/matrix servers are bridged so you can join whichever you prefer
-    - name: Matrix Community
-      url: https://matrix.to/#/#sonixd:matrix.org
-      about: The discord/matrix servers are bridged so you can join whichever you prefer
+    - name: Worbus issues (Worbus for desktop, Worbus for Android and the Worbus Server)
+      url: https://github.com/illuminator69/worbus/issues
+      about: One place for every Worbus bug and idea. Not sure which piece is at fault? File it there.

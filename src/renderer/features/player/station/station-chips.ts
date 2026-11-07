@@ -6,7 +6,7 @@ import type { StationCharacterId } from '/@/shared/types/station-types';
 
 // navi-connect (I-041): the queue's chip row (Off, Close, Balanced, Explore; or Off, Auto DJ
 // without the hub's station engine), as pure decisions so they can be replayed in
-// station-chips.harness.ts. The same spec is implemented in Navic.
+// station-chips.harness.ts. The same spec is implemented in Worbus for Android.
 //
 // A chip is a choice about the queue that is playing, and it takes effect now: Off takes out
 // what the station queued that has not played, a character replaces it with a batch in that
@@ -24,6 +24,24 @@ export const FALLBACK_CHIPS: readonly ChipId[] = ['off', 'autoDj'];
 /** Which chips there are: the four with the station engine, Off and Auto DJ without it. */
 export const chipsFor = (mode: StationMode): readonly ChipId[] =>
     mode === 'fallback' ? FALLBACK_CHIPS : STATION_CHIPS;
+
+/**
+ * The side queue's Autoplay toggle (F4) is a tap on one chip, so the tap plan, the hub edit and
+ * the signals have one code path: off is Off; on is the preferred character with the station
+ * engine and Auto DJ without it.
+ */
+export const autoplayToggleChip = (
+    turnOn: boolean,
+    stationsAvailable: boolean,
+    preferred: StationCharacterId,
+): ChipId => (!turnOn ? 'off' : stationsAvailable ? preferred : 'autoDj');
+
+/** The character chips only (no Off, no Auto DJ): empty without the station engine. */
+export const characterChips = (chips: readonly ChipId[]): StationCharacterId[] =>
+    chips.filter((chip): chip is StationCharacterId => chip !== 'off' && chip !== 'autoDj');
+
+/** The toggle shows on iff the selected chip is not Off. */
+export const autoplayIsOn = (selected: ChipId): boolean => selected !== 'off';
 
 export interface ChipState {
     /** This device's preference: `autoDJ.enabled`. */
@@ -198,3 +216,36 @@ export const chipLine = (origin: null | string, status: null | string): null | s
     const parts = [origin, status].filter((part): part is string => Boolean(part?.trim()));
     return parts.length > 0 ? parts.join(' · ') : null;
 };
+
+/** What happens when the queue runs out, as the key of its sentence (`naviConnect.station.*`). */
+export type StationStatusKey = 'continues' | 'exhausted' | 'finding' | 'offStops' | 'partial';
+
+/**
+ * The status under the chips, by key. Off (a stopped station, or no station and Autoplay off)
+ * means the queue stops at its end, radios included. Null when there is nothing to say.
+ */
+export const stationStatusKey = (state: {
+    autoplay: boolean;
+    bound: null | Pick<StationBinding, 'exhausted' | 'stopped'>;
+    inFlight: boolean;
+    lastPartial: boolean;
+    mode: StationMode;
+}): null | StationStatusKey => {
+    if (state.mode !== 'stations') return null;
+    if (state.bound ? state.bound.stopped : !state.autoplay) return 'offStops';
+    if (state.bound?.exhausted) return 'exhausted';
+    if (state.inFlight) return 'finding';
+    if (state.lastPartial) return 'partial';
+    if (!state.bound) return 'continues';
+    return null;
+};
+
+/**
+ * The side queue header's line under the title (R14, B-251): the bound station's name, character
+ * and engine, and no status sentence. The Autoplay switch beside the title already says on or off,
+ * and a line that came and went with it ("Off stops", "Auto DJ") moved the list under the pointer
+ * at every flip. The drawer, the popover and the Now Playing page keep the whole line
+ * (queue-station-chips.tsx).
+ */
+export const panelStatusLine = (origin: null | string, bound: boolean): null | string =>
+    bound && origin?.trim() ? origin : null;

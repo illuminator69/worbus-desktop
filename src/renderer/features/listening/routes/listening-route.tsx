@@ -2,6 +2,7 @@ import { Suspense, useMemo, useState } from 'react';
 
 import styles from '../components/listening.module.css';
 
+import { RoleGatedRoute } from '/@/renderer/features/hub/components/role-gated-route';
 import {
     isListeningUnavailable,
     LbBotReadError,
@@ -315,7 +316,10 @@ const ListeningRoute = () => {
 const ListeningRouteWithBoundary = () => (
     <PageErrorBoundary>
         <Suspense fallback={<Spinner container />}>
-            <ListeningRoute />
+            {/* Worbus P2 (R28): the primary user's only - never another account's cached plays. */}
+            <RoleGatedRoute gate="listening">
+                <ListeningRoute />
+            </RoleGatedRoute>
         </Suspense>
     </PageErrorBoundary>
 );

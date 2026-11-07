@@ -4,66 +4,141 @@
     container-type: inline-size;
 }
 
+/* R10: one column at every width, in Spotify's order (the F7 side column is gone). */
 .detail-container {
     display: flex;
     flex-direction: column;
-    gap: var(--theme-spacing-2xl);
+    gap: 36px;
+    min-width: 0;
     padding: 1rem 2rem 5rem;
 }
 
-.album-section-container {
+.section {
     display: flex;
     flex-direction: column;
-    gap: var(--theme-spacing-4xl);
-    width: 100%;
     min-width: 0;
 }
 
-.album-section-title {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--theme-spacing-md);
-    align-items: center;
-    margin-bottom: var(--theme-spacing-md);
-}
-
-.album-section-divider-container {
+/* A section's heading row: the title, then (Popular, the favourite songs) its two small chips. */
+.section-head {
     display: flex;
-    gap: var(--theme-spacing-md);
+    gap: 12px;
     align-items: center;
-    width: 100%;
-}
-
-.album-section-divider {
-    flex: 1;
-    height: 2px;
-    background: var(--theme-colors-border);
-}
-
-.similar-artists-title {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--theme-spacing-md);
-    align-items: center;
-    width: 100%;
     min-width: 0;
+    padding-bottom: 8px;
 }
 
-.album-grid {
+/* The same heading as the Discography's (artist-shelves.module.css `.title`). */
+.section-title {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    white-space: nowrap;
+}
+
+.switch {
+    display: flex;
+    flex: none;
+    gap: 6px;
+}
+
+.switch-chip {
+    height: 24px;
+    padding: 0 10px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.switch-chip[aria-pressed='true'] {
+    color: var(--theme-colors-primary-contrast);
+    background: var(--theme-colors-primary-filled);
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}
+
+/* An empty "Yours" or "Rating" list: one muted line where the rows would be. */
+.empty {
+    padding: 8px;
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--theme-colors-foreground-muted);
+}
+
+.about {
+    max-width: 1280px;
+}
+
+.genres {
     display: flex;
     flex-wrap: wrap;
-    gap: var(--theme-spacing-md);
-    width: 100%;
+    gap: 8px;
 }
 
-.album-grid-item {
-    /* The anchor for lb-bot's incomplete-album badge, which is overlaid on the
-       card rather than built into it. */
-    position: relative;
-    flex: 1 1
-        calc((100% - (var(--items-per-row) - 1) * var(--theme-spacing-md)) / var(--items-per-row));
-    min-width: 0;
-    max-width: calc(
-        (100% - (var(--items-per-row) - 1) * var(--theme-spacing-md)) / var(--items-per-row)
-    );
+.genre {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    text-decoration: none;
+    background: var(--theme-colors-surface);
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    &:hover {
+        text-decoration: underline;
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    align-items: center;
+}
+
+.text-link {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground-muted);
+    text-decoration: none;
+
+    &:hover {
+        color: var(--theme-colors-foreground);
+        text-decoration: underline;
+    }
 }

@@ -1,4 +1,4 @@
-import type { KeyboardEvent } from 'react';
+import type { CSSProperties, KeyboardEvent } from 'react';
 
 import { closeAllModals, openModal } from '@mantine/modals';
 import clsx from 'clsx';
@@ -6,6 +6,7 @@ import { forwardRef, ReactNode, Ref, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
 
+import { calculateWeightedLength, heroTitleSize } from './hero-title-size';
 import styles from './library-header.module.css';
 
 import { getItemImageUrl, ItemImage } from '/@/renderer/components/item-image/item-image';
@@ -34,10 +35,20 @@ import { Text } from '/@/shared/components/text/text';
 import { ExplicitStatus, LibraryItem } from '/@/shared/types/domain-types';
 import { Play } from '/@/shared/types/types';
 
+export { calculateWeightedLength, heroTitleSize, isAsianCharacter } from './hero-title-size';
+
+/** The opt-in hero size (the artist and album boards): image and title sizes in px. */
+export interface HeroSize {
+    image: number;
+    round?: boolean;
+    title: number;
+}
+
 interface LibraryHeaderProps {
     children?: ReactNode;
     compact?: boolean;
     containerClassName?: string;
+    hero?: HeroSize;
     imageOverlay?: ReactNode;
     imagePlaceholderUrl?: null | string;
     imageUrl?: null | string;
@@ -55,6 +66,8 @@ interface LibraryHeaderProps {
     loading?: boolean;
     onImageFileDrop?: (file: File) => Promise<void> | void;
     title: string;
+    /** Where the title links to (the discography page's title leads back to the artist). */
+    titleTo?: string;
     topRight?: ReactNode;
 }
 
@@ -64,11 +77,13 @@ export const LibraryHeader = forwardRef(
             children,
             compact,
             containerClassName,
+            hero,
             imageOverlay,
             imageUrl,
             item,
             onImageFileDrop,
             title,
+            titleTo,
             topRight,
         }: LibraryHeaderProps,
         ref: Ref<HTMLDivElement>,
@@ -161,8 +176,18 @@ export const LibraryHeader = forwardRef(
                     styles.libraryHeader,
                     containerClassName,
                     compact && styles.compact,
+                    hero && styles.hero,
+                    hero?.round && styles.round,
                 )}
                 ref={ref}
+                style={
+                    hero
+                        ? ({
+                              '--hero-image': `${hero.image}px`,
+                              '--hero-title': heroTitleSize(title, hero.title),
+                          } as CSSProperties)
+                        : undefined
+                }
             >
                 {topRight && <div className={styles.topRight}>{topRight}</div>}
                 {onImageFileDrop ? (
@@ -236,7 +261,7 @@ export const LibraryHeader = forwardRef(
                             <Text
                                 className={styles.itemType}
                                 component={Link}
-                                fw={600}
+                                fw={hero ? undefined : 600}
                                 isLink
                                 size="md"
                                 to={item.route}
@@ -248,11 +273,16 @@ export const LibraryHeader = forwardRef(
 
                         <h1
                             className={styles.title}
-                            style={{
-                                fontSize: calculateTitleSize(title),
-                            }}
+                            data-hero-title
+                            style={hero ? undefined : { fontSize: calculateTitleSize(title) }}
                         >
-                            {title}
+                            {titleTo ? (
+                                <Link className={styles.titleLink} to={titleTo}>
+                                    {title}
+                                </Link>
+                            ) : (
+                                title
+                            )}
                         </h1>
                         {children}
                     </div>
@@ -261,41 +291,6 @@ export const LibraryHeader = forwardRef(
         );
     },
 );
-
-export const isAsianCharacter = (char: string): boolean => {
-    const codePoint = char.codePointAt(0);
-
-    if (!codePoint) return false;
-
-    // CJK Unified Ideographs: U+4E00–U+9FFF
-    if (codePoint >= 0x4e00 && codePoint <= 0x9fff) return true;
-
-    // Hiragana: U+3040–U+309F
-    if (codePoint >= 0x3040 && codePoint <= 0x309f) return true;
-
-    // Katakana: U+30A0–U+30FF
-    if (codePoint >= 0x30a0 && codePoint <= 0x30ff) return true;
-
-    // CJK Extension A: U+3400–U+4DBF
-    if (codePoint >= 0x3400 && codePoint <= 0x4dbf) return true;
-
-    // CJK Compatibility Ideographs: U+F900–U+FAFF
-    if (codePoint >= 0xf900 && codePoint <= 0xfaff) return true;
-
-    // Fullwidth forms (some Asian characters): U+FF00–U+FFEF
-    // Only count fullwidth letters/numbers as Asian
-    if (codePoint >= 0xff01 && codePoint <= 0xff5e) return true;
-
-    return false;
-};
-
-export const calculateWeightedLength = (str: string): number => {
-    let length = 0;
-    for (const char of str) {
-        length += isAsianCharacter(char) ? 2.5 : 1;
-    }
-    return length;
-};
 
 /*
  * Sized in container units, not viewport units: the header lives inside the content column, so a

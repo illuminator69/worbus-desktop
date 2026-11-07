@@ -52,7 +52,7 @@ test('aNewIdAfterTheBaselineIsAnArrival', () => {
     assert.equal(proposedId(tracker, 1_000), 'pixel');
 });
 
-test('aDeviceOfflineForFifteenSecondsThenOnlineIsAnArrival', () => {
+test('aDeviceOfflineForTheMinimumThenOnlineIsAnArrival', () => {
     const tracker = createArrivalTracker();
     tracker.observe([device(ME), device('pixel')], 0);
     tracker.observe([device(ME), device('pixel', { online: false })], 1_000);
@@ -60,12 +60,32 @@ test('aDeviceOfflineForFifteenSecondsThenOnlineIsAnArrival', () => {
     assert.equal(proposedId(tracker, 1_000 + ARRIVAL_MIN_ABSENCE_MS), 'pixel');
 });
 
-test('aDeviceMissingForFifteenSecondsThenBackIsAnArrival', () => {
+test('aDeviceMissingForTheMinimumThenBackIsAnArrival', () => {
     const tracker = createArrivalTracker();
     tracker.observe([device(ME), device('pixel')], 0);
     tracker.observe([device(ME)], 1_000);
-    tracker.observe([device(ME), device('pixel')], 16_000);
-    assert.equal(proposedId(tracker, 16_000), 'pixel');
+    tracker.observe([device(ME), device('pixel')], 1_000 + ARRIVAL_MIN_ABSENCE_MS);
+    assert.equal(proposedId(tracker, 1_000 + ARRIVAL_MIN_ABSENCE_MS), 'pixel');
+});
+
+// Worbus for Android keeps its hub socket while backgrounded; it reconnects when its process restarts, and
+// is back within seconds (its backoff starts at 1 s). That is the arrival the pill is for.
+test('anAppRestartAFewSecondsLongIsAnArrival', () => {
+    const tracker = createArrivalTracker();
+    tracker.observe([device(ME), device('pixel')], 0);
+    tracker.observe([device(ME), device('pixel', { online: false })], 1_000);
+    tracker.observe([device(ME), device('pixel')], 6_000);
+    assert.equal(proposedId(tracker, 6_000), 'pixel');
+});
+
+test('observeReturnsWhatArrived', () => {
+    const tracker = createArrivalTracker();
+    assert.deepEqual(tracker.observe([device(ME)], 0), []);
+    assert.deepEqual(
+        tracker.observe([device(ME), device('pixel')], 1_000).map((d) => d.id),
+        ['pixel'],
+    );
+    assert.deepEqual(tracker.observe([device(ME), device('pixel', { volume: 3 })], 2_000), []);
 });
 
 test('aDeviceOfflineForTwoSecondsIsNotAnArrival', () => {

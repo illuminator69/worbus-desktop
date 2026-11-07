@@ -289,6 +289,18 @@ export const stationIdForPublish = (): string | undefined => {
     return bound && !bound.unbound ? bound.stationId : undefined;
 };
 
+/**
+ * The ids the bound station served this client, only while `served` is that station's: how a
+ * remote session's rows, which carry ids only, are told apart from the user's. A row is the
+ * station's when it carries `_stationId` (local) or its id is in this set.
+ */
+export const servedIdsOf = (state: Pick<StationState, 'bound' | 'served'>): Set<string> =>
+    new Set(
+        state.served.stationId && state.served.stationId === state.bound?.stationId
+            ? state.served.ids
+            : [],
+    );
+
 export const useStationBinding = () => useStationStore((s) => s.bound, shallow);
 export const useStationCatalog = () => useStationStore((s) => s.catalog, shallow);
 export const useStationInFlight = () => useStationStore((s) => s.inFlight);

@@ -19,6 +19,8 @@ export enum AppRoute {
     /** navi-connect: site-wide new and upcoming releases, from lb-bot. */
     FRESH = '/fresh',
     HOME = '/',
+    /** F6: Library as one place, its Artists page. The frame's chips lead to the other list pages. */
+    LIBRARY = '/library',
     LIBRARY_ALBUM_ARTISTS = '/library/album-artists',
     LIBRARY_ALBUM_ARTISTS_DETAIL = '/library/album-artists/:albumArtistId',
     LIBRARY_ALBUM_ARTISTS_DETAIL_DISCOGRAPHY = '/library/album-artists/:albumArtistId/discography',

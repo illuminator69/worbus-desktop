@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQueries } from '@tanstack/react-query';
+import { useSuspenseQueries } from '@tanstack/react-query';
 import { Suspense, useRef } from 'react';
 import { useParams } from 'react-router';
 
@@ -9,11 +9,8 @@ import { albumQueries } from '/@/renderer/features/albums/api/album-api';
 import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
 import { AlbumArtistDetailContent } from '/@/renderer/features/artists/components/album-artist-detail-content';
 import { AlbumArtistDetailHeader } from '/@/renderer/features/artists/components/album-artist-detail-header';
-import {
-    useEffectiveArtistMbid,
-    useIndexMirrorReady,
-    useLbBotDiscography,
-} from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { LbBotDiscographyPrefetch } from '/@/renderer/features/artists/components/lbbot-discography-prefetch';
+import { useIndexMirrorReady } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { AnimatedPage } from '/@/renderer/features/shared/components/animated-page';
 import {
     LibraryBackgroundImage,
@@ -22,8 +19,8 @@ import {
 import { LibraryContainer } from '/@/renderer/features/shared/components/library-container';
 import { LibraryHeaderBar } from '/@/renderer/features/shared/components/library-header-bar';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
-import { useFastAverageColor } from '/@/renderer/hooks';
 import { useArtistBackground, useCurrentServer, useCurrentServerId } from '/@/renderer/store';
+import { useCoverHeaderWash } from '/@/renderer/themes/cover/use-cover-header-wash';
 import { Spinner } from '/@/shared/components/spinner/spinner';
 import { AlbumListSort, LibraryItem, SortOrder } from '/@/shared/types/domain-types';
 
@@ -82,13 +79,11 @@ const AlbumArtistDetailRouteContent = () => {
 
     const selectedImageUrl = imageUrl || detailQuery.data?.imageUrl;
 
-    const { background: backgroundColor } = useFastAverageColor({
-        id: artistId,
+    const { background } = useCoverHeaderWash({
+        id: detailQuery.data?.imageId || undefined,
+        serverId: detailQuery.data?._serverId,
         src: selectedImageUrl,
-        srcLoaded: true,
     });
-
-    const background = backgroundColor;
 
     const showBlurredImage = artistBackground;
 
@@ -96,11 +91,23 @@ const AlbumArtistDetailRouteContent = () => {
     //     return <Spinner container />;
     // }
 
+    // The hero's band, drawn behind the hero and again in the bar (B-216), laid out against the hero.
+    const band = showBlurredImage ? (
+        <LibraryBackgroundImage
+            blur={artistBackgroundBlur}
+            headerRef={headerRef}
+            imageUrl={libraryBackgroundImageUrl || ''}
+        />
+    ) : (
+        <LibraryBackgroundOverlay background={background} headerRef={headerRef} />
+    );
+
     return (
         <AnimatedPage key={`album-artist-detail-${routeId}`}>
             <NativeScrollArea
                 pageHeaderProps={{
-                    backgroundColor: backgroundColor || undefined,
+                    backgroundColor: background || undefined,
+                    band,
                     children: (
                         <LibraryHeaderBar>
                             <LibraryHeaderBar.PlayButton
@@ -113,20 +120,13 @@ const AlbumArtistDetailRouteContent = () => {
                             </LibraryHeaderBar.Title>
                         </LibraryHeaderBar>
                     ),
-                    offset: 200,
+                    // The bar follows the hero's title, not a pixel offset (B-220).
+                    fadeWithTitle: true,
                     target: headerRef,
                 }}
                 ref={scrollAreaRef}
             >
-                {showBlurredImage ? (
-                    <LibraryBackgroundImage
-                        blur={artistBackgroundBlur}
-                        headerRef={headerRef}
-                        imageUrl={libraryBackgroundImageUrl || ''}
-                    />
-                ) : (
-                    <LibraryBackgroundOverlay backgroundColor={background} headerRef={headerRef} />
-                )}
+                {band}
                 <LibraryContainer>
                     <AlbumArtistDetailHeader
                         albumsQuery={albumsQuery}
@@ -137,39 +137,6 @@ const AlbumArtistDetailRouteContent = () => {
             </NativeScrollArea>
         </AnimatedPage>
     );
-};
-
-/**
- * navi-connect: start lb-bot's discography read for this artist OUTSIDE the
- * Suspense boundary below.
- *
- * Inside it, the read could not begin until both Navidrome queries had answered
- * — the album list is `limit: -1`, so for a large artist that is the slow one —
- * because a component that suspends never commits, and react-query starts a
- * plain query's fetch on commit. For an artist in the local index mirror none
- * of this matters (the read is synchronous and never touches the network); this
- * is the fallback, for an artist the mirror does not hold.
- *
- * It waits for the artist's MBID before asking, because lb-bot looks an artist
- * up by MBID first and the query key does not carry it: a read without it can
- * answer `{indexed: false}` for an artist indexed under its MBID alone, and the
- * page would then serve that answer from the cache. The artist detail it reads
- * the MBID from is the same query the page suspends on, so it costs no request.
- * Renders nothing.
- */
-const LbBotDiscographyPrefetch = ({ routeId }: { routeId: string }) => {
-    const server = useCurrentServer();
-    const tagMbid = useQuery({
-        ...artistsQueries.albumArtistDetail({ query: { id: routeId }, serverId: server?.id }),
-        select: (detail) => detail?.mbz ?? null,
-        // The page's own boundary reports a failure; this is only a trigger.
-        throwOnError: false,
-    }).data;
-    // I-019: the same MBID the page itself will ask with, so the fallback read
-    // lands on the entry the page uses.
-    const mbid = useEffectiveArtistMbid(routeId, tagMbid);
-    useLbBotDiscography(tagMbid === undefined ? '' : routeId, mbid);
-    return null;
 };
 
 const AlbumArtistDetailRoute = () => {

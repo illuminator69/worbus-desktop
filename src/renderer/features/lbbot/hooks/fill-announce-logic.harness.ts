@@ -13,7 +13,7 @@ import {
 } from './fill-announce-logic.ts';
 
 /**
- * B-026 (Feishin half): pure-function coverage for the settled-row decision, run
+ * B-026 (Worbus for desktop half): pure-function coverage for the settled-row decision, run
  * the same way as `../index-mirror/mirror-logic.harness.ts` (Node 24 strips
  * TypeScript's erasable syntax natively — no build step, no devDependency):
  *
@@ -33,7 +33,7 @@ test('a real failure (no stall, no needs_match) still reads couldntGet', () => {
 
 test('a stalled gap placement reads needsSorting, not couldntGet', () => {
     // lb-bot only ever sets `stalledPlacement` alongside `state: 'failed'` — it
-    // never pairs it with `'picking'` (Feishin's gap watcher settles a `picking`
+    // never pairs it with `'picking'` (Worbus for desktop's gap watcher settles a `picking`
     // row as `needsPick`, not `failed`, before `stalledPlacement` would matter).
     assert.equal(
         announcementKindFor({
@@ -99,7 +99,7 @@ test('a groupId with characters that need escaping is encoded', () => {
 // Q-031: `picking` with a `downloaded` track is lb-bot's needs_match bucket
 // (files already downloaded, waiting on a manual match lb-bot's own workspace
 // does), not "your move" — the shared predicate behind both the settle and the
-// gap modal's "Open in lb-bot" prominence.
+// gaps box's attention stage.
 
 test('picking with a downloaded track is awaiting a match', () => {
     assert.equal(

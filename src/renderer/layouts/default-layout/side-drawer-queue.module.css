@@ -14,4 +14,9 @@
     background: var(--theme-colors-background);
     border: 3px solid var(--theme-generic-border-color);
     border-radius: var(--theme-radius-lg);
+
+    /* Floats over the page under the cover wash: the bar's near-opaque role. */
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-bar);
+    }
 }

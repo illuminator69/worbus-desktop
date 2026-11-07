@@ -1,14 +1,14 @@
 /**
  * navi-connect: the Discover row catalogue.
  *
- * **This table is duplicated in Navic, on purpose, and the ids are the
+ * **This table is duplicated in Worbus for Android, on purpose, and the ids are the
  * contract.** There is no shared build between the two repos and no codegen, so
  * "shared catalogue" can only ever mean "written twice and kept in sync". The
  * precedent is `MoodCharacter`, and it is a cautionary one: the same three
- * presets live in `auto-dj/audio-muse-source.ts` and in Navic's
+ * presets live in `auto-dj/audio-muse-source.ts` and in Worbus for Android's
  * `MoodCharacter.kt` with matching numbers but different ids and labels, and
- * they have already drifted — Feishin's auto-DJ escalates temperature per pass
- * and Navic's `topUp` does not. Writing the ids down in one place
+ * they have already drifted — Worbus for desktop's auto-DJ escalates temperature per pass
+ * and Worbus for Android's `topUp` does not. Writing the ids down in one place
  * (`navi-connect/CLAUDE.md` §6) is the only thing standing between this table
  * and the same fate.
  *
@@ -59,7 +59,7 @@ export type DiscoverRowId =
  *
  * `stations` is deliberately absent rather than disabled. Persistent named
  * stations were the placeholder for what became `mixes`, and the word is spent
- * twice over: `Screen.RadioList` and Feishin's create/edit-station forms are
+ * twice over: `Screen.RadioList` and Worbus for desktop's create/edit-station forms are
  * Subsonic internet radio, and `SavedQueueSource.RADIO` is the ephemeral
  * similarity mix. Hence "Mixed for You", and `mix` as the noun in code.
  */

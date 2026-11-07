@@ -7,6 +7,7 @@ import { PageHeader } from '/@/renderer/components/page-header/page-header';
 import { useListContext } from '/@/renderer/context/list-context';
 import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
 import { useGenreList } from '/@/renderer/features/genres/api/genres-api';
+import { useLibraryFrame } from '/@/renderer/features/library/hooks/use-library-frame';
 import { FilterBar } from '/@/renderer/features/shared/components/filter-bar';
 import { LibraryHeaderBar } from '/@/renderer/features/shared/components/library-header-bar';
 import { ListSearchInput } from '/@/renderer/features/shared/components/list-search-input';
@@ -47,11 +48,15 @@ export const SongListHeader = ({ title }: SongListHeaderProps) => {
 };
 
 const SongListHeaderBadge = () => {
-    const { itemCount } = useListContext();
+    const { itemCount, pageKey } = useListContext();
+    const { inFrame } = useLibraryFrame();
 
     const isFetching = useIsFetchingItemListCount({
         itemType: LibraryItem.SONG,
     });
+
+    // In the Library frame the Tracks count is in the filter row (F6): shown once.
+    if (inFrame && pageKey === ItemListKey.SONG) return null;
 
     return <LibraryHeaderBar.Badge isLoading={isFetching}>{itemCount}</LibraryHeaderBar.Badge>;
 };

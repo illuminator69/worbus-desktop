@@ -2,10 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 
 import { useResolveLink } from '/@/renderer/features/lbbot/hooks/use-lbbot';
-import {
-    externalAlbumPathFor,
-    externalArtistPath,
-} from '/@/renderer/features/lbbot/utils/external-paths';
+import { openResolvedLink } from '/@/renderer/features/lbbot/utils/open-resolved-link';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
 import { Stack } from '/@/shared/components/stack/stack';
@@ -30,8 +27,9 @@ import { toast } from '/@/shared/components/toast/toast';
  * fact is how somebody ends up downloading the wrong record from a link they
  * never looked at.
  *
- * A `kind: 'unknown'` answer is not a failure — it is lb-bot saying it does not
- * parse that provider — so it gets a sentence rather than an error toast.
+ * A `kind: 'unknown'` answer is not a failure - it is lb-bot saying it does not
+ * parse that provider - so it gets a sentence rather than an error toast
+ * (`openResolvedLink`, shared with the Library field).
  */
 export const ResolveLinkBox = () => {
     const navigate = useNavigate();
@@ -39,56 +37,15 @@ export const ResolveLinkBox = () => {
     const [url, setUrl] = useState('');
 
     const submit = async () => {
-        const result = await resolve(url);
-        if (!result.ok || !result.data) {
-            toast.error({ message: result.error || 'lb-bot could not read that link.' });
-            return;
-        }
-        const link = result.data;
-        // lb-bot's own sentence wherever it wrote one. "Not a music link we
-        // recognise", "Couldn't read the Tidal page" and "No MusicBrainz artist
-        // matched" are three different problems with three different answers,
-        // and a sentence written here would have to guess which.
-        if (link.kind === 'unknown') {
-            toast.show({
-                message:
-                    link.reason ||
-                    'That looks like a link lb-bot does not recognise. Try Spotify or Deezer.',
-            });
-            return;
-        }
-        // A low-confidence hit still navigates — the album page is where the
-        // user can see whether it is the right record, and refusing to move
-        // would leave them with a number and nothing to do about it.
-        if (link.confidence > 0 && link.confidence < 0.5) {
-            toast.show({
-                message: `Best guess: "${link.title}" by ${link.artist}. Check it is the right record before fetching.`,
-            });
-        }
-        if (link.kind === 'artist' && link.mbid) {
-            navigate(externalArtistPath(link.mbid, link.artist));
+        const outcome = openResolvedLink(await resolve(url), navigate);
+        if (outcome.opened) {
+            if (outcome.notice) toast.show({ message: outcome.notice });
             setUrl('');
-            return;
+        } else if (outcome.error) {
+            toast.error({ message: outcome.message });
+        } else {
+            toast.show({ message: outcome.message });
         }
-        if (link.rgid) {
-            // A track link resolves to its release-group too: there is no
-            // per-track page in this app and nothing acquires a single track,
-            // so the album is the only useful destination.
-            navigate(
-                externalAlbumPathFor({
-                    artist: link.artist,
-                    rgid: link.rgid,
-                    title: link.title,
-                }),
-            );
-            setUrl('');
-            return;
-        }
-        toast.error({
-            message:
-                link.reason ||
-                `lb-bot read the link as a ${link.kind} but could not match it on MusicBrainz.`,
-        });
     };
 
     return (

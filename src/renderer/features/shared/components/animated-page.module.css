@@ -7,3 +7,84 @@
     container-type: inline-size;
     overflow: hidden;
 }
+
+@keyframes page-push {
+    from {
+        opacity: 0;
+        transform: translateX(18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes page-pop {
+    from {
+        opacity: 0;
+        transform: translateX(-18px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes page-fade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/* The section switch inside the Library frame: a rise and a slightly shorter fade. */
+@keyframes page-tab-rise {
+    from {
+        transform: translateY(8px);
+    }
+
+    to {
+        transform: none;
+    }
+}
+
+@keyframes page-tab-fade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+/*
+ * `backwards`, not `both`: the keyframes end at the page's own style, so holding the last frame changes
+ * nothing on screen, but a held `transform` (even an identity one) kept `<main>` a containing block for
+ * every `position: fixed` row inside it for the page's life, which put the pinned table rows 82 px under
+ * the bar and off the table's edge (B-221). Released at the end, `<main>` is a plain box again.
+ */
+@media (prefers-reduced-motion: no-preference) {
+    .animated-page[data-nav='forward'] {
+        animation: page-push 220ms var(--arrive-ease) backwards;
+    }
+
+    .animated-page[data-nav='back'] {
+        animation: page-pop 220ms var(--arrive-ease) backwards;
+    }
+
+    .animated-page[data-nav='none'] {
+        animation: page-fade 220ms var(--arrive-ease) backwards;
+    }
+
+    .animated-page[data-nav='tab'] {
+        animation:
+            page-tab-rise 200ms var(--arrive-ease) backwards,
+            page-tab-fade 180ms var(--arrive-ease) backwards;
+    }
+}

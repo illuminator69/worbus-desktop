@@ -1,0 +1,246 @@
+/* The ranked sources as radio cards (R11, after Worbus for Android's SourceCards): each card stands alone, the
+   chosen one a step raised and ringed in the primary role, the highlight easing across. */
+.cards {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.item {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.card {
+    min-width: 0;
+    background: var(--theme-colors-background-alternate);
+    border-radius: 10px;
+    box-shadow: inset 0 0 0 1px var(--theme-colors-border);
+}
+
+.card[data-selected='true'] {
+    background: var(--theme-colors-surface);
+    box-shadow: inset 0 0 0 2px var(--theme-colors-primary);
+
+    :root[data-cover-wash='true'] & {
+        box-shadow: inset 0 0 0 2px var(--wash-acc);
+    }
+}
+
+.head {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    gap: 12px;
+    align-items: start;
+    width: 100%;
+    padding: 12px 14px;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+    background: none;
+    border: none;
+    border-radius: 10px;
+}
+
+.head:disabled {
+    cursor: default;
+}
+
+.head:focus-visible {
+    outline: 2px solid var(--theme-colors-primary);
+    outline-offset: 2px;
+}
+
+/* The radio: a ring, filled with a dot when chosen. */
+.radio {
+    position: relative;
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+    border-radius: 50%;
+    box-shadow: inset 0 0 0 2px var(--theme-colors-foreground-muted);
+}
+
+.radio::after {
+    position: absolute;
+    inset: 4px;
+    content: '';
+    background: var(--theme-colors-primary);
+    border-radius: 50%;
+    opacity: 0;
+    transform: scale(0.4);
+}
+
+.card[data-selected='true'] .radio {
+    box-shadow: inset 0 0 0 2px var(--theme-colors-primary);
+}
+
+.card[data-selected='true'] .radio::after {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.rank {
+    font-size: 12px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--theme-colors-foreground-muted);
+}
+
+.folder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.coverage {
+    font-size: 13px;
+    color: var(--theme-colors-foreground-muted);
+}
+
+.coverage[data-full='true'] {
+    color: var(--theme-colors-foreground);
+}
+
+/* The verdict in the primary role when it holds, the error role (pulled toward the foreground so it
+   reads on dark and light) when it asks. */
+.verdict {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--theme-colors-primary);
+}
+
+.verdict[data-ok='false'] {
+    color: color-mix(in oklab, var(--theme-colors-state-error) 60%, var(--theme-colors-foreground));
+}
+
+.meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12.5px;
+    color: var(--theme-colors-foreground-muted);
+    white-space: nowrap;
+}
+
+.hint {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--theme-colors-primary);
+}
+
+.expanded {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 0 14px 12px 44px;
+}
+
+.listing {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.files {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: 40vh;
+    padding-top: 6px;
+    overflow-y: auto;
+    border-top: 1px solid var(--theme-colors-border);
+}
+
+.file {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 12px;
+}
+
+.filename {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* A file matching no tracklist slot is the tell that the folder is the wrong album: dimmed, not hidden. */
+.unmatched {
+    opacity: 0.6;
+}
+
+.note {
+    margin: 0;
+    font-size: 12px;
+    color: var(--theme-colors-foreground-muted);
+}
+
+.warn {
+    margin: 0;
+    font-size: 12px;
+    color: color-mix(in oklab, var(--theme-colors-state-error) 60%, var(--theme-colors-foreground));
+}
+
+.extra {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.under {
+    padding-top: 8px;
+}
+
+/* A refused Request (R12, B-238): lb-bot's sentence under the button, Search again beside it. */
+.refusal {
+    display: flex;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+    min-width: 0;
+}
+
+.refusal-text {
+    min-width: 0;
+    margin: 0;
+    font-size: 13px;
+    color: color-mix(in oklab, var(--theme-colors-state-error) 60%, var(--theme-colors-foreground));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .card,
+    .radio {
+        transition:
+            background-color 220ms var(--fold-ease),
+            box-shadow 220ms var(--fold-ease);
+    }
+
+    .radio::after {
+        transition:
+            opacity 220ms var(--fold-ease),
+            transform 220ms var(--fold-ease);
+    }
+}

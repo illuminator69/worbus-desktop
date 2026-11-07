@@ -7,6 +7,7 @@ import './downloads';
 import './hub';
 import './lbbot';
 import './lyrics';
+import './mood';
 import './player';
 import './preview';
 import './remote';

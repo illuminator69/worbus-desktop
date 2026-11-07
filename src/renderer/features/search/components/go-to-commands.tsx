@@ -47,6 +47,10 @@ export const GoToCommands = ({ handleClose, setPages, setQuery }: GoToCommandsPr
                 </Command.Item>
             </Command.Group>
             <Command.Group heading="Library">
+                {/* F6: the Library frame (its Artists page); the entries below open its other chips. */}
+                <Command.Item onSelect={() => goTo(AppRoute.LIBRARY)}>
+                    {t('page.library.title')}
+                </Command.Item>
                 <Command.Item onSelect={() => goTo(AppRoute.LIBRARY_ALBUMS)}>
                     {t('page.sidebar.albums')}
                 </Command.Item>
@@ -54,7 +58,7 @@ export const GoToCommands = ({ handleClose, setPages, setQuery }: GoToCommandsPr
                     {t('page.sidebar.tracks')}
                 </Command.Item>
                 <Command.Item onSelect={() => goTo(AppRoute.LIBRARY_ALBUM_ARTISTS)}>
-                    {t('page.sidebar.albumArtists')}
+                    {t('page.library.tab.albumArtists')}
                 </Command.Item>
                 <Command.Item onSelect={() => goTo(AppRoute.LIBRARY_GENRES)}>
                     {t('page.sidebar.genres')}

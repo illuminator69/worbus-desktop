@@ -1,6 +1,6 @@
 # Mantine
 
-Feishin wraps the Mantine components and hooks it uses under `src/shared/components/` and `src/shared/hooks/`. Feature code imports those wrappers (`/@/shared/...`), not `@mantine/*`.
+Worbus for desktop wraps the Mantine components and hooks it uses under `src/shared/components/` and `src/shared/hooks/`. Feature code imports those wrappers (`/@/shared/...`), not `@mantine/*`.
 
 ## Default (most UI work)
 

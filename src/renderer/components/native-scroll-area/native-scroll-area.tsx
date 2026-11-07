@@ -13,7 +13,7 @@ interface NativeScrollAreaProps {
     children: ReactNode;
     debugScrollPosition?: boolean;
     noHeader?: boolean;
-    pageHeaderProps?: PageHeaderProps & { offset: number; target?: any };
+    pageHeaderProps?: PageHeaderProps & { offset?: number; target?: any };
     scrollBarOffset?: string;
     scrollHideDelay?: number;
     style?: CSSProperties;
@@ -28,7 +28,8 @@ const BaseNativeScrollArea = forwardRef(
         const containerRef = useRef<HTMLDivElement | null>(null);
 
         const scrollHandler = useThrottledCallback((e: Event) => {
-            if (noHeader || !pageHeaderProps) {
+            // A title-linked bar (album, artist) runs its own fade in PageHeader.
+            if (noHeader || !pageHeaderProps || pageHeaderProps.fadeWithTitle) {
                 return;
             }
 
@@ -86,7 +87,7 @@ const BaseNativeScrollArea = forwardRef(
                 {windowBarStyle === Platform.WEB && <div className={styles.dragContainer} />}
                 {!noHeader && pageHeaderProps && (
                     <PageHeader
-                        animated
+                        animated={!pageHeaderProps.fadeWithTitle}
                         position="absolute"
                         scrollContainerRef={containerRef}
                         {...pageHeaderProps}

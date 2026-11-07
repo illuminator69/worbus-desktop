@@ -18,6 +18,8 @@ import {
     remoteTogglePlayPause,
     remoteVolumePinned,
 } from '/@/renderer/features/hub/utils/remote-queue';
+import { keepsCurrentSong } from '/@/renderer/features/player/station/keep-current'; // navi-connect (B-175)
+import { currentSongId } from '/@/renderer/features/player/station/station-client'; // navi-connect (B-175)
 import {
     filterSongsByPlayerFilters,
     getAlbumArtistSongsById,
@@ -109,6 +111,10 @@ export interface PlayerContext {
     moveSelectedToBottom: (items: QueueSong[]) => void;
     moveSelectedToNext: (items: QueueSong[]) => void;
     moveSelectedToTop: (items: QueueSong[]) => void;
+    // navi-connect (B-175): `data[0]` is the song playing now (here or on the remote device); it
+    // keeps playing where it is and everything else in the queue is replaced by the rest of
+    // `data`. Same confirmation, onApply and remote routing as addToQueueByData's Play.NOW.
+    playKeepingCurrent: (data: Song[], skipConfirmation?: boolean, onApply?: () => void) => void;
     setQueue: (data: Song[], index?: number, position?: number) => void;
     setRepeat: (repeat: PlayerRepeat) => void;
     setShuffle: (shuffle: PlayerShuffle) => void;
@@ -145,6 +151,7 @@ export const PlayerContext = createContext<PlayerContext>({
     moveSelectedToBottom: () => {},
     moveSelectedToNext: () => {},
     moveSelectedToTop: () => {},
+    playKeepingCurrent: () => {}, // navi-connect (B-175)
     setQueue: () => {},
     setRepeat: () => {},
     setShuffle: () => {},
@@ -253,7 +260,7 @@ const isReplaceQueueType = (type: AddToQueueType): boolean => {
 const announceNewQueueSession = (type: AddToQueueType): void => {
     if (!isReplaceQueueType(type)) return;
     // navi-connect (B-058): and a replace starts playback the user asked for (Play.NOW / SHUFFLE,
-    // from every play button, menu and Feishin's remote) - use-hub's guards must not pause it.
+    // from every play button, menu and Worbus for desktop's remote) - use-hub's guards must not pause it.
     notePlayRequest();
     if (isNewQueueSessionPending()) return; // a call site already named it
     beginQueueSession('manual');
@@ -441,6 +448,56 @@ export const PlayerProvider = ({ children }: { children: React.ReactNode }) => {
             }
         },
         [confirmQueueChange, storeActions],
+    );
+
+    // navi-connect (B-175)
+    const playKeepingCurrent = useCallback(
+        (data: Song[], skipConfirmation?: boolean, onApply?: () => void) => {
+            const [current, ...rest] = data;
+            if (!current) return;
+            let tail = filterSongsByPlayerFilters(
+                rest,
+                useSettingsStore.getState().playback.filters,
+            );
+            // As Play.NOW tags what it queues from a playlist page (the sidebar's highlight).
+            const contextPlaylistId = inferPlaylistContextFromUrl();
+            if (contextPlaylistId) tail = tagPlaylistContext(tail, contextPlaylistId);
+
+            const apply = () => {
+                // The song can change while the confirmation is open (it ends, or is skipped):
+                // keep only the song the radio was started from, else the old replace.
+                if (!keepsCurrentSong(data, currentSongId())) {
+                    logger.debug('The playing song changed, replacing the queue instead');
+                    addToQueueByData(data, Play.NOW, undefined, undefined, true, onApply);
+                    return;
+                }
+
+                onApply?.();
+                announceNewQueueSession(Play.NOW);
+
+                if (isRemoteSessionActive()) {
+                    // The hub has no "replace after the current row": a setQueue at index 0 that
+                    // carries the remote device's own position continues the song there.
+                    void enqueueToRemote([current, ...tail], 'now', 0, {
+                        positionMs: remotePositionMsShown(),
+                    });
+                    return;
+                }
+
+                logger.debug('Kept the current song, replaced the rest', { tail: tail.length });
+                if (!storeActions.keepCurrentAndReplaceRest(current.id, tail)) {
+                    // Checked above in the same tick, so not expected: the old replace.
+                    storeActions.addToQueueByType([current, ...tail], Play.NOW);
+                }
+            };
+
+            if (!skipConfirmation) {
+                confirmQueueChange(apply);
+            } else {
+                apply();
+            }
+        },
+        [addToQueueByData, confirmQueueChange, storeActions],
     );
 
     const addToQueueByFetch = useCallback(
@@ -1201,6 +1258,7 @@ export const PlayerProvider = ({ children }: { children: React.ReactNode }) => {
             moveSelectedToBottom,
             moveSelectedToNext,
             moveSelectedToTop,
+            playKeepingCurrent, // navi-connect (B-175)
             setQueue,
             setRepeat,
             setShuffle,
@@ -1236,6 +1294,7 @@ export const PlayerProvider = ({ children }: { children: React.ReactNode }) => {
             moveSelectedToBottom,
             moveSelectedToNext,
             moveSelectedToTop,
+            playKeepingCurrent, // navi-connect (B-175)
             setQueue,
             setRepeat,
             setShuffle,

@@ -11,7 +11,7 @@
 /* Mobile layout mounts the container in a full-viewport overlay, so pin it to the
    main-content row (below the window bar, above the playerbar) instead. */
 .mobile-container {
-    bottom: 90px;
+    bottom: var(--player-bar-height, 90px);
 }
 
 .mobile-container-with-window-bar {

@@ -1,3 +1,4 @@
+import { failedRowWishlistExplain } from '/@/renderer/features/lbbot/components/wishlist-copy';
 import { LedgerRow } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { leftOutText } from '/@/renderer/features/lbbot/utils/album-download';
 import { LbBotFillState } from '/@/shared/types/lbbot-types';
@@ -7,9 +8,9 @@ import { LbBotFillState } from '/@/shared/types/lbbot-types';
  *
  * One state renders the same words and offers the same buttons in every place
  * a fill is shown — the downloads view, the missing-album modal, the tile —
- * and in Navic, which implements the same table in `FillVocabulary.kt`. There
+ * and in Worbus for Android, which implements the same table in `FillVocabulary.kt`. There
  * is no shared build between the two clients, so the table in PROTOCOL is the
- * contract and this file is Feishin's copy of it. Change one, change all three.
+ * contract and this file is Worbus for desktop's copy of it. Change one, change all three.
  */
 
 export type FillButton =
@@ -66,8 +67,6 @@ export const SHORT_STATE: Partial<Record<LbBotFillState, string>> = {
 
 export const EXPLAIN_NO_ACTION =
     'Asking again would hit the same problem — this one needs fixing in lb-bot.';
-export const EXPLAIN_WISHLIST =
-    'Nobody had it this time. The swarm changes — add it to the wishlist and lb-bot will keep looking every few hours.';
 
 /** How long a row may go unanswered before it says so, in consecutive ticks. */
 export const UNREACHABLE_AFTER_ERRORS = 2;
@@ -87,9 +86,15 @@ const seconds = (ms: number): number => Math.max(0, Math.round(ms / 1000));
 /**
  * Everything a row needs to render itself. Pure: the same row and the same
  * clock give the same answer, which is what makes the table checkable against
- * PROTOCOL §15.2 by reading rather than by driving the UI.
+ * PROTOCOL §15.2 by reading rather than by driving the UI. Worbus P1: `downloadsShown` false
+ * (downloading is off) changes only the wishlist sentence; the buttons are dropped by
+ * `useFillActions`.
  */
-export const describeFill = (row: LedgerRow, now: number = Date.now()): FillPresentation => {
+export const describeFill = (
+    row: LedgerRow,
+    now: number = Date.now(),
+    downloadsShown = true,
+): FillPresentation => {
     const buttons: FillButton[] = [];
     const sublines: string[] = [];
     let headline = '';
@@ -157,7 +162,7 @@ export const describeFill = (row: LedgerRow, now: number = Date.now()): FillPres
             if (row.rgid) buttons.push('openAlbum');
             break;
         case 'needsPick':
-            // The picker is the gap modal on the album page; there is no rgid to
+            // The picker is the gaps box on the album page; there is no rgid to
             // route to from a gap row, so the row says where to go rather than
             // offering a button that could not.
             headline = 'Waiting for you to pick a source';
@@ -189,7 +194,7 @@ export const describeFill = (row: LedgerRow, now: number = Date.now()): FillPres
             if (!row.isGap && row.otherSourceExcludes.length > 0) buttons.push('tryAnother');
             if (wishlistable) {
                 buttons.push('wishlist');
-                explain = EXPLAIN_WISHLIST;
+                explain = failedRowWishlistExplain(downloadsShown);
             } else if (!retryable && !row.mp3WouldHelp) {
                 explain = EXPLAIN_NO_ACTION;
             }

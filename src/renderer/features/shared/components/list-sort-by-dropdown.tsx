@@ -590,6 +590,11 @@ const SONG_LIST_FILTERS: Partial<
         },
         {
             defaultOrder: SortOrder.DESC,
+            name: i18n.t('filter.bitrate'),
+            value: SongListSort.BIT_RATE,
+        },
+        {
+            defaultOrder: SortOrder.DESC,
             name: i18n.t('filter.recentlyAdded'),
             value: SongListSort.RECENTLY_ADDED,
         },

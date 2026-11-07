@@ -3,6 +3,7 @@ import { Dispatch, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createSearchParams, generatePath, useNavigate } from 'react-router';
 
+import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import { fetchClapAvailable } from '/@/renderer/features/player/auto-dj/audio-muse-source';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { playYourMix } from '/@/renderer/features/player/station/station-client';
@@ -11,7 +12,7 @@ import { openCreatePlaylistModal } from '/@/renderer/features/playlists/componen
 import { Command, CommandPalettePages } from '/@/renderer/features/search/components/command';
 import { openClapSearchModal } from '/@/renderer/features/sonic/components/clap-search-modal';
 import { AppRoute } from '/@/renderer/router/routes';
-import { useAudioMuseSettings, useCurrentServer } from '/@/renderer/store';
+import { useAudioMuseSettings, useCurrentServer, useHubRoles } from '/@/renderer/store';
 import { LibraryItem } from '/@/shared/types/domain-types';
 
 interface HomeCommandsProps {
@@ -33,6 +34,9 @@ export const HomeCommands = ({
     const navigate = useNavigate();
     const server = useCurrentServer();
     const audioMuse = useAudioMuseSettings();
+    // Worbus P2 (design §6.5): Your mix is the primary user's listening - not offered to anyone
+    // else (the hub answers them 403 primary_only).
+    const yourMixAllowed = allows(useHubRoles(), 'yourMix');
 
     // CLAP text→mood search (AudioMuse Tier 2). Probe once so the command only
     // shows when it's actually usable (enabled + library analyzed); fail-soft.
@@ -99,7 +103,7 @@ export const HomeCommands = ({
                 <Command.Item onSelect={handleCreatePlaylistModal}>
                     {t('action.createPlaylist')}...
                 </Command.Item>
-                {stationMode === 'stations' && (
+                {stationMode === 'stations' && yourMixAllowed && (
                     <Command.Item onSelect={handleYourMix} value={t('naviConnect.mixes.yourMix')}>
                         {t('naviConnect.mixes.yourMix')}
                     </Command.Item>

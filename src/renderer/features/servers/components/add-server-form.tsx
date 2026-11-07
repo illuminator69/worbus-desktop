@@ -9,6 +9,7 @@ import {
     isLegacyAuth,
     isServerLock,
 } from '/@/renderer/features/action-required/utils/window-properties';
+import { startAutoLook } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import JellyfinIcon from '/@/renderer/features/servers/assets/jellyfin.png';
 import NavidromeIcon from '/@/renderer/features/servers/assets/navidrome.png';
 import SubsonicIcon from '/@/renderer/features/servers/assets/opensubsonic.png';
@@ -169,6 +170,8 @@ export const AddServerForm = ({ onCancel }: AddServerFormProps) => {
 
             addServer(serverItem);
             setCurrentServer(serverItem);
+            // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+            startAutoLook();
             closeAllModals();
             toast.success({ message: t('form.addServer.success') });
         },
@@ -249,6 +252,8 @@ export const AddServerForm = ({ onCancel }: AddServerFormProps) => {
 
             addServer(serverItem);
             setCurrentServer(serverItem);
+            // Worbus P3: no Worbus Server set yet - look beside this Navidrome (design §6.4).
+            startAutoLook();
             closeAllModals();
 
             toast.success({

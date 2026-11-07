@@ -1,16 +1,17 @@
+/* B-267: one line ending in an ellipsis, the title column's artist line rule (`.artists` in
+   title-combined-column.module.css). A two-line clamp cut a word wider than the cell through. */
 .genres-container {
-    display: -webkit-box;
+    min-width: 0;
+    max-width: 100%;
     overflow: hidden;
-    -webkit-line-clamp: 2;
+    text-overflow: ellipsis;
     color: var(--theme-colors-foreground-muted);
-    -webkit-box-orient: vertical;
+    white-space: nowrap;
     user-select: none;
+
+    --text-text-wrap: nowrap;
 }
 
-.genres-container.compact {
-    -webkit-line-clamp: 1;
-}
-
-.genres-container.large {
-    -webkit-line-clamp: 3;
+.genres-container > * {
+    white-space: nowrap;
 }

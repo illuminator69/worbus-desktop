@@ -28,7 +28,7 @@ import { toast } from '/@/shared/components/toast/toast';
 import { QueueSong } from '/@/shared/types/domain-types';
 
 // navi-connect: automatically capture the current queue as a rolling "saved queue" (Continue
-// Listening), and restore one on demand. Mirrors Navic's SavedQueueRepository upsert/cheap-path.
+// Listening), and restore one on demand. Mirrors Worbus for Android's SavedQueueRepository upsert/cheap-path.
 
 // How often the moving cursor/position of an UNCHANGED queue is persisted (avoids localStorage
 // thrash on every 1 Hz timestamp tick; a song/queue change always writes immediately).

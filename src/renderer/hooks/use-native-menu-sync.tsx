@@ -3,13 +3,11 @@ import isElectron from 'is-electron';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import packageJson from '../../../package.json';
-
 import { useRemoteAwareStatus } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { openCreatePlaylistModal } from '/@/renderer/features/playlists/components/create-playlist-form';
 import { ServerList } from '/@/renderer/features/servers/components/server-list';
 import { openSettingsModal } from '/@/renderer/features/settings/utils/open-settings-modal';
-import { openReleaseNotesModal } from '/@/renderer/release-notes-modal';
+import { useSidebarFolded } from '/@/renderer/layouts/default-layout/use-shell-fit';
 import {
     useAppStore,
     useAppStoreActions,
@@ -27,6 +25,9 @@ export const useNativeMenuSync = () => {
     const { t } = useTranslation();
     const privateMode = useAppStore((state) => state.privateMode);
     const sidebar = useAppStore((state) => state.sidebar);
+    // A sidebar folded to its rail for width (R6, B-198) shows as collapsed, and the toggle waits
+    // for the window to widen: it would write the user's flag with nothing to see.
+    const sidebarFolded = useSidebarFolded();
     const { setPrivateMode, setSideBar } = useAppStoreActions();
     const { open: openCommandPalette } = useCommandPalette();
     const server = useCurrentServer();
@@ -116,13 +117,14 @@ export const useNativeMenuSync = () => {
         }
 
         window.api.utils.rendererToggleSidebar(() => {
+            if (sidebarFolded) return;
             setSideBar({ collapsed: !sidebar.collapsed });
         });
 
         return () => {
             ipc?.removeAllListeners('renderer-toggle-sidebar');
         };
-    }, [setSideBar, sidebar.collapsed]);
+    }, [setSideBar, sidebar.collapsed, sidebarFolded]);
 
     useEffect(() => {
         if (!isElectron()) {
@@ -151,22 +153,6 @@ export const useNativeMenuSync = () => {
             return;
         }
 
-        ipc?.send('update-sidebar-collapsed', sidebar.collapsed);
-    }, [sidebar.collapsed]);
-
-    useEffect(() => {
-        if (!isElectron()) {
-            return undefined;
-        }
-
-        window.api.utils.rendererOpenReleaseNotes(() => {
-            openReleaseNotesModal(
-                t('common.newVersion', { version: packageJson.version }) as string,
-            );
-        });
-
-        return () => {
-            ipc?.removeAllListeners('renderer-open-release-notes');
-        };
-    }, [t]);
+        ipc?.send('update-sidebar-collapsed', sidebar.collapsed || sidebarFolded, sidebarFolded);
+    }, [sidebar.collapsed, sidebarFolded]);
 };

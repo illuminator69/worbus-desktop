@@ -14,8 +14,8 @@ import type {
  * and reviewed without IndexedDB, IPC or React in the way. Nothing here touches
  * state; every function answers a question about the values it is handed.
  *
- * Feishin has no test runner, so nothing exercises these at runtime except the
- * app itself. Navic implements the same rules in Kotlin; the contract, not
+ * Worbus for desktop has no test runner, so nothing exercises these at runtime except the
+ * app itself. Worbus for Android implements the same rules in Kotlin; the contract, not
  * either implementation, is the reference.
  */
 
@@ -32,6 +32,11 @@ export interface MirrorMeta {
      *  leave the OLD hub's library rendering under the new one. */
     hubUrl: string;
     scanVersion: number;
+    /**
+     * Worbus P3 (design §6.5): the server key (`id:<serverId>`, else the address) this mirror was
+     * pulled for. Absent from a project 2 store; B-014's check compares it, not the address.
+     */
+    serverKey?: string;
     ttlDays: number;
 }
 
@@ -192,7 +197,7 @@ export const ndIdsOf = (artist: LbBotIndexArtist): string[] => {
  * Deliberately `<`/`>`, never `localeCompare`: lb-bot compares keys as bytes,
  * and a locale-aware compare can order two keys differently, which during the
  * brief two-rows state of an `nd:` → MBID swap would resolve the same page to a
- * different artist here than on the server and on Navic. (UTF-16 order equals
+ * different artist here than on the server and on Worbus for Android. (UTF-16 order equals
  * UTF-8 byte order for everything but astral characters; keys are MBIDs and
  * `nd:` ids, which are ASCII.)
  */
@@ -258,3 +263,30 @@ export const toDiscography = (
     scannedAt: artist.scannedAt,
     stale: isArtistStale(artist, envelope, nowSeconds),
 });
+
+/**
+ * B-014, keyed by the server (Worbus P3, design §6.5): whether a stored mirror belongs to the
+ * server this app is pointed at now.
+ * - `keep`: the same server (the same id at another address included), or nothing stored yet, or
+ *   main has not said yet which server the record holds (judged again when it has);
+ * - `adopt`: the same server under its older key - a project 2 meta, or one stamped with the
+ *   address before the first welcome carried the id: kept, and stamped with the new key (never an
+ *   id-keyed meta into an id-less key: that one is kept unstamped, or cleared);
+ * - `clear`: another server (another id; an older server at another address).
+ */
+export const mirrorVerdict = (
+    meta: Partial<Pick<MirrorMeta, 'hubUrl' | 'serverKey'>>,
+    current: { hubUrl: string; known: boolean; serverKey: string },
+): 'adopt' | 'clear' | 'keep' => {
+    if (!meta.hubUrl && !meta.serverKey) return 'keep';
+    if (meta.serverKey && meta.serverKey === current.serverKey) return 'keep';
+    if (meta.serverKey?.startsWith('id:')) {
+        if (!current.known) return 'keep';
+        if (current.serverKey.startsWith('id:')) return 'clear';
+        // Review C1: an id-keyed mirror is never adopted under an id-less key - the record forgot
+        // its server, and the next welcome may name another one. Kept as it is (not re-stamped)
+        // while `hub.url` is unchanged, so that welcome judges it by id; else another server.
+        return meta.hubUrl === current.hubUrl ? 'keep' : 'clear';
+    }
+    return meta.hubUrl === current.hubUrl ? 'adopt' : 'clear';
+};

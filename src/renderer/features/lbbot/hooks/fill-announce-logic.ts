@@ -2,7 +2,7 @@ import type { FillOutcome } from '/@/renderer/features/lbbot/stores/active-fills
 import type { LbBotGap } from '/@/shared/types/lbbot-types';
 
 /**
- * B-026 (Feishin half): what `useFillAnnouncements` should say about a row that
+ * B-026 (Worbus for desktop half): what `useFillAnnouncements` should say about a row that
  * just settled, kept apart from the toast/notify wiring so the decision can be
  * tested with `node --test` (no runtime imports here — see the harness).
  *
@@ -27,14 +27,14 @@ import type { LbBotGap } from '/@/shared/types/lbbot-types';
  * `listenbrainz_bot.py`'s `_album_fill_set`), and `#/gaps/rec17` is a page lb-bot
  * answers "Group not found" on. Only `ActiveGap.groupId` resolves `#/gaps/<id>`.
  *
- * Q-031 (Feishin half): lb-bot reports `picking` for two different buckets — the
+ * Q-031 (Worbus for desktop half): lb-bot reports `picking` for two different buckets — the
  * picker holding candidates and waiting on the user ("your move"), and the
  * `needs_match` bucket, files already `downloaded` and waiting on a manual match
  * only lb-bot's own workspace can do. `gapAwaitingMatch` is the one predicate
  * that tells them apart, shared by `applyGapSummary`'s settle (`use-lbbot.ts`,
- * via `gapSettleOutcome`) and the gap modal's own "Open in lb-bot" prominence
- * (`gap-fill-modal.tsx`) — two copies of this test would drift the way the
- * ledger and the modal already had.
+ * via `gapSettleOutcome`) and the album page's gaps box (`gap-stage.ts`'s
+ * attention stage, R11). Two copies of this test would drift the way the
+ * ledger and the old gap modal already had.
  */
 
 /** Which of the two settled-row toasts to show; `null` means say nothing (the
@@ -152,7 +152,7 @@ export const gapFailReason = (
  * ledger poll until the dialog's own `/lb/gap` poll wrote the rows back — the list
  * vanished and returned every ~10 s. The summary wins on every field except the
  * rows, which are kept while they describe the same result set (same
- * `sourcesFoundAt`): Navic's `applyGapSummary` rule. A new search changes the
+ * `sourcesFoundAt`): Worbus for Android's `applyGapSummary` rule. A new search changes the
  * stamp, and an emptied list is a summary with the rows already gone either way.
  */
 export const mergeGapSummary = (prev: LbBotGap | null | undefined, summary: LbBotGap): LbBotGap =>

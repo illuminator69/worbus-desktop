@@ -1,8 +1,24 @@
-.metadata-group {
-    justify-content: center;
-    width: 100%;
+/* The board's `.meta` under the hero title: the album artist, release, length, size, plays. */
+.meta {
+    margin-top: 8px;
+    font-size: 13.5px;
+    color: var(--theme-colors-foreground-muted);
+}
 
-    @container (min-width: $mantine-breakpoint-sm) {
-        justify-content: flex-start;
-    }
+/*
+ * The artist names take the line's size; the root keeps the muted colour of the line. Inline, as
+ * JoinedArtists renders a block when the album has no artist ids and only a name.
+ */
+.meta .inherit {
+    display: inline;
+    font-size: inherit;
+    line-height: inherit;
+    color: inherit;
+}
+
+/* The album artist as the board draws it: accent, weight 800 (`.acc`). */
+.meta .artist-link {
+    font-size: inherit;
+    line-height: inherit;
+    color: var(--theme-colors-primary);
 }

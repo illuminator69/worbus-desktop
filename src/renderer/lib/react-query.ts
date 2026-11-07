@@ -14,6 +14,9 @@ const queryCache = new QueryCache({
     onError: (error: any, query) => {
         if (query.state.data !== undefined) {
             console.error(error);
+            // lb-bot's refusals (downloading off, this hub refused) are shown by the state they
+            // set, never as a red error (Worbus P1, B-263): `LbBotReadError.quiet`.
+            if (error?.quiet) return;
             toast.show({ message: `${error.message}`, type: 'error' });
         }
     },

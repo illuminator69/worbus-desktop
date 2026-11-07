@@ -1,0 +1,36 @@
+.fold {
+    display: grid;
+    grid-template-rows: 0fr;
+    min-width: 0;
+    opacity: 0;
+}
+
+.fold[data-open='true'] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .fold {
+        transition:
+            grid-template-rows var(--fold-ms) var(--fold-ease),
+            opacity 220ms var(--fold-ease);
+    }
+
+    .fold[data-tall='true'] {
+        transition:
+            grid-template-rows var(--fold-ms-tall) var(--fold-ease),
+            opacity 220ms var(--fold-ease);
+    }
+}
+
+/* Clipped while closed or moving, so a closed fold adds no dead scroll; unclipped once open and still. */
+.inner {
+    min-width: 0;
+    min-height: 0;
+    overflow: clip;
+}
+
+.fold[data-open='true']:not([data-moving]) > .inner {
+    overflow: visible;
+}

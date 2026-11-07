@@ -7,6 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 import { eventEmitter } from '/@/renderer/events/event-emitter';
+import { keepCurrentThen } from '/@/renderer/features/player/station/keep-current'; // navi-connect (B-175)
 import { useRadioStore as useRadioPlayerStore } from '/@/renderer/features/radio/hooks/use-radio-player';
 import { createSelectors } from '/@/renderer/lib/zustand';
 import { useSettingsStore } from '/@/renderer/store/settings.store';
@@ -48,6 +49,10 @@ interface Actions {
     increaseVolume: (value: number) => void;
     isFirstTrackInQueue: () => boolean;
     isLastTrackInQueue: () => boolean;
+    // navi-connect (B-175): a radio from the playing song keeps that row playing where it is
+    // and replaces only what follows it with `items` (the station's songs, without the seed).
+    // False, and nothing changes, when the current row is no longer `expectedSongId`.
+    keepCurrentAndReplaceRest: (expectedSongId: string, items: Song[]) => boolean;
     mediaAutoNext: () => PlayerData;
     mediaNext: (toNextAlbum: boolean) => void;
     mediaPause: () => void;
@@ -938,6 +943,47 @@ export const usePlayerStoreBase = createWithEqualityFn<PlayerState>()(
                     const queue = state.getQueueOrder();
                     const currentIndex = state.player.index;
                     return currentIndex === queue.items.length - 1;
+                },
+                // navi-connect (B-175)
+                keepCurrentAndReplaceRest: (expectedSongId, items) => {
+                    const snapshot = get();
+                    const queueIndex = isShuffleEnabled(snapshot)
+                        ? mapShuffledToQueueIndex(snapshot.player.index, snapshot.queue.shuffled)
+                        : snapshot.player.index;
+                    const currentUniqueId = snapshot.queue.default[queueIndex];
+                    const currentRow = currentUniqueId
+                        ? snapshot.queue.songs[currentUniqueId]
+                        : undefined;
+                    const newItems = items.map(toQueueSong);
+
+                    // Null when the current row is no longer the expected song: nothing changes.
+                    const next = keepCurrentThen(
+                        currentRow && { songId: currentRow.id, uniqueId: currentUniqueId },
+                        expectedSongId,
+                        newItems.map((item) => item._uniqueId),
+                        snapshot.player.shuffle === PlayerShuffle.TRACK
+                            ? (indexes) => shuffleInPlace(indexes)
+                            : null,
+                    );
+                    if (!next) return false;
+
+                    clearActiveRadio();
+
+                    set((state) => {
+                        newItems.forEach((item) => {
+                            state.queue.songs[item._uniqueId] = item;
+                        });
+
+                        state.queue.default = next.default;
+                        state.queue.shuffled = next.shuffled;
+                        state.player.index = next.index;
+                        // A radio is music the user asked for: a paused song resumes from
+                        // where it is (the timestamp is left alone), as Play.NOW plays.
+                        state.player.status = PlayerStatus.PLAYING;
+
+                        cleanupOrphanedSongs(state);
+                    });
+                    return true;
                 },
                 mediaAutoNext: () => {
                     const stateSnapshot = get();
@@ -1879,6 +1925,7 @@ export const usePlayerActions = () => {
             increaseVolume: state.increaseVolume,
             isFirstTrackInQueue: state.isFirstTrackInQueue,
             isLastTrackInQueue: state.isLastTrackInQueue,
+            keepCurrentAndReplaceRest: state.keepCurrentAndReplaceRest, // navi-connect (B-175)
             mediaAutoNext: state.mediaAutoNext,
             mediaNext: state.mediaNext,
             mediaPause: state.mediaPause,

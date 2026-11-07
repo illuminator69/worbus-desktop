@@ -12,11 +12,16 @@ import {
     artistSeedSongs,
     bindingFromCursor,
     boundByAnotherDevice,
+    BUNDLED_CHARACTERS,
     characterFromAny,
+    characterLabel,
+    charactersOf,
     continueSeedIds,
+    customRadioSeeds,
     decideAutoplay,
     EXCLUDE_MAX,
     idsInPlayOrder,
+    interleaveSeeds,
     keepResolved,
     LOCAL_BINDING_HOLD_MS,
     LOOKAHEAD_MIN,
@@ -26,8 +31,10 @@ import {
     parseStationCursor,
     remainingLocal,
     remainingRemote,
+    seedsPerArtist,
     spreadPick,
     stationMode,
+    takesVariety,
 } from './station-logic.ts';
 
 /**
@@ -211,7 +218,7 @@ test('exclude carries at most 1000 distinct ids, the newest ones', () => {
 // --- Play order under shuffle ------------------------------------------------------------------
 
 test('local: remaining counts the play order, which is what player.index walks', () => {
-    // Shuffled or not, Feishin's index is a position in the order being played.
+    // Shuffled or not, Worbus for desktop's index is a position in the order being played.
     assert.equal(remainingLocal(8, 10), 1);
     assert.equal(remainingLocal(9, 10), 0);
     assert.equal(remainingLocal(0, 10), 9);
@@ -246,7 +253,7 @@ test('album seeds are spread over the album, first and last included', () => {
     assert.deepEqual(spreadPick([1, 2, 3], 5), [1, 2, 3]);
 });
 
-// --- An artist radio's seed (B-149, Navic's `artistSeedSongs`) ---------------------------------
+// --- An artist radio's seed (B-149, Worbus for Android's `artistSeedSongs`) ---------------------------------
 
 const song = (id: string, albumId: string, playCount: number, artistId = 'oya') => ({
     albumId,
@@ -935,7 +942,7 @@ test('paused: autoplay waits, but a chip tap asks now (continuation still only u
 });
 
 test('a station another device bound to the session is waited for, not topped up at once', () => {
-    // Walk W7: Navic continued an album as a new station; Feishin, controlling, saw the session
+    // Walk W7: Worbus for Android continued an album as a new station; Worbus for desktop, controlling, saw the session
     // bound to it with the queue still one track long and asked `next`: two batches, one top-up.
     assert.equal(boundByAnotherDevice(null, bound(), false), true);
     assert.equal(boundByAnotherDevice(bound({ stationId: 'st_0' }), bound(), false), true);
@@ -943,4 +950,86 @@ test('a station another device bound to the session is waited for, not topped up
     assert.equal(boundByAnotherDevice(bound(), bound(), false), false);
     assert.equal(boundByAnotherDevice(bound(), null, false), false);
     assert.equal(boundByAnotherDevice(null, bound(), true), false);
+});
+
+// --- A custom radio (P5): seeds, words, variety -------------------------------------------------
+
+test('custom radio seeds: twelve shared one to five per artist, dealt in turn', () => {
+    assert.deepEqual([0, 1, 2, 3, 4, 5, 6, 7, 8].map(seedsPerArtist), [0, 5, 5, 4, 3, 2, 2, 1, 1]);
+    const a = [song('a1', 'A1', 9, 'a'), song('a2', 'A2', 8, 'a')];
+    const b = [song('b1', 'B1', 9, 'b')];
+    const c = [song('c1', 'C1', 9, 'c'), song('c2', 'C2', 8, 'c'), song('c3', 'C3', 7, 'c')];
+    assert.deepEqual(ids(interleaveSeeds([a, b, c])), ['a1', 'b1', 'c1', 'a2', 'c2', 'c3']);
+    const duet = song('duet', 'D', 9, 'a');
+    assert.deepEqual(
+        ids(
+            interleaveSeeds([
+                [duet, a[1]],
+                [b[0], duet],
+            ]),
+        ),
+        ['duet', 'b1', 'a2'],
+    );
+    // Three artists of six: four each, twelve.
+    const six = (x: string) =>
+        Array.from({ length: 6 }, (_, i) => song(`${x}${i}`, `${x}-al${i}`, 100 - i, x));
+    const three = customRadioSeeds([six('a'), six('b'), six('c')]);
+    assert.equal(three.length, 12);
+    assert.deepEqual(ids(three).slice(0, 6), ['a0', 'b0', 'c0', 'a1', 'b1', 'c1']);
+    // An artist the library no longer holds is skipped; one held is the artist radio's five.
+    assert.deepEqual(ids(customRadioSeeds([[], six('a'), []])), ids(artistSeedSongs(six('a'))));
+    assert.equal(customRadioSeeds([[], []]).length, 0);
+});
+
+test("the characters read Familiar, Blend, Discover; an old hub's words read as these", () => {
+    assert.deepEqual(
+        BUNDLED_CHARACTERS.map((row) => row.label),
+        ['Familiar', 'Blend', 'Discover'],
+    );
+    const oldHub = {
+        available: true,
+        characters: [
+            { description: 'd1', id: 'close' as const, label: 'Close', legacy: 'EchoMatch' },
+            {
+                description: 'd2',
+                id: 'balanced' as const,
+                label: 'Balanced',
+                legacy: 'SteadyVibes',
+            },
+            {
+                description: 'd3',
+                id: 'explore' as const,
+                label: 'Explore',
+                legacy: 'TransitionMaestro',
+            },
+        ],
+        configured: true,
+        count: false,
+        default: 'balanced' as const,
+        engine: 'tier2' as const,
+        filters: [],
+        varieties: [],
+    };
+    assert.deepEqual(
+        charactersOf(oldHub).map((row) => row.label),
+        ['Familiar', 'Blend', 'Discover'],
+    );
+    assert.equal(charactersOf(oldHub)[1].description, 'd2');
+    assert.equal(characterLabel(oldHub, 'explore'), 'Discover');
+    // A hub's own new words win.
+    const renamed = {
+        ...oldHub,
+        characters: [{ ...oldHub.characters[0], label: 'Near' }],
+    };
+    assert.equal(characterLabel(renamed, 'close'), 'Near');
+});
+
+test('variety is sent only when the probe lists it', () => {
+    assert.equal(takesVariety(null, 'high'), false);
+    const listed = { varieties: ['low', 'medium', 'high'] } as never;
+    assert.equal(takesVariety(listed, 'high'), true);
+    assert.equal(takesVariety(listed, ''), false);
+    assert.equal(takesVariety({ varieties: [] } as never, 'low'), false);
+    // A catalogue stored by an older build has no `varieties` at all.
+    assert.equal(takesVariety({} as never, 'low'), false);
 });

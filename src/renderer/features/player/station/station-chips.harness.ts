@@ -5,15 +5,20 @@ import type { ChipState, QueueEntry } from './station-chips.ts';
 import type { StationBinding } from './station-logic.ts';
 
 import {
+    autoplayIsOn,
+    autoplayToggleChip,
+    characterChips,
     chipLine,
     chipsFor,
     KEEP_NEXT_UNDER_MS,
     keepsNext,
+    panelStatusLine,
     planChipTap,
     remoteEditActs,
     removableStationRows,
     REPLACE_COUNT,
     selectedChip,
+    stationStatusKey,
 } from './station-chips.ts';
 
 /**
@@ -455,4 +460,93 @@ test('the line is the origin then the status, either alone, or nothing', () => {
     );
     assert.equal(chipLine(null, null), null);
     assert.equal(chipLine('  ', ''), null);
+});
+
+// F4: the side queue's Autoplay toggle is the chip Off or the preferred character, over the
+// same tap plan, and its character row is the three characters only.
+
+test('offToggleIsTheOffChip', () => {
+    assert.equal(autoplayToggleChip(false, true, 'balanced'), 'off');
+    assert.equal(autoplayToggleChip(false, false, 'explore'), 'off');
+    const state: ChipState = {
+        autoplay: true,
+        bound: bound(),
+        mode: 'stations',
+        preferred: 'balanced',
+    };
+    const queue = { keepNext: false, playOrder: [], position: 0 };
+    assert.deepEqual(
+        planChipTap(autoplayToggleChip(false, true, 'balanced'), state, queue),
+        planChipTap('off', state, queue),
+    );
+});
+
+test('onToggleIsThePreferredCharacterWithTheEngine', () => {
+    assert.equal(autoplayToggleChip(true, true, 'explore'), 'explore');
+    assert.equal(autoplayToggleChip(true, true, 'close'), 'close');
+});
+
+test('onToggleIsAutoDjWithoutIt', () => {
+    assert.equal(autoplayToggleChip(true, false, 'explore'), 'autoDj');
+});
+
+test('characterChipsAreTheThreeCharacters', () => {
+    assert.deepEqual(characterChips(['off', 'close', 'balanced', 'explore']), [
+        'close',
+        'balanced',
+        'explore',
+    ]);
+    assert.deepEqual(characterChips(chipsFor('stations')), ['close', 'balanced', 'explore']);
+    assert.deepEqual(characterChips(chipsFor('pending')), ['close', 'balanced', 'explore']);
+});
+
+test('characterChipsOfTheFallbackAreEmpty', () => {
+    assert.deepEqual(characterChips(['off', 'autoDj']), []);
+    assert.deepEqual(characterChips(chipsFor('fallback')), []);
+});
+
+test('theToggleIsOnIffTheSelectedChipIsNotOff', () => {
+    assert.equal(autoplayIsOn('off'), false);
+    assert.equal(autoplayIsOn('autoDj'), true);
+    assert.equal(autoplayIsOn('close'), true);
+    assert.equal(autoplayIsOn('balanced'), true);
+    assert.equal(autoplayIsOn('explore'), true);
+});
+
+// R14 (B-251): the status line's key, as useStationWords had it inline, and the side queue
+// header's line, which carries no status sentence.
+
+test('statusKeyInEachState', () => {
+    const base = { autoplay: true, bound: null, inFlight: false, lastPartial: false };
+    assert.equal(stationStatusKey({ ...base, mode: 'fallback' }), null);
+    assert.equal(stationStatusKey({ ...base, mode: 'pending' }), null);
+    assert.equal(stationStatusKey({ ...base, mode: 'stations' }), 'continues');
+    assert.equal(stationStatusKey({ ...base, autoplay: false, mode: 'stations' }), 'offStops');
+    assert.equal(stationStatusKey({ ...base, inFlight: true, mode: 'stations' }), 'finding');
+    assert.equal(stationStatusKey({ ...base, lastPartial: true, mode: 'stations' }), 'partial');
+    const live = { exhausted: false, stopped: false };
+    assert.equal(stationStatusKey({ ...base, bound: live, mode: 'stations' }), null);
+    // A bound station answers for itself: Autoplay off does not stop it, Off does.
+    assert.equal(
+        stationStatusKey({ ...base, autoplay: false, bound: live, mode: 'stations' }),
+        null,
+    );
+    assert.equal(
+        stationStatusKey({ ...base, bound: { ...live, stopped: true }, mode: 'stations' }),
+        'offStops',
+    );
+    assert.equal(
+        stationStatusKey({ ...base, bound: { ...live, exhausted: true }, mode: 'stations' }),
+        'exhausted',
+    );
+});
+
+test('panelLineIsTheBoundStationOnly', () => {
+    // I1: no status sentence (the Autoplay switch says on and off), and no "Auto DJ" (it comes
+    // and goes with that switch): the line's presence never follows the switch.
+    assert.equal(panelStatusLine('Auto DJ', false), null);
+    assert.equal(panelStatusLine(null, false), null);
+    assert.equal(panelStatusLine(null, true), null);
+    assert.equal(panelStatusLine('  ', true), null);
+    assert.equal(panelStatusLine('Moon Song radio · Balanced', true), 'Moon Song radio · Balanced');
 });

@@ -1,0 +1,46 @@
+.list {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding-bottom: 16px;
+}
+
+/* A section heading (the Library board): Bricolage 19 px, a 12.5 px note beside it. */
+.heading {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    padding: 18px 28px 6px;
+}
+
+.heading-title {
+    margin: 0;
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: 19px;
+    font-weight: 700;
+    line-height: 24px;
+    letter-spacing: -0.015em;
+}
+
+.heading-note {
+    font-size: 12.5px;
+    color: var(--theme-colors-foreground-muted);
+    white-space: nowrap;
+}
+
+.message {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 0 28px;
+    font-size: 14px;
+    color: var(--theme-colors-foreground-muted);
+}
+
+/* "Checked: ..." (the board's note line): 13 px muted. */
+.note {
+    padding: 16px 28px 0;
+    margin: 0;
+    font-size: 13px;
+    line-height: var(--note-line, 18px);
+    color: var(--theme-colors-foreground-muted);
+}

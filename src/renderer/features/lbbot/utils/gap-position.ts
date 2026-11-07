@@ -9,7 +9,7 @@ import type { LbBotGapTrack } from '/@/shared/types/lbbot-types';
  * gap, and any gap from an lb-bot that sends no `disc` (decoded as 0, "not known"),
  * reads exactly as it did.
  *
- * Pure, so `gap-position.harness.ts` can run it. Navic implements the same two
+ * Pure, so `gap-position.harness.ts` can run it. Worbus for Android implements the same two
  * functions by hand (no shared build): change the rule in both.
  */
 

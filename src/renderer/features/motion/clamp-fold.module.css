@@ -1,0 +1,53 @@
+.clamp {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+}
+
+.box {
+    align-self: stretch;
+    min-width: 0;
+}
+
+/* Clipped while folded or moving; unclipped once open and still, so focus rings show. */
+.box[data-clamped],
+.box[data-moving] {
+    overflow: clip;
+}
+
+/* The arrow at the cut, 4 px under the last line. */
+.toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 28px;
+    padding: 0;
+    margin: 4px 0 0 -6px;
+    color: var(--theme-colors-foreground-muted);
+    cursor: pointer;
+    background: none;
+    border: none;
+    border-radius: 8px;
+}
+
+.toggle:hover {
+    color: var(--theme-colors-foreground);
+    background: alpha(var(--theme-colors-foreground), 0.06);
+}
+
+.toggle:focus-visible {
+    outline: 2px solid var(--theme-colors-primary);
+    outline-offset: 2px;
+}
+
+.toggle[data-open='true'] svg {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .toggle svg {
+        transition: transform var(--fold-ms) var(--fold-ease);
+    }
+}

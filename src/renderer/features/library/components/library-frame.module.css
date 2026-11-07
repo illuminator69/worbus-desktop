@@ -1,0 +1,111 @@
+/* The Library frame (the Library board, 1440 x 900): the title row, the chips, and the page under them. */
+.frame {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+}
+
+.head {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    min-width: 0;
+}
+
+/* The title and the slot; at a narrow width the slot wraps under the title rather than spilling out. */
+.title-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    align-items: center;
+    min-width: 0;
+    padding: 18px 28px 6px;
+}
+
+.title {
+    flex: none;
+    margin: 0;
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.15;
+    color: var(--theme-colors-foreground);
+    letter-spacing: -0.02em;
+}
+
+/* One 48 px line (the play button's height), filled or empty, so the row never changes height. */
+.slot-host {
+    display: flex;
+    flex: 1 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    max-width: 100%;
+    min-height: 48px;
+}
+
+/* What a page portals here: its play button, count, list search and its own buttons, at the right. */
+.slot {
+    display: flex;
+    flex: 0 1 auto;
+    gap: 12px;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+
+    /* A page's header pieces were sized for their own full-width row: here each takes its content's width. */
+    & > * {
+        flex: 0 1 auto;
+        width: auto !important;
+        min-width: 0;
+        height: auto;
+    }
+
+    /* The theme turns Mantine's focus ring off; the slot's controls wear the chips' 2 px ring. */
+    & :is(a, button, input):focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+}
+
+/*
+ * A short window (under 760 px) keeps the list at least 300 px tall: the title is not drawn and the
+ * slot's controls share the chip row, at its right. Nothing moves in the DOM (a focused search input in
+ * the slot keeps its focus); only the layout changes.
+ */
+@media (height <= 759px) {
+    .head {
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .title-row {
+        display: contents;
+    }
+
+    .title {
+        display: none;
+    }
+
+    /* The chips' `SidewaysRow` frame (it carries the attribute), so the chips take the free space
+       and the slot sits at the right edge. */
+    .head > [data-library-chips] {
+        flex: 1 1 auto;
+        order: 1;
+        min-width: 0;
+    }
+
+    .slot-host {
+        flex: none;
+        order: 2;
+        padding: 4px 28px 4px 0;
+    }
+}

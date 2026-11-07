@@ -1,6 +1,8 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DraggableItems } from '/@/renderer/features/settings/components/general/draggable-items';
+import { SettingsOptions } from '/@/renderer/features/settings/components/settings-option';
 import {
     ArtistItem,
     ArtistReleaseTypeItem,
@@ -8,27 +10,57 @@ import {
     useGeneralSettings,
     useSettingsStoreActions,
 } from '/@/renderer/store';
+import { Switch } from '/@/shared/components/switch/switch';
 
-const ARTIST_ITEMS: Array<[ArtistItem, string]> = [
-    [ArtistItem.BIOGRAPHY, 'table.column.biography'],
-    [ArtistItem.FAVORITE_SONGS, 'page.albumArtistDetail.favoriteSongs'],
-    [ArtistItem.TOP_SONGS, 'page.albumArtistDetail.topSongs'],
-    [ArtistItem.RECENT_ALBUMS, 'page.albumArtistDetail.recentReleases'],
+// The artist page has one order (Popular, Discography, About, Related artists), so these are
+// switches in the page's order, named as the page names its sections. The stored list keeps
+// whatever order it has; only each row's `disabled` flag is read (album-artist-detail-content.tsx).
+const ARTIST_SECTIONS: Array<[ArtistItem, string]> = [
+    [ArtistItem.TOP_SONGS, 'page.albumArtistDetail.popular'],
+    [ArtistItem.RECENT_ALBUMS, 'page.albumArtistDetail.discographyKicker'],
+    [ArtistItem.BIOGRAPHY, 'page.albumArtistDetail.aboutHeading'],
     [ArtistItem.SIMILAR_ARTISTS, 'page.albumArtistDetail.relatedArtists'],
 ];
 
 export const ArtistSettings = memo(() => {
+    const { t } = useTranslation();
     const { artistItems } = useGeneralSettings();
     const { setArtistItems } = useSettingsStoreActions();
+    const items = artistItems as SortableItem<ArtistItem>[];
 
     return (
-        <DraggableItems
-            description="setting.artistConfiguration"
-            itemLabels={ARTIST_ITEMS}
-            items={artistItems as SortableItem<ArtistItem>[]}
-            setItems={setArtistItems}
-            title="setting.artistConfiguration"
-        />
+        <>
+            {ARTIST_SECTIONS.map(([id, label]) => {
+                const stored = items.find((item) => item.id === id);
+                // A section the stored list lacks reads as the page reads it: the releases show,
+                // the others do not.
+                const shown = stored ? !stored.disabled : id === ArtistItem.RECENT_ALBUMS;
+
+                return (
+                    <SettingsOptions
+                        control={
+                            <Switch
+                                aria-label={t(label)}
+                                checked={shown}
+                                onChange={(e) => {
+                                    const disabled = !e.currentTarget.checked;
+                                    setArtistItems(
+                                        stored
+                                            ? items.map((item) =>
+                                                  item.id === id ? { ...item, disabled } : item,
+                                              )
+                                            : [...items, { disabled, id }],
+                                    );
+                                }}
+                            />
+                        }
+                        description={t('setting.artistSection', { context: 'description' })}
+                        key={id}
+                        title={t(label)}
+                    />
+                );
+            })}
+        </>
     );
 });
 

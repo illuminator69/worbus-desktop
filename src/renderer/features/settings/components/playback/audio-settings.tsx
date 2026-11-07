@@ -11,6 +11,7 @@ import {
 } from '/@/renderer/features/settings/components/settings-section';
 import { useCurrentServer, useMpvInitialized, usePlayerStatus } from '/@/renderer/store';
 import {
+    useGeneralSettings,
     usePlaybackSettings,
     usePlaybackType,
     useSettingsStoreActions,
@@ -106,6 +107,7 @@ export const useAudioDevices = (playbackType: PlayerType) => {
 export const AudioSettings = memo(() => {
     const { t } = useTranslation();
     const settings = usePlaybackSettings();
+    const general = useGeneralSettings();
     const { setSettings } = useSettingsStoreActions();
     const status = usePlayerStatus();
     const playbackType = usePlaybackType();
@@ -236,6 +238,22 @@ export const AudioSettings = memo(() => {
             ),
             description: t('setting.audioFadeOnStatusChange', { context: 'description' }),
             title: t('setting.audioFadeOnStatusChange'),
+        },
+        {
+            // Moved from General > Controls: it only adds pitch controls to More > Playback options.
+            control: (
+                <Switch
+                    aria-label={t('setting.microtonalPitchControls')}
+                    defaultChecked={general.microtonalPitchControls}
+                    onChange={(e) =>
+                        setSettings({
+                            general: { microtonalPitchControls: e.currentTarget.checked },
+                        })
+                    }
+                />
+            ),
+            description: t('setting.microtonalPitchControls', { context: 'description' }),
+            title: t('setting.microtonalPitchControls'),
         },
     ];
 

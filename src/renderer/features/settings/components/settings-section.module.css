@@ -1,0 +1,5 @@
+/* A row after the first in a section whose rows fold (R30): the gap is the row's own, so a row
+   folded closed takes its gap with it instead of leaving a dead one. Same as the Stack's gap="xl". */
+.folding-row {
+    padding-top: var(--mantine-spacing-xl);
+}

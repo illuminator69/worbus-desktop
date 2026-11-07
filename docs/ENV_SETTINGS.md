@@ -154,5 +154,5 @@ Applies to the default lyrics display profile (`lyricsDisplay.default`).
 | Setting path | Default | Env variable | Available values / Description |
 |-------------|---------|--------------|--------------------------------|
 | `font.type` | `builtIn` | `FS_FONT_TYPE` | `builtIn` / `system` / `custom`. |
-| `font.builtIn` | `Inter` | `FS_FONT_BUILT_IN` | Built-in font name. |
+| `font.builtIn` | `Figtree` | `FS_FONT_BUILT_IN` | Built-in font name. |
 | `font.system` | *(empty)* | `FS_FONT_SYSTEM` | System font name (when type is `system`). |

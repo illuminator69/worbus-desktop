@@ -10,7 +10,7 @@ import { LibraryBackgroundOverlay } from '/@/renderer/features/shared/components
 import { LibraryContainer } from '/@/renderer/features/shared/components/library-container';
 import { LibraryHeader } from '/@/renderer/features/shared/components/library-header';
 import { LibraryHeaderBar } from '/@/renderer/features/shared/components/library-header-bar';
-import { useFastAverageColor } from '/@/renderer/hooks';
+import { useCoverHeaderWash } from '/@/renderer/themes/cover/use-cover-header-wash';
 import { LibraryItem } from '/@/shared/types/domain-types';
 
 /**
@@ -25,6 +25,8 @@ export const ForkDetailPage = ({
     headerChildren,
     imageUrl,
     itemType,
+    kicker,
+    plain = false,
     route,
     title,
 }: {
@@ -32,15 +34,25 @@ export const ForkDetailPage = ({
     headerChildren?: ReactNode;
     imageUrl?: null | string;
     itemType: LibraryItem.ALBUM | LibraryItem.ALBUM_ARTIST;
+    /** The small caps line above the name ("Artist · not in your library"), in either hero. */
+    kicker?: string;
+    /**
+     * F7 (board ArtistUnowned `.hero.plain`): no portrait and no wash band, the large name under a
+     * kicker. For a page that has no picture of its own to colour itself from.
+     */
+    plain?: boolean;
     route: string;
     title: string;
 }) => {
     const headerRef = useRef<HTMLDivElement>(null);
-    const { background } = useFastAverageColor({
+    // A fork page's art is a public Cover Art Archive URL (no credential, no per-request token), so
+    // the URL itself is the cover's identity here.
+    const wash = useCoverHeaderWash({
         id: imageUrl || title,
-        src: imageUrl,
-        srcLoaded: true,
+        serverId: 'external',
+        src: plain ? null : imageUrl,
     });
+    const background = plain ? undefined : wash.background;
 
     return (
         <AnimatedPage>
@@ -56,16 +68,33 @@ export const ForkDetailPage = ({
                     target: headerRef,
                 }}
             >
-                <LibraryBackgroundOverlay backgroundColor={background} headerRef={headerRef} />
+                {!plain && (
+                    <LibraryBackgroundOverlay background={background} headerRef={headerRef} />
+                )}
                 <LibraryContainer>
-                    <LibraryHeader
-                        imageUrl={imageUrl}
-                        item={{ imageUrl, route, type: itemType }}
-                        ref={headerRef}
-                        title={title}
-                    >
-                        {headerChildren}
-                    </LibraryHeader>
+                    {plain ? (
+                        <header className={styles.plain} ref={headerRef}>
+                            {kicker && <div className={styles.kicker}>{kicker}</div>}
+                            <h1 className={styles.plainTitle}>{title}</h1>
+                            {headerChildren}
+                        </header>
+                    ) : (
+                        <LibraryHeader
+                            imageUrl={imageUrl}
+                            item={{
+                                children: kicker ? (
+                                    <span className={styles.kicker}>{kicker}</span>
+                                ) : undefined,
+                                imageUrl,
+                                route,
+                                type: itemType,
+                            }}
+                            ref={headerRef}
+                            title={title}
+                        >
+                            {headerChildren}
+                        </LibraryHeader>
+                    )}
                     <div className={styles.contentContainer}>
                         <div className={styles.detailContainer}>{children}</div>
                     </div>

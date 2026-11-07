@@ -20,10 +20,13 @@ import {
 } from '/@/renderer/features/lbbot/stores/fresh-filters.store';
 import { artistLinkPath, externalAlbumPath } from '/@/renderer/features/lbbot/utils/external-paths';
 import {
-    applyFreshScope,
-    hasArtistPlays,
-    scopeInEffect,
-} from '/@/renderer/features/lbbot/utils/fresh-scope';
+    FRESH_SCOPE_WORDS,
+    FRESH_TYPE_WORDS,
+    freshBuckets,
+    freshScopeInEffect,
+    freshTileTarget,
+} from '/@/renderer/features/lbbot/utils/fresh-order';
+import { hasArtistPlays } from '/@/renderer/features/lbbot/utils/fresh-scope';
 import { ForkCardGrid } from '/@/renderer/features/shared/components/fork-card-grid';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
@@ -54,8 +57,8 @@ import { LbBotFreshRelease } from '/@/shared/types/lbbot-types';
  */
 
 const SCOPE_DATA: { label: string; value: FreshScope }[] = [
-    { label: 'Your artists', value: 'mine' },
-    { label: 'All', value: 'all' },
+    { label: FRESH_SCOPE_WORDS.mine.label, value: 'mine' },
+    { label: FRESH_SCOPE_WORDS.all.label, value: 'all' },
 ];
 
 const DAYS_DATA = [
@@ -64,59 +67,14 @@ const DAYS_DATA = [
     { label: '90 days', value: '90' },
 ];
 
-const TYPE_DATA: { label: string; value: FreshType }[] = [
-    { label: 'All', value: 'all' },
-    { label: 'Albums', value: 'album' },
-    { label: 'EPs', value: 'ep' },
-    { label: 'Singles', value: 'single' },
-    { label: 'Other', value: 'other' },
-];
+const TYPE_DATA: { label: string; value: FreshType }[] = (
+    ['all', 'album', 'ep', 'single', 'other'] as const
+).map((value) => ({ label: FRESH_TYPE_WORDS[value], value }));
 
 const SORT_DATA: { label: string; value: FreshSort }[] = [
     { label: 'Newest', value: 'newest' },
     { label: 'Artist A–Z', value: 'artist' },
 ];
-
-/**
- * Which type bucket a row belongs in.
- *
- * **Everything unrecognised — including the very common empty `type` — lands in
- * `other`.** MusicBrainz leaves the primary type blank often enough that a
- * bucket-per-known-type rule would drop those rows out of every filter at once,
- * which reads as the feed being empty rather than as a filter doing its job.
- */
-const typeBucket = (release: LbBotFreshRelease): FreshType => {
-    const type = (release.type || '').toLowerCase();
-    if (type === 'album') return 'album';
-    if (type === 'ep') return 'ep';
-    if (type === 'single') return 'single';
-    return 'other';
-};
-
-const DAY_MS = 86_400_000;
-
-/** Week buckets, newest first. An undated row sinks to `Earlier` rather than
- *  claiming a week it has no evidence for. */
-const WEEK_BUCKETS = [
-    'Upcoming',
-    'This week',
-    'Last week',
-    '2 weeks ago',
-    '3 weeks ago',
-    'Earlier',
-] as const;
-
-const weekBucketFor = (releaseDate: string, now: number): string => {
-    const parsed = releaseDate ? Date.parse(releaseDate) : NaN;
-    if (!Number.isFinite(parsed)) return 'Earlier';
-    if (parsed > now) return 'Upcoming';
-    const weeks = Math.floor((now - parsed) / (7 * DAY_MS));
-    if (weeks <= 0) return 'This week';
-    if (weeks === 1) return 'Last week';
-    if (weeks === 2) return '2 weeks ago';
-    if (weeks === 3) return '3 weeks ago';
-    return 'Earlier';
-};
 
 const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
     const navigate = useNavigate();
@@ -137,11 +95,14 @@ const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
     // itself has none (placement cannot write them). So a tile badged "In
     // library" opened a download page. The virtual page stays the fallback it
     // was designed to be.
-    const albumTo = release.releaseAlbumId
-        ? generatePath(AppRoute.LIBRARY_ALBUMS_DETAIL, { albumId: release.releaseAlbumId })
-        : release.releaseGroupMbid
-          ? externalAlbumPath(release)
-          : undefined;
+    // `freshTileTarget` is this rule, shared with the Fresh shelf.
+    const target = freshTileTarget(release);
+    const albumTo =
+        target?.kind === 'library'
+            ? generatePath(AppRoute.LIBRARY_ALBUMS_DETAIL, { albumId: target.albumId })
+            : target
+              ? externalAlbumPath(release)
+              : undefined;
 
     // The app's card, as on Discover's Fresh row: "In library" and the date travel on it,
     // the artist line links to the artist, an absent release is dashed and faded.
@@ -200,53 +161,27 @@ const LbBotFreshRoute = () => {
     // I-006: "Artists you play" exists only while some row carries `artistPlays`
     // (an older lb-bot sends none); a stored `plays` then reads as `mine`.
     const playsAvailable = hasArtistPlays(data?.releases);
-    const scope = scopeInEffect(storedScope, playsAvailable);
+    const scope = freshScopeInEffect(data?.releases, storedScope);
     const scopeData = playsAvailable
-        ? [...SCOPE_DATA, { label: 'Artists you play', value: 'plays' as FreshScope }]
+        ? [...SCOPE_DATA, { label: FRESH_SCOPE_WORDS.plays.label, value: 'plays' as FreshScope }]
         : SCOPE_DATA;
 
-    const buckets = useMemo(() => {
-        const rows = applyFreshScope(data?.releases ?? [], scope).filter(
-            (release) => type === 'all' || typeBucket(release) === type,
-        );
-        if (scope === 'plays') {
-            // Most played first, newest breaking ties — already ordered by the scope.
-            return [{ label: '', releases: rows }];
-        }
-        if (sort === 'artist') {
-            const sorted = [...rows].sort(
-                (a, b) =>
-                    a.artist.localeCompare(b.artist) || a.releaseName.localeCompare(b.releaseName),
-            );
-            // One unlabelled bucket: an A–Z list divided by week would be two
-            // orderings fighting each other.
-            return [{ label: '', releases: sorted }];
-        }
-        // "This week" is relative to the wall clock and to nothing else. The memo
-        // re-runs only when the rows or the filters change, so this reads the clock
-        // about as often as the page changes — and a bucket boundary crossed while
-        // the page sits open is worth exactly nothing to re-render for.
-        // eslint-disable-next-line react-hooks/purity
-        const now = Date.now();
-        const byBucket = new Map<string, LbBotFreshRelease[]>();
-        for (const release of rows) {
-            const key = weekBucketFor(release.releaseDate, now);
-            const list = byBucket.get(key);
-            if (list) list.push(release);
-            else byBucket.set(key, [release]);
-        }
-        for (const list of byBucket.values()) {
-            list.sort(
-                (a, b) =>
-                    (b.releaseDate || '').localeCompare(a.releaseDate || '') ||
-                    a.artist.localeCompare(b.artist),
-            );
-        }
-        return WEEK_BUCKETS.flatMap((label) => {
-            const releases = byBucket.get(label);
-            return releases?.length ? [{ label, releases }] : [];
-        });
-    }, [data, scope, sort, type]);
+    // The order lives in `fresh-order.ts`, which the Fresh shelf (Home, Discover) reads too, so
+    // the shelf is always this page's first rows (B-286).
+    const buckets = useMemo(
+        () =>
+            freshBuckets(
+                data?.releases,
+                { scope, sort, type },
+                // "This week" is relative to the wall clock and to nothing else. The memo re-runs
+                // only when the rows or the filters change, so this reads the clock about as often
+                // as the page changes, and a bucket boundary crossed while the page sits open is
+                // worth exactly nothing to re-render for.
+                // eslint-disable-next-line react-hooks/purity
+                Date.now(),
+            ),
+        [data, scope, sort, type],
+    );
 
     const total = buckets.reduce((sum, bucket) => sum + bucket.releases.length, 0);
 

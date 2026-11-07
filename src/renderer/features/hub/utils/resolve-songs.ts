@@ -64,7 +64,7 @@ export const placeholderSong = (track: HubTrackLike, serverId: string): Song =>
  * missing from this server's library (or a transient getSongDetail failure) would
  * shorten the queue and shift every index after it — the hub's `index` would then point
  * at the wrong track, which reads as the queue "resetting" after a transfer. Mirrors
- * Navic's resolveQueue.
+ * Worbus for Android's resolveQueue.
  */
 export const resolveHubTracks = async (
     tracks: HubTrackLike[],

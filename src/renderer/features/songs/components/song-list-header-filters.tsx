@@ -1,9 +1,12 @@
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import styles from './song-list-header-filters.module.css';
+
 import { SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
 import { useListContext } from '/@/renderer/context/list-context';
 import { useAlbumListFilters } from '/@/renderer/features/albums/hooks/use-album-list-filters';
+import { useLibraryFrame } from '/@/renderer/features/library/hooks/use-library-frame';
 import {
     ListConfigMenu,
     SONG_DISPLAY_TYPES,
@@ -17,14 +20,23 @@ import { ListRefreshButton } from '/@/renderer/features/shared/components/list-r
 import { ListSortByDropdown } from '/@/renderer/features/shared/components/list-sort-by-dropdown';
 import { ListSortOrderToggleButton } from '/@/renderer/features/shared/components/list-sort-order-toggle-button';
 import { FILTER_KEYS } from '/@/renderer/features/shared/utils';
+import { TopRatedChip } from '/@/renderer/features/songs/components/top-rated-chip';
 import { useSongListFilters } from '/@/renderer/features/songs/hooks/use-song-list-filters';
-import { GenreTarget, useGenreTarget, useSettingsStoreActions } from '/@/renderer/store';
+import {
+    GenreTarget,
+    useCurrentServer,
+    useGenreTarget,
+    useSettingsStoreActions,
+} from '/@/renderer/store';
+import { hasFeature } from '/@/shared/api/utils';
 import { Button } from '/@/shared/components/button/button';
 import { Divider } from '/@/shared/components/divider/divider';
 import { Flex } from '/@/shared/components/flex/flex';
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
-import { LibraryItem, SongListSort, SortOrder } from '/@/shared/types/domain-types';
+import { Text } from '/@/shared/components/text/text';
+import { LibraryItem, ServerType, SongListSort, SortOrder } from '/@/shared/types/domain-types';
+import { ServerFeature } from '/@/shared/types/features-types';
 import { ItemListKey } from '/@/shared/types/types';
 
 export const SongListHeaderFilters = ({ toggleGenreTarget }: { toggleGenreTarget?: boolean }) => {
@@ -34,7 +46,16 @@ export const SongListHeaderFilters = ({ toggleGenreTarget }: { toggleGenreTarget
     const albumFilters = useAlbumListFilters();
     const songFilters = useSongListFilters();
 
-    const { pageKey } = useListContext();
+    const { itemCount, pageKey } = useListContext();
+    const server = useCurrentServer();
+    // F6: Top rated needs Navidrome's yes/no rating filter (0.60.4 or later), and only the Library's
+    // Tracks page (Favorites' Songs tab shares the page key, outside the frame, with its own badge).
+    const { inFrame } = useLibraryFrame();
+    const tracksInFrame = inFrame && pageKey === ItemListKey.SONG;
+    const topRated =
+        tracksInFrame &&
+        server?.type === ServerType.NAVIDROME &&
+        hasFeature(server, ServerFeature.TRACK_YES_NO_RATING_FILTER);
 
     const handleToggleGenreTarget = useCallback(() => {
         // Clear all filter query states
@@ -57,6 +78,7 @@ export const SongListHeaderFilters = ({ toggleGenreTarget }: { toggleGenreTarget
             isFilterValueSet(query[FILTER_KEYS.SONG._CUSTOM]) ||
             isFilterValueSet(query[FILTER_KEYS.SONG.ARTIST_IDS]) ||
             query[FILTER_KEYS.SONG.FAVORITE] !== undefined ||
+            query[FILTER_KEYS.SONG.HAS_RATING] !== undefined ||
             isFilterValueSet(query[FILTER_KEYS.SONG.GENRE_ID]) ||
             isFilterValueSet(query[FILTER_KEYS.SONG.MAX_YEAR]) ||
             isFilterValueSet(query[FILTER_KEYS.SONG.MIN_YEAR]) ||
@@ -89,10 +111,19 @@ export const SongListHeaderFilters = ({ toggleGenreTarget }: { toggleGenreTarget
                     defaultSortOrder={SortOrder.ASC}
                     listKey={pageKey as ItemListKey}
                 />
+                {topRated && <TopRatedChip />}
                 <ListFiltersModal isActive={hasActiveFilters} itemType={LibraryItem.SONG} />
                 <ListRefreshButton listKey={pageKey as ItemListKey} />
             </Group>
             <Group gap="sm" wrap="nowrap">
+                {tracksInFrame && itemCount !== undefined && (
+                    <Text className={styles.count} isMuted>
+                        {t('page.library.songCount', {
+                            count: itemCount,
+                            n: itemCount.toLocaleString(),
+                        })}
+                    </Text>
+                )}
                 <ListDisplayTypeToggleButton listKey={ItemListKey.SONG} />
                 <ListConfigMenu
                     displayTypes={SONG_DISPLAY_TYPES}

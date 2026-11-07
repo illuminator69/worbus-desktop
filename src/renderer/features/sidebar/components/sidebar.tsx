@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { AnimatePresence, motion } from 'motion/react';
-import { MouseEvent, useMemo } from 'react';
+import { MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import styles from './sidebar.module.css';
@@ -12,11 +12,12 @@ import {
     useIsRadioActive,
     useRadioPlayer,
 } from '/@/renderer/features/radio/hooks/use-radio-player';
-import { ActionBar } from '/@/renderer/features/sidebar/components/action-bar';
-import { useNaviConnectSidebarItems } from '/@/renderer/features/sidebar/components/navi-connect-items';
 import { SidebarCollectionList } from '/@/renderer/features/sidebar/components/sidebar-collection-list';
-import { SidebarIcon } from '/@/renderer/features/sidebar/components/sidebar-icon';
-import { SidebarItem } from '/@/renderer/features/sidebar/components/sidebar-item';
+import {
+    SidebarGroups,
+    SidebarMore,
+    useSidebarModel,
+} from '/@/renderer/features/sidebar/components/sidebar-groups';
 import {
     SidebarPlaylistAddDragContext,
     SidebarPlaylistList,
@@ -32,24 +33,30 @@ import {
     useSetFullScreenPlayerStore,
 } from '/@/renderer/store';
 import {
-    SidebarItemType,
     useSidebarImageEnabled,
-    useSidebarItems,
     useSidebarPlaylistList,
     useWindowSettings,
 } from '/@/renderer/store/settings.store';
 import { Accordion } from '/@/shared/components/accordion/accordion';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Center } from '/@/shared/components/center/center';
-import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
 import { ImageUnloader } from '/@/shared/components/image/image';
 import { ScrollArea } from '/@/shared/components/scroll-area/scroll-area';
-import { Text } from '/@/shared/components/text/text';
 import { Tooltip } from '/@/shared/components/tooltip/tooltip';
 import { useImageHashUrl } from '/@/shared/hooks/use-image-hash-url';
+import { useMediaQuery } from '/@/shared/hooks/use-media-query'; // navi-connect (B-232, B-295)
 import { ExplicitStatus, LibraryItem } from '/@/shared/types/domain-types';
 import { Platform } from '/@/shared/types/types';
+
+/**
+ * navi-connect (B-232, B-295): the window height from which the lower groups (You, Listening,
+ * Library tools, App) are pinned under the list. Below it, with every lb-bot group present, the
+ * list over them is under about 440 px tall: at 900 px the Playlists header sat on their edge, at
+ * 700 px they cut it. Pinning fits from about 990 px; a custom window bar takes 30 px more.
+ */
+const PIN_LOWER_GROUPS_QUERY = '(min-height: 1000px)';
+const PIN_LOWER_GROUPS_QUERY_CUSTOM_BAR = '(min-height: 1030px)';
 
 const SidebarPlaylistSection = () => {
     const isAddDragActive = useSidebarPlaylistAddDragMonitor();
@@ -63,61 +70,34 @@ const SidebarPlaylistSection = () => {
 };
 
 export const Sidebar = () => {
-    const { t } = useTranslation();
-
     const sidebarPlaylistList = useSidebarPlaylistList();
-
-    const translatedSidebarItemMap = useMemo(
-        () => ({
-            Albums: t('page.sidebar.albums'),
-            Artists: t('page.sidebar.albumArtists'),
-            'Artists-all': t('page.sidebar.artists'),
-            Collections: t('page.sidebar.collections'),
-            Favorites: t('page.sidebar.favorites'),
-            Folders: t('page.sidebar.folders'),
-            Genres: t('page.sidebar.genres'),
-            Home: t('page.sidebar.home'),
-            'Now Playing': t('page.sidebar.nowPlaying'),
-            Playlists: t('page.sidebar.playlists'),
-            Radio: t('page.sidebar.radio'),
-            Search: t('page.sidebar.search'),
-            Settings: t('page.sidebar.settings'),
-            Tracks: t('page.sidebar.tracks'),
-        }),
-        [t],
-    );
-
-    const sidebarItems = useSidebarItems();
     const { windowBarStyle } = useWindowSettings();
     const sidebarImageEnabled = useSidebarImageEnabled();
     const sidebarImageShown = useAppStore((state) => state.sidebar.image);
     const showImage = sidebarImageEnabled && sidebarImageShown;
-
-    const sidebarItemsWithRoute: SidebarItemType[] = useMemo(() => {
-        if (!sidebarItems) return [];
-
-        const items = sidebarItems
-            .filter((item) => !item.disabled)
-            .map((item) => ({
-                ...item,
-                label:
-                    translatedSidebarItemMap[item.id as keyof typeof translatedSidebarItemMap] ??
-                    item.label,
-            }));
-
-        return items;
-    }, [sidebarItems, translatedSidebarItemMap]);
-
-    /* Library accordion: only items with a route (exclude Collections section) */
-    const libraryItemsWithRoute = useMemo(
-        () => sidebarItemsWithRoute.filter((item) => item.id !== 'Collections' && item.route),
-        [sidebarItemsWithRoute],
-    );
-
-    const naviConnectItems = useNaviConnectSidebarItems();
+    const { groups, more } = useSidebarModel();
+    const mainGroups = groups.filter((group) => group.id === 'main');
+    const lowerGroups = groups.filter((group) => group.id !== 'main');
 
     const isCustomWindowBar =
         windowBarStyle === Platform.WINDOWS || windowBarStyle === Platform.MACOS;
+
+    // navi-connect (B-232, B-295): pinned under the list, the lower groups left a short window's
+    // list too little room to show the Playlists header and two playlists. There they scroll with
+    // it. The sidebar image, pinned below them, takes that room too: with it shown they always
+    // scroll with the list.
+    const tallEnoughToPin = useMediaQuery(
+        isCustomWindowBar ? PIN_LOWER_GROUPS_QUERY_CUSTOM_BAR : PIN_LOWER_GROUPS_QUERY,
+        undefined,
+        { getInitialValueInEffect: false },
+    );
+    const pinLowerGroups = tallEnoughToPin && !showImage;
+    const lowerGroupStack = (
+        <div className={clsx(styles.groupStack, { [styles.inList]: !pinLowerGroups })}>
+            <SidebarGroups groups={lowerGroups} />
+            {more.length > 0 && <SidebarMore entries={more} />}
+        </div>
+    );
 
     return (
         <div
@@ -126,54 +106,23 @@ export const Sidebar = () => {
             })}
             id="left-sidebar"
         >
-            <Group grow id="global-search-container" style={{ flexShrink: 0 }}>
-                <ActionBar />
-            </Group>
             <ScrollArea allowDragScroll className={styles.scrollArea}>
+                <SidebarGroups groups={mainGroups} />
                 <Accordion
                     classNames={{
                         content: styles.accordionContent,
                         control: styles.accordionControl,
                         item: styles.accordionItem,
-                        root: styles.accordionRoot,
                     }}
-                    defaultValue={['library', 'collections', 'playlists']}
+                    defaultValue={['collections', 'playlists']}
                     multiple
                 >
-                    <Accordion.Item value="library">
-                        <Accordion.Control>
-                            <Text fw={500} variant="secondary">
-                                {t('page.sidebar.myLibrary')}
-                            </Text>
-                        </Accordion.Control>
-                        <Accordion.Panel>
-                            {libraryItemsWithRoute.map((item) => {
-                                return (
-                                    <SidebarItem key={`sidebar-${item.route}`} to={item.route}>
-                                        <Group gap="md">
-                                            <SidebarIcon route={item.route} />
-                                            {item.label}
-                                        </Group>
-                                    </SidebarItem>
-                                );
-                            })}
-                            {/* navi-connect: appended rather than added to `sidebarItems`
-                                — see `useNaviConnectSidebarItems` for why, and for why
-                                the list lives there rather than inline here. */}
-                            {naviConnectItems.map((item) => (
-                                <SidebarItem key={item.id} to={item.route}>
-                                    <Group gap="md">
-                                        <SidebarIcon route={item.route} />
-                                        {item.label}
-                                    </Group>
-                                </SidebarItem>
-                            ))}
-                        </Accordion.Panel>
-                    </Accordion.Item>
                     <SidebarCollectionList />
                     {sidebarPlaylistList && <SidebarPlaylistSection />}
                 </Accordion>
+                {!pinLowerGroups && lowerGroupStack /* navi-connect (B-232, B-295) */}
             </ScrollArea>
+            {pinLowerGroups && lowerGroupStack /* navi-connect (B-232, B-295) */}
             <AnimatePresence initial={false} mode="popLayout">
                 {showImage && <SidebarImage />}
             </AnimatePresence>

@@ -21,6 +21,7 @@ import { queryClient } from '/@/renderer/lib/react-query';
 import { AppRoute } from '/@/renderer/router/routes';
 import { useCurrentServer, useShowFavorites } from '/@/renderer/store';
 import { usePlayButtonBehavior } from '/@/renderer/store/settings.store';
+import { useCoverWashOn } from '/@/renderer/themes/cover/cover-wash.store';
 import { formatDurationString } from '/@/renderer/utils';
 import { replaceURLWithHTMLLinks } from '/@/renderer/utils/linkify';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
@@ -50,10 +51,13 @@ const DummyAlbumDetailRoute = () => {
         queryKey,
     });
 
+    // This page draws no colour band; the colour only held the header's skeleton. With the cover wash
+    // on it is not computed and does not hold the header.
+    const washOn = useCoverWashOn();
     const { background, colorId } = useFastAverageColor({
         id: albumId,
-        src: detailQuery.data?.imageUrl,
-        srcLoaded: Boolean(detailQuery.data?.imageUrl),
+        src: washOn ? undefined : detailQuery.data?.imageUrl,
+        srcLoaded: !washOn && Boolean(detailQuery.data?.imageUrl),
     });
     const { addToQueueByFetch } = usePlayer();
     const playButtonBehavior = usePlayButtonBehavior();
@@ -134,7 +138,7 @@ const DummyAlbumDetailRoute = () => {
                             route: AppRoute.LIBRARY_SONGS,
                             type: LibraryItem.SONG,
                         }}
-                        loading={!background || colorId !== albumId}
+                        loading={!washOn && (!background || colorId !== albumId)}
                         title={detailQuery?.data?.name || ''}
                     >
                         <Stack gap="sm">

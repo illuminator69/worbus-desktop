@@ -2,6 +2,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+    autoplayEnabledPatch,
+    strategyPatch,
+} from '/@/renderer/features/player/station/autoplay-keys';
+import {
     ListConfigBooleanControl,
     ListConfigTable,
 } from '/@/renderer/features/shared/components/list-config-menu';
@@ -55,9 +59,7 @@ export const AutoDjPanel = () => {
                 component: (
                     <ListConfigBooleanControl
                         onChange={(value) => {
-                            setSettings({
-                                autoDJ: { enabled: value },
-                            });
+                            setSettings(autoplayEnabledPatch(value));
                         }}
                         value={settings.enabled}
                     />
@@ -78,12 +80,7 @@ export const AutoDjPanel = () => {
                         data={strategySelectData}
                         onChange={(value) => {
                             if (!value) return;
-                            setSettings({
-                                autoDJ:
-                                    settings.mode === AUTO_DJ_MODE.ALBUMS
-                                        ? { albumStrategy: value as AutoDJStrategy }
-                                        : { songStrategy: value as AutoDJStrategy },
-                            });
+                            setSettings(strategyPatch(settings.mode, value as AutoDJStrategy));
                         }}
                         size="sm"
                         value={strategyValue}

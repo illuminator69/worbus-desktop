@@ -10,7 +10,6 @@ import {
 } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { MainPlayButton, PlayerButton } from '/@/renderer/features/player/components/player-button';
 import { PlayerbarSlider } from '/@/renderer/features/player/components/playerbar-slider';
-import { openShuffleAllModal } from '/@/renderer/features/player/components/shuffle-all-modal';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     useIsPlayingRadio,
@@ -30,7 +29,8 @@ export const CenterControls = () => {
     const isRadioActive = useIsRadioActive();
 
     // Play sits in the middle column of its own grid, so it stays centred on the bar whatever
-    // stands either side of it (Stop moved to More; Shuffle all stays, on the right).
+    // stands either side of it. Stop and Play random are in More (R14, B-252: the owner moved Play
+    // random there, the one deliberate difference from upstream's set in this file).
     if (isRadioActive) {
         return (
             <div className={styles.controlsContainer}>
@@ -46,7 +46,6 @@ export const CenterControls = () => {
                         {skip?.enabled && <SkipForwardButton disabled={isRadioActive} />}
                         <NextButton disabled={isRadioActive} />
                         <RepeatButton disabled={isRadioActive} />
-                        <ShuffleAllButton disabled={isRadioActive} />
                     </div>
                 </div>
             </div>
@@ -67,7 +66,6 @@ export const CenterControls = () => {
                         {skip?.enabled && <SkipForwardButton />}
                         <NextButton />
                         <RepeatButton />
-                        <ShuffleAllButton />
                     </div>
                 </div>
             </div>
@@ -292,24 +290,6 @@ const RepeatButton = ({ disabled }: { disabled?: boolean }) => {
                                 context: 'one',
                             })
                 }`,
-                openDelay: 0,
-            }}
-            variant="tertiary"
-        />
-    );
-};
-
-const ShuffleAllButton = ({ disabled }: { disabled?: boolean }) => {
-    const { t } = useTranslation();
-    const buttonSize = useButtonSize();
-
-    return (
-        <PlayerButton
-            disabled={disabled}
-            icon={<Icon fill="default" icon="mediaRandom" size={buttonSize} />}
-            onClick={() => openShuffleAllModal()}
-            tooltip={{
-                label: t('form.shuffleAll.title'),
                 openDelay: 0,
             }}
             variant="tertiary"

@@ -6,6 +6,7 @@ import { queryKeys } from '/@/renderer/api/query-keys';
 import { genresQueries } from '/@/renderer/features/genres/api/genres-api';
 import {
     genreNameOf,
+    mixArtistIds,
     mixCharacter,
     mixPlan,
     StationPlan,
@@ -22,10 +23,16 @@ import {
     artistRadioSeed,
     buildStationQueue,
     currentCharacter,
+    customRadioSeed,
+    ownSongsOf,
     stationsReady,
     trackRadioSeed,
 } from '/@/renderer/features/player/station/station-client';
-import { StationBinding } from '/@/renderer/features/player/station/station-logic';
+import {
+    customRadioSeeds,
+    interleaveSeeds,
+    StationBinding,
+} from '/@/renderer/features/player/station/station-logic';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
 import { Mix, MixKind } from '/@/renderer/store';
 import { AUTO_DJ_STRATEGY } from '/@/renderer/store/settings.store';
@@ -119,10 +126,13 @@ const runStation = async (
     let seeded: null | { leading: Song[]; seed: StationSeed } = null;
     switch (plan.kind) {
         case 'artist':
-            seeded = await artistRadioSeed(serverId, {
-                id: plan.artistId,
-                name: plan.artistName,
-            }).catch(() => null);
+            // One artist: the artist radio's seed. Several (a custom radio, P5): their seeds
+            // dealt in turn, an artist the library no longer holds skipped.
+            seeded = await (
+                plan.artistIds.length > 1
+                    ? customRadioSeed(serverId, plan.artistIds, plan.artistName)
+                    : artistRadioSeed(serverId, { id: plan.artistIds[0], name: plan.artistName })
+            ).catch(() => null);
             break;
         case 'track': {
             const song = await seedSong(serverId, plan.songId);
@@ -139,6 +149,7 @@ const runStation = async (
         count,
         ...seeded,
         serverId,
+        variety: plan.kind === 'artist' ? plan.variety : undefined,
     });
     return queue ? { songs: queue.songs, station: queue.binding } : null;
 };
@@ -192,11 +203,35 @@ const regenerateLocally = async (
             );
             return resolveSongsByIds(serverId, ids);
         }
-        case 'artist':
+        case 'artist': {
             // The artist radio without a station (B-149): the artist's own most played songs,
-            // then Navidrome's similar songs, cut at the mix's length. Never a shuffle.
-            if (!mix.seedId) return [];
-            return artistRadioQueue({ artistId: mix.seedId, cap: count, count, serverId });
+            // then Navidrome's similar songs, cut at the mix's length. Never a shuffle. A custom
+            // radio (P5): every artist's seeds dealt in turn, then their similar songs in turn.
+            const ids = mixArtistIds(mix);
+            if (ids.length === 0) return [];
+            if (ids.length === 1) {
+                return artistRadioQueue({ artistId: ids[0], cap: count, count, serverId });
+            }
+            const own = await Promise.all(
+                ids.map((artistId) => ownSongsOf(serverId, artistId).catch(() => [] as Song[])),
+            );
+            const held = ids.filter((_, i) => own[i].length > 0);
+            const each = Math.max(5, Math.floor(count / Math.max(1, held.length)));
+            const similar = await Promise.all(
+                held.map((artistId) =>
+                    api.controller
+                        .getArtistRadio({
+                            apiClientProps: { serverId },
+                            query: { artistId, count: each },
+                        })
+                        .catch(() => [] as Song[]),
+                ),
+            );
+            const seen = new Set<string>();
+            return [...customRadioSeeds(own), ...interleaveSeeds(similar)]
+                .filter((song) => !seen.has(song.id) && Boolean(seen.add(song.id)))
+                .slice(0, count);
+        }
         case 'fingerprint': {
             // Seeded from listening history rather than from a stored id, which
             // is why this is the one kind with no seed: its recipe is "me,
@@ -205,7 +240,7 @@ const regenerateLocally = async (
             return resolveSongsByIds(serverId, ids);
         }
         case 'genre': {
-            // `getRandomSongList` takes a genre NAME, and so does Navic: a recipe holds the
+            // `getRandomSongList` takes a genre NAME, and so does Worbus for Android: a recipe holds the
             // name (B-151). One from before that holds Navidrome's genre id; with no stored
             // name beside it, the id is looked up in the genre list.
             const genres = mix.seedName.trim()

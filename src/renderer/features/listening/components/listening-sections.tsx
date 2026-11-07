@@ -449,12 +449,23 @@ const UnownedAlbumTile = ({ row }: { row: LbBotUnownedRow }) => {
     // back to offering the download that just succeeded.
     const fill = useActiveFill(row.rgid);
     const fillDone = !!fill && fill.settled && fill.outcome === 'done';
+    const release = unownedAlbumRelease(row, fillDone);
     return (
         <div>
             <MissingAlbumTile
+                albumId={release.navidromeAlbumIds[0] ?? null}
                 artistName={row.artist}
                 ndArtistId={row.artistId}
-                release={unownedAlbumRelease(row, fillDone)}
+                ownership={
+                    release.navidromeAlbumIds.length > 0
+                        ? 'owned'
+                        : release.status === 'missing'
+                          ? 'missing'
+                          : 'syncing'
+                }
+                rgid={release.rgid}
+                title={release.title}
+                year={Number.parseInt(release.year, 10) || null}
             />
             <Text isMuted size="xs">
                 {`${row.artist} · ${playsLabel(row.plays)}`}

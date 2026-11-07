@@ -100,6 +100,11 @@ const mainMessageListener = (
     ipcRenderer.on('toast-from-main', (_, data) => cb(data));
 };
 
+/** Worbus P5: main says a saved password could not be read after the move from Feishin. */
+const onPasswordUnreadableAfterMove = (cb: (message: string) => void) => {
+    ipcRenderer.on('password-unreadable-after-move', (_, message: string) => cb(message));
+};
+
 const download = (url: string) => {
     ipcRenderer.send('download-url', url);
 };
@@ -162,14 +167,6 @@ const rendererToggleSidebar = (cb: () => void) => {
     ipcRenderer.on('renderer-toggle-sidebar', () => cb());
 };
 
-const rendererOpenReleaseNotes = (cb: () => void) => {
-    ipcRenderer.on('renderer-open-release-notes', () => cb());
-};
-
-const rendererUpdateAvailable = (cb: (version: string) => void) => {
-    ipcRenderer.on('update-available', (_, version) => cb(version));
-};
-
 export const utils = {
     cancelReadSongMetadata,
     checkForUpdates,
@@ -185,6 +182,7 @@ export const utils = {
     mainMessageListener,
     offBatchProgress,
     onBatchProgress,
+    onPasswordUnreadableAfterMove,
     openApplicationDirectory,
     openCustomCssFolder,
     openItem,
@@ -195,11 +193,9 @@ export const utils = {
     rendererOpenCommandPalette,
     rendererOpenCreatePlaylist,
     rendererOpenManageServers,
-    rendererOpenReleaseNotes,
     rendererOpenSettings,
     rendererTogglePrivateMode,
     rendererToggleSidebar,
-    rendererUpdateAvailable,
     saveCustomCss,
     separator: isWindows() ? '\\' : '/',
     setInputFocused,

@@ -1,21 +1,25 @@
 import clsx from 'clsx';
 import {
+    CSSProperties,
     ForwardedRef,
     forwardRef,
     HTMLAttributes,
     type ImgHTMLAttributes,
     memo,
     ReactNode,
+    SyntheticEvent,
     useEffect,
     useMemo,
+    useRef,
     useState,
 } from 'react';
 
 import styles from './image.module.css';
+import { dropUnder, markLoaded, nextShown, type ShownEntry } from './shown-stack';
 import { useNativeImage } from './use-native-image';
 
+import { tintHues } from '/@/shared/components/animations/tint-hues';
 import { AppIcon, Icon } from '/@/shared/components/icon/icon';
-import { Skeleton } from '/@/shared/components/skeleton/skeleton';
 import { useDebouncedValue } from '/@/shared/hooks/use-debounced-value';
 import { useInViewport } from '/@/shared/hooks/use-in-viewport';
 import { ImageRequest } from '/@/shared/types/domain-types';
@@ -42,10 +46,6 @@ interface ImageContainerProps extends HTMLAttributes<HTMLDivElement> {
     children: ReactNode;
     hashUrl?: null | string;
     isExplicit?: boolean;
-}
-
-interface ImageLoaderProps {
-    className?: string;
 }
 
 interface ImageUnloaderProps {
@@ -123,6 +123,40 @@ export function BaseImage({
         setHasLoadedInInstance(true);
     }, [effectiveImageRequest?.cacheKey, nativeImage.isLoaded]);
 
+    // Fade or not is decided once per displayed image, when its request starts: `isInSessionCache`
+    // turns true right after the load and would otherwise drop the class mid-fade. An image the
+    // session already loaded (a recycled grid cell, a page seen before) shows at once.
+    const requestKey = rawImageRequest?.cacheKey;
+    const fadeDecision = useRef<{ fade: boolean; key?: string }>({ fade: false });
+
+    if (fadeDecision.current.key !== requestKey) {
+        fadeDecision.current = { fade: !isInSessionCache, key: requestKey };
+    }
+
+    const fade = enableAnimation || Boolean(hashUrl) || fadeDecision.current.fade;
+
+    // The images on screen, the newest last, each with its own fade decision. A changed request
+    // keeps the last image that loaded mounted underneath (its blob URL is already revoked, so only
+    // the loaded element can still show it) until the new one has loaded and faded in over it.
+    const [shown, setShown] = useState<ShownEntry[]>([]);
+    const displaySrc = nativeImage.displaySrc;
+    const gone = !src || nativeImage.isError;
+    const nextList = nextShown(shown, displaySrc, gone, fade);
+    if (nextList !== shown) setShown(nextList);
+    const settle = () => setShown(dropUnder);
+    const handleLoad = (event: SyntheticEvent<HTMLImageElement>, loadedSrc: string) => {
+        const animating = event.currentTarget.getAnimations().length > 0;
+        setShown((list) => {
+            const marked = markLoaded(list, loadedSrc);
+            return animating ? marked : dropUnder(marked);
+        });
+        onLoad?.(event);
+    };
+
+    const seed = props.id || rawImageRequest?.cacheKey || src || '';
+    const [tintA, tintB] = useMemo(() => tintHues(seed), [seed]);
+    const showTint = includeLoader && !gone && !hashUrl;
+
     return (
         <ImageContainer
             className={clsx(containerClassName, containerPropsClassName)}
@@ -131,26 +165,38 @@ export function BaseImage({
             isExplicit={isExplicit}
             ref={ref}
         >
-            {nativeImage.displaySrc ? (
-                <img
-                    className={clsx(styles.image, className, {
-                        [styles.animated]: enableAnimation || Boolean(hashUrl),
+            {showTint && (
+                <div
+                    aria-hidden
+                    className={clsx(styles.hash, styles.tint, {
+                        [styles.tintDone]: shown.length > 0,
                     })}
-                    decoding="async"
-                    fetchPriority={fetchPriority}
-                    onError={onError}
-                    onLoad={onLoad}
-                    src={nativeImage.displaySrc}
-                    {...props}
+                    style={{ '--tint-a': tintA, '--tint-b': tintB } as CSSProperties}
                 />
-            ) : !src ? (
+            )}
+            {shown.length > 0 ? (
+                shown.map((entry, index) => {
+                    const top = index === shown.length - 1;
+                    return (
+                        <img
+                            className={clsx(styles.image, className, {
+                                [styles.animated]: top && entry.fade,
+                                [styles.under]: !top,
+                            })}
+                            decoding="async"
+                            fetchPriority={fetchPriority}
+                            key={entry.src}
+                            onAnimationEnd={top ? settle : undefined}
+                            onError={onError}
+                            onLoad={top ? (event) => handleLoad(event, entry.src) : undefined}
+                            src={entry.src}
+                            {...props}
+                            id={top ? props.id : undefined}
+                        />
+                    );
+                })
+            ) : gone && (!src || includeUnloader) ? (
                 <ImageUnloader className={className} icon={unloaderIcon} />
-            ) : nativeImage.isError ? (
-                includeUnloader ? (
-                    <ImageUnloader className={className} icon={unloaderIcon} />
-                ) : null
-            ) : hashUrl ? null : includeLoader ? (
-                <ImageLoader className={className} />
             ) : null}
         </ImageContainer>
     );
@@ -183,15 +229,6 @@ const ImageContainer = forwardRef(
         );
     },
 );
-
-export function ImageLoader({ className }: ImageLoaderProps) {
-    return (
-        <Skeleton
-            className={clsx(styles.skeleton, styles.loader, className)}
-            containerClassName={styles.skeletonContainer}
-        />
-    );
-}
 
 export function ImageUnloader({ className, icon = 'emptyImage' }: ImageUnloaderProps) {
     return (

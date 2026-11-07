@@ -1,35 +1,30 @@
 import { Suspense, useEffect, useState } from 'react';
-import { generatePath, useNavigate } from 'react-router';
+import { useTranslation } from 'react-i18next';
 
 import styles from './lbbot-downloads-route.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
+import { ImportsRow } from '/@/renderer/features/lbbot/components/imports-row';
 import { ResolveLinkBox } from '/@/renderer/features/lbbot/components/resolve-link-box';
+import { activityPageCopy } from '/@/renderer/features/lbbot/components/wishlist-copy';
 import { WishlistList } from '/@/renderer/features/lbbot/components/wishlist-list';
-import { describeFill, FillButton } from '/@/renderer/features/lbbot/fill-vocabulary';
+import { describeFill } from '/@/renderer/features/lbbot/fill-vocabulary';
+import { useFillActions } from '/@/renderer/features/lbbot/hooks/use-fill-actions';
 import {
-    allowMp3AndRetry,
     caaCoverUrl,
-    cancelFill,
-    retryFill,
+    useLbBotDownloadsShown,
     useLbBotWishlist,
-    useWishlistActions,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
-import {
-    LedgerRow,
-    useActiveFillsActions,
-    useFillLedger,
-} from '/@/renderer/features/lbbot/stores/active-fills.store';
+import { LedgerRow, useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
+import { Fold } from '/@/renderer/features/motion/fold';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
-import { AppRoute } from '/@/renderer/router/routes';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
 import { Progress } from '/@/shared/components/progress/progress';
 import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
-import { toast } from '/@/shared/components/toast/toast';
 import { LibraryItem } from '/@/shared/types/domain-types';
 
 /**
@@ -45,7 +40,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
  * unsettled row in one request whether or not this page is open — this view used
  * to watch only the rows that passed its filter, so choosing "Didn't land" stopped
  * the fills in flight from being polled at all. Every word and every button comes
- * from `describeFill` (PROTOCOL §15.2), the table Navic renders from too.
+ * from `describeFill` (PROTOCOL §15.2), the table Worbus for Android renders from too.
  */
 
 /** A one-second clock for the countdowns and "last checked Ns ago". */
@@ -58,57 +53,12 @@ const useNow = (): number => {
     return now;
 };
 
-const BUTTON_LABEL: Record<FillButton, string> = {
-    allowMp3: 'Allow MP3 and retry',
-    cancel: 'Cancel',
-    dismiss: 'Dismiss',
-    openAlbum: 'Open album',
-    retry: 'Retry',
-    tryAnother: 'Try another source',
-    wishlist: 'Add to wishlist',
-};
-
 const FillRow = ({ now, row }: { now: number; row: LedgerRow }) => {
-    const { dismiss } = useActiveFillsActions();
-    const { add: addToWishlist } = useWishlistActions();
-    const navigate = useNavigate();
-    const [busy, setBusy] = useState(false);
-    const view = describeFill(row, now);
+    // F7: the same actions as the album page's request box, so one row offers the same buttons.
+    const { busy, label, run, shown } = useFillActions(row);
+    const downloadsShown = useLbBotDownloadsShown();
+    const view = describeFill(row, now, downloadsShown);
     const failed = row.settled && row.outcome !== 'done';
-
-    const run = async (action: () => Promise<boolean>) => {
-        setBusy(true);
-        const ok = await action();
-        setBusy(false);
-        if (!ok) toast.error({ message: 'lb-bot would not take that request.' });
-    };
-
-    const openAlbum = () => {
-        if (row.rgid) navigate(generatePath(AppRoute.EXTERNAL_ALBUM_DETAIL, { rgid: row.rgid }));
-    };
-
-    const actions: Record<FillButton, () => void> = {
-        allowMp3: () =>
-            run(() => allowMp3AndRetry({ groupId: row.groupId, isGap: row.isGap, key: row.key })),
-        cancel: () => run(() => cancelFill(row)),
-        dismiss: () => dismiss(row.key),
-        openAlbum,
-        retry: () => run(() => retryFill({ isGap: row.isGap, key: row.key })),
-        tryAnother: () => run(() => retryFill(row, { anotherSource: true })),
-        // The row is dismissed once it is on the list: the wishlist page is
-        // where it lives from here, and a live button under it was a second
-        // way to add the same thing.
-        wishlist: () =>
-            run(async () => {
-                const ok = await addToWishlist({
-                    artist: row.artist,
-                    rgid: row.rgid,
-                    title: row.album,
-                });
-                if (ok) dismiss(row.key);
-                return ok;
-            }),
-    };
 
     return (
         <div className={styles.row}>
@@ -151,14 +101,14 @@ const FillRow = ({ now, row }: { now: number; row: LedgerRow }) => {
                 )}
             </Stack>
             <Group gap="xs">
-                {view.buttons.map((button) => (
+                {shown(view.buttons).map((button) => (
                     <Button
                         disabled={busy && button !== 'dismiss'}
                         key={button}
-                        onClick={actions[button]}
+                        onClick={() => run(button)}
                         variant="subtle"
                     >
-                        {BUTTON_LABEL[button]}
+                        {label(button)}
                     </Button>
                 ))}
             </Group>
@@ -212,6 +162,12 @@ export const LbBotDownloadsPage = ({
     const filter: LedgerFilter = section === 'wishlist' ? 'all' : section;
     const shown = rows.filter(MATCHES[filter]);
     const now = useNow();
+    // Worbus P1: with downloading off the ledger is history to read: no paste-a-link box (a pasted
+    // link is an acquisition); the rows lose their fetching buttons (`useFillActions`).
+    const downloadsShown = useLbBotDownloadsShown();
+    // Off, the page is Activity (the sidebar's name) and its empty line says nothing of fetching.
+    const { t } = useTranslation();
+    const copy = activityPageCopy(downloadsShown);
 
     const chips = (
         <Group gap="xs">
@@ -242,23 +198,27 @@ export const LbBotDownloadsPage = ({
             count={section === 'wishlist' ? (wishlistCount ?? null) : shown.length}
             countLoading={section === 'wishlist' && wishlist.isLoading}
             filters={chips}
-            title="Downloads"
+            title={t(copy.title.key)}
         >
             {section === 'wishlist' ? (
                 <WishlistList />
             ) : (
                 <>
+                    {/* Worbus P4: lb-bot's imports that need you (Needs attention's own row),
+                        whatever the filter: they are not fills, and the chips do not count them. */}
+                    <ImportsRow />
                     {/* The one entry point into this surface that does not start
                         from something the library already knows about. It sits
                         here rather than on Discover because a pasted link is an
                         acquisition, and this is the page acquisitions are
                         tracked on. */}
-                    <ResolveLinkBox />
+                    {/* Off, it folds away rather than vanishing, so a row acted on below it is
+                        not jumped up (F7 walk). */}
+                    <Fold name="resolve-link" open={downloadsShown}>
+                        <ResolveLinkBox />
+                    </Fold>
                     {rows.length === 0 ? (
-                        <Text isMuted>
-                            Nothing yet. Albums you ask lb-bot to fetch show up here while they
-                            download, and stay until you dismiss them.
-                        </Text>
+                        <Text isMuted>{t(copy.empty.key)}</Text>
                     ) : shown.length === 0 ? (
                         // A filter that hides everything must say it was the
                         // filter, not that there is nothing here.

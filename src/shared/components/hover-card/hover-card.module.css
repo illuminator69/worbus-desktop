@@ -4,4 +4,12 @@
     background: var(--theme-colors-surface);
     border: 1px solid var(--theme-colors-border);
     filter: drop-shadow(0 0 5px rgb(0 0 0 / 50%));
+
+    /* With the cover wash the surface role is translucent: a floating layer keeps its tint over the
+       opaque page colour, so what is under it does not show through. */
+    :root[data-cover-wash='true'] & {
+        background:
+            linear-gradient(var(--theme-colors-surface), var(--theme-colors-surface)),
+            var(--theme-colors-background);
+    }
 }

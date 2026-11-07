@@ -4,18 +4,52 @@
     gap: var(--mantine-spacing-xs);
     width: 100%;
     height: 100%;
-    max-height: calc(100vh - 90px);
+    max-height: var(--content-height, calc(100vh - 90px));
+
+    /* A column too short for the group stack scrolls as a whole, so the lower groups stay reachable. */
+    overflow-y: auto;
     background: var(--theme-colors-background-alternate);
+
+    /* The #sidebar card already paints the translucent surface: one layer, as the queue panel has. */
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
 }
 
 .container.custom-bar {
-    max-height: calc(100vh - 120px);
+    max-height: var(--content-height, calc(100vh - 120px));
 }
 
 .scroll-area {
     flex: 1;
-    min-height: 0;
-    padding: 0 var(--theme-spacing-md) var(--theme-spacing-md) var(--theme-spacing-md);
+    min-height: 136px;
+    padding: var(--theme-spacing-sm) var(--theme-spacing-md) var(--theme-spacing-md)
+        var(--theme-spacing-md);
+}
+
+/* You, Listening, Library tools and App, pinned under the scroll area with a hairline above. */
+.group-stack {
+    display: flex;
+    flex-shrink: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: 0 var(--theme-spacing-md) var(--theme-spacing-sm);
+
+    &::before {
+        height: 1px;
+        margin: 0 10px 8px;
+        content: '';
+        background: var(--theme-colors-border);
+    }
+
+    &:empty {
+        display: none;
+    }
+}
+
+/* navi-connect (B-232, B-295): in a short window the lower groups scroll with the list, after the playlists. */
+.group-stack.in-list {
+    padding: var(--theme-spacing-md) 0 0;
 }
 
 @keyframes fade-in {
@@ -56,10 +90,6 @@
     filter: blur(20px);
 }
 
-.accordion-root {
-    height: 100%;
-}
-
 .accordion-item {
     border-bottom: none;
 }
@@ -77,6 +107,10 @@
 .accordion-content {
     padding: 0;
     background: var(--theme-colors-background-alternate);
+
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
 }
 
 .accordion-content:last-child {

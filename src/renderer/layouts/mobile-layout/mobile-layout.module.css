@@ -1,12 +1,20 @@
 .layout {
+    /*
+     * The heights a pinned table header sits under (shell-pinned-top.ts), as the default layout names
+     * them: no top bar here, the window bar only under the Windows and macOS bars.
+     */
+    --window-bar-height: 0px;
+    --top-bar-height: 0px;
+    --page-header-height: 65px;
+
     position: relative;
     display: grid;
     grid-template-areas:
         'window-bar'
         'main-content'
         'player';
-    grid-template-rows: 0 calc(100vh - 90px) 90px;
-    grid-template-rows: 0 calc(100dvh - 90px) 90px;
+    grid-template-rows: var(--window-bar-height) calc(100vh - 90px - var(--window-bar-height)) 90px;
+    grid-template-rows: var(--window-bar-height) calc(100dvh - 90px - var(--window-bar-height)) 90px;
     grid-template-columns: 1fr;
     gap: 0;
     width: 100vw;
@@ -18,8 +26,7 @@
 
 .windows,
 .macos {
-    grid-template-rows: 30px calc(100vh - 120px) 90px;
-    grid-template-rows: 30px calc(100dvh - 120px) 90px;
+    --window-bar-height: 30px;
 }
 
 .drawer-button {

@@ -12,6 +12,10 @@
     background: var(--theme-colors-background);
     border-bottom: 1px solid alpha(var(--theme-colors-border), 0.5);
     -webkit-app-region: drag;
+
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
 }
 
 .windows-button-group {
@@ -98,6 +102,10 @@
     background: var(--theme-colors-background);
     border-bottom: 1px solid alpha(var(--theme-colors-border), 0.5);
     -webkit-app-region: drag;
+
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
 }
 
 .macos-container .player-status-container {

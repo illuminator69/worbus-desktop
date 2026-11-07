@@ -1,9 +1,11 @@
 import { closeAllModals } from '@mantine/modals';
+import clsx from 'clsx';
 import { AnimatePresence } from 'motion/react';
 import { CSSProperties, memo, ReactNode, useCallback, useRef, useState } from 'react';
 
 import styles from './library-header-bar.module.css';
 
+import { useLibraryFrame } from '/@/renderer/features/library/hooks/use-library-frame';
 import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
 import { DefaultPlayButton } from '/@/renderer/features/shared/components/play-button';
 import { PlayButtonGroupPopover } from '/@/renderer/features/shared/components/play-button-group';
@@ -20,9 +22,10 @@ interface LibraryHeaderBarProps {
 }
 
 const LibraryHeaderBarComponent = ({ children, ignoreMaxWidth }: LibraryHeaderBarProps) => {
+    const { inFrame } = useLibraryFrame();
     return (
         <div
-            className={styles.headerContainer}
+            className={clsx(styles.headerContainer, { [styles.inFrame]: inFrame })}
             style={ignoreMaxWidth ? ({ maxWidth: 'none' } as CSSProperties) : undefined}
         >
             {children}
@@ -102,6 +105,9 @@ const HeaderPlayButton = ({
 };
 
 const Title = ({ children, order = 1 }: TitleProps) => {
+    // The Library frame draws the one title ("Library"); a page inside it draws none.
+    const { inFrame } = useLibraryFrame();
+    if (inFrame) return null;
     return (
         <TextTitle fw={700} order={order as any} overflow="hidden">
             {children}

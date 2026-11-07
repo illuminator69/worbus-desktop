@@ -6,23 +6,30 @@
     padding: var(--theme-spacing-md) var(--theme-spacing-md) var(--theme-spacing-md) 0;
 }
 
+/*
+ * R14 (B-253): the title, artist and album take a fixed width, each one line cut with an ellipsis
+ * (the full text in its title attribute), so the heart after them stands at the same x for every
+ * song: it moved with the longest line (the owner's shots, at about 1.2 zoom: x 247, 264, 293, i.e.
+ * 206, 220, 244 CSS px, for three songs). The width is in px, not a share of the column, so the
+ * heart also keeps its x from window to window: 30 px past the widest of those three, all of which
+ * still fit uncut. Only a window too narrow for it cuts it further.
+ */
 .metadata-stack {
     display: flex;
+    flex: 0 1 160px;
     flex-direction: column;
     gap: var(--theme-spacing-xs);
     justify-content: center;
-    width: 100%;
+    min-width: 0;
     overflow: hidden;
 }
 
-@keyframes fadein {
-    from {
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
+/* The heart follows the text block, whose width does not depend on the song (B-253). */
+.favorite {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    padding: 0 var(--theme-spacing-md) 0 var(--theme-spacing-sm);
 }
 
 .image {
@@ -30,7 +37,6 @@
     width: 60px;
     height: 60px;
     cursor: pointer;
-    animation: fadein 0.2s ease-in-out;
 
     button {
         display: none;

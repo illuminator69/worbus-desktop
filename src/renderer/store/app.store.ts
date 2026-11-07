@@ -11,6 +11,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 
 import packageJson from '../../../package.json';
 
+import { migrateSidebarWidths } from '/@/renderer/store/sidebar-widths';
 import { AlbumListSort, SongListSort, SortOrder } from '/@/shared/types/domain-types';
 import { Platform } from '/@/shared/types/types';
 
@@ -242,10 +243,10 @@ export const useAppStore = createWithEqualityFn<AppSlice>()(
                     collapsed: false,
                     expanded: [],
                     image: false,
-                    leftWidth: '400px',
+                    leftWidth: '232px',
                     rightExpanded: false,
                     rightHeight: '320px',
-                    rightWidth: '600px',
+                    rightWidth: '360px',
                 },
                 titlebar: {
                     backgroundColor: '#000000',
@@ -268,6 +269,10 @@ export const useAppStore = createWithEqualityFn<AppSlice>()(
                     state.sidebar.rightHeight = '320px';
                 }
 
+                if (version < 6 && state.sidebar) {
+                    Object.assign(state.sidebar, migrateSidebarWidths(state.sidebar));
+                }
+
                 return state;
             },
             name: 'store_app',
@@ -276,7 +281,7 @@ export const useAppStore = createWithEqualityFn<AppSlice>()(
                 const { globalExpanded: _, latestVersion: __, ...rest } = state;
                 return rest;
             },
-            version: 5,
+            version: 6,
         },
     ),
 );

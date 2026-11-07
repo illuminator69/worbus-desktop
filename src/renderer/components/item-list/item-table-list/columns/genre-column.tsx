@@ -1,4 +1,3 @@
-import clsx from 'clsx';
 import { Fragment, useMemo } from 'react';
 import { generatePath, Link } from 'react-router';
 
@@ -10,6 +9,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { AppRoute } from '/@/renderer/router/routes';
 import { Text } from '/@/shared/components/text/text';
 import { Genre } from '/@/shared/types/domain-types';
@@ -32,10 +32,8 @@ const GenreColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <div
-                    className={clsx(styles.genresContainer, {
-                        [styles.compact]: props.size === 'compact',
-                        [styles.large]: props.size === 'large',
-                    })}
+                    className={styles.genresContainer}
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                 >
                     {genres.map((genre, index) => (
                         <Fragment key={genre.id}>

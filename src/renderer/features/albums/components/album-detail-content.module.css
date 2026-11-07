@@ -4,122 +4,224 @@
     container-type: inline-size;
 }
 
+/* The body under the hero, on the hero's 28 px side padding (board `.two`, the toolbar row). */
 .detail-container {
     display: flex;
     flex-direction: column;
-    gap: var(--theme-spacing-lg);
-    padding: 1rem 2rem 5rem;
+    padding: 6px 28px 5rem;
 }
 
-.content-layout {
-    display: grid;
-    grid-template-areas:
-        'metadata'
-        'songs';
-    grid-template-rows: auto auto;
-    grid-template-columns: 1fr;
-    gap: var(--theme-spacing-lg);
-    align-items: start;
-    width: 100%;
+/*
+ * The About row, in the artist page's order (R13, B-243): the folded text, then the genres, tags
+ * and links, full width under it, 16 px apart (the artist About's gap). Side by side, a folded
+ * About beside a taller tags column left an empty band under the text (the owner's shot 01).
+ */
+.about-row {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.about {
     min-width: 0;
 }
 
-.metadata-column {
+/* The board's `.lbl`. The fold's arrow sits under the text, at the cut (ClampFold). */
+.label {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--theme-colors-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+}
+
+/* The board's `.about p`: 14 px / 1.55, muted, 62ch. */
+.about-text {
+    max-width: 62ch;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--theme-colors-foreground-muted);
+    overflow-wrap: anywhere;
+
+    & p {
+        margin: 0;
+    }
+
+    & p + p {
+        margin-top: 8px;
+    }
+
+    & a {
+        color: var(--theme-colors-primary);
+    }
+}
+
+.meta-source {
     display: flex;
     flex-direction: column;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.side {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.chips {
+    display: flex;
     flex-wrap: wrap;
-    grid-area: metadata;
-    gap: var(--theme-spacing-xl);
+    gap: 6px;
+}
+
+/* The board's `.tags span`: 26 px, 6 px corners, 12.5 px weight 600 on the raised surface. */
+.chip-tag {
+    display: inline-flex;
     align-items: center;
-    text-align: center;
+    max-width: 100%;
+    height: 26px;
+    padding: 0 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    text-decoration: none;
+    background: var(--theme-colors-surface);
+    border-radius: 6px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+}
+
+a.chip-tag:hover {
+    text-decoration: underline;
+}
+
+/* The board's `.lnk`: accent text links, 13 px weight 700, an external mark after the name. */
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+    margin-top: 2px;
+}
+
+.link {
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--theme-colors-primary);
+    text-decoration: none;
+
+    &:hover {
+        text-decoration: underline;
+    }
 }
 
 .songs-column {
     display: flex;
     flex-direction: column;
-    grid-area: songs;
     min-width: 0;
     overflow-x: hidden;
 }
 
-.search-text-input {
-    background: transparent;
-    border-color: rgb(255 255 255 / 5%);
-    border-style: solid;
-    border-width: 1px;
-
-    @mixin light {
-        border-color: rgb(0 0 0 / 5%);
-    }
-
-    @mixin dark {
-        border-color: rgb(255 255 255 / 5%);
-    }
-}
-
-.external-links-group {
-    justify-content: center;
-}
-
-.metadata-pill-group {
-    align-items: center;
-}
-
-.pill-group-wrapper {
+/* The board's toolbar row: 14 px above, 8 px to the table. */
+.toolbar {
     display: flex;
-    width: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    padding: 14px 0 8px;
+}
 
-    & > div {
-        justify-content: center;
+/* The board's `.sfield`, 240 px wide; two classes deep so it beats Mantine's input sizes. */
+.search {
+    flex: 0 1 240px;
+    min-width: 0;
+}
+
+.toolbar .search-input {
+    height: 34px;
+    min-height: 34px;
+    font-size: 13.5px;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    /* The board's `.sfield.on`: a 2 px accent ring inside the field while it has focus. */
+    &:focus,
+    &:focus-visible {
+        color: var(--theme-colors-foreground);
+        outline: none;
+        box-shadow: inset 0 0 0 2px var(--theme-colors-primary);
     }
 }
 
-@container (min-width: $mantine-breakpoint-sm) {
-    .metadata-column {
-        flex-direction: row;
-        justify-content: flex-start;
-        text-align: left;
+/* The board's `.chip` (the discography's filter bar draws the same one). */
+.chip {
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 6px;
+    align-items: center;
+    max-width: 100%;
+    height: 30px;
+    padding: 0 12px;
+    overflow: hidden;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
     }
 
-    .external-links-group {
-        justify-content: flex-start;
-    }
-
-    .metadata-pill-group {
-        align-items: flex-start;
-    }
-
-    .pill-group-wrapper {
-        justify-content: flex-start;
-
-        & > div {
-            justify-content: flex-start;
-        }
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
     }
 }
 
-@container (min-width: $mantine-breakpoint-lg) {
-    .content-layout {
-        grid-template-areas: 'songs metadata';
-        grid-template-rows: 1fr;
-        grid-template-columns: minmax(0, 1fr) 300px;
-        gap: var(--theme-spacing-xl);
-        width: 100%;
-        max-width: 100%;
-    }
+.icon-chip {
+    justify-content: center;
+    width: 30px;
+    padding: 0;
+}
 
-    /* Prevent sticky headers from extending into the right margins */
-    .songs-column :global(.fs-item-table-list-module-sticky-header),
-    .songs-column :global(.fs-item-table-list-module-sticky-group-row) {
-        padding-right: 0;
-        margin-right: 0;
-    }
+.spacer {
+    flex: 1 1 0;
+    min-width: 0;
+}
 
-    .metadata-column {
-        position: sticky;
-        top: calc(var(--theme-spacing-lg) + 4rem);
-        align-self: start;
-        width: 300px;
-        max-height: calc(100vh - 90px - var(--theme-spacing-lg) - 4rem);
+/* The board's `.ib.fill`: the table settings on the raised surface. */
+.toolbar .settings {
+    background: var(--theme-colors-surface);
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
     }
+}
+
+.credits {
+    margin-top: var(--theme-spacing-xl);
 }

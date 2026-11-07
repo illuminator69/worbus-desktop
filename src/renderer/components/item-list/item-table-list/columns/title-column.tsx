@@ -12,6 +12,7 @@ import {
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { useIsActiveRow } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { PreviewIndicator } from '/@/renderer/features/preview/components/preview-indicator';
 import { ExplicitIndicator } from '/@/shared/components/explicit-indicator/explicit-indicator';
 import { Text } from '/@/shared/components/text/text';
@@ -63,6 +64,7 @@ function DefaultTitleColumn(props: ItemTableListInnerColumn) {
                         [styles.nameContainer]: true,
                     })}
                     isNoSelect
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                     {...titleLinkProps}
                 >
                     <ExplicitIndicator explicitStatus={item?.explicitStatus} />
@@ -113,6 +115,7 @@ function QueueSongTitleColumn(props: ItemTableListInnerColumn) {
                         [styles.nameContainer]: true,
                     })}
                     isNoSelect
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                     {...titleLinkProps}
                 >
                     <ExplicitIndicator explicitStatus={song?.explicitStatus} />

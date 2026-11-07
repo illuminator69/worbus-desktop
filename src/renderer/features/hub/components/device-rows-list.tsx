@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useEffect, useState } from 'react';
 
 import styles from './device-rows-list.module.css';
@@ -268,7 +269,13 @@ export const DeviceRowsList = () => {
                     >
                         {showExtra ? 'Hide' : 'Show'} offline & hidden ({extra.length})
                     </button>
-                    {showExtra && extra.map(renderRow)}
+                    {/* Folds open as the device box does. */}
+                    <div
+                        className={clsx(styles.fold, showExtra && styles.foldOpen)}
+                        inert={!showExtra}
+                    >
+                        <div className={styles.foldInner}>{extra.map(renderRow)}</div>
+                    </div>
                 </>
             )}
         </div>

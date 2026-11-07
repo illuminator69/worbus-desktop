@@ -1,5 +1,6 @@
-appId: org.jeffvli.feishin
-productName: Feishin
+appId: app.worbus.desktop
+productName: Worbus
+executableName: worbus
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 electronVersion: 43.7.0
 directories:
@@ -40,7 +41,8 @@ mac:
           arch:
               - arm64
               - x64
-    icon: media/feishin.icon
+    # Worbus P5: electron-builder makes the .icns from the 1024 PNG (no Icon Composer bundle).
+    icon: assets/icons/1024x1024.png
     type: distribution
     hardenedRuntime: false
     identity: "-"
@@ -49,8 +51,8 @@ mac:
     gatekeeperAssess: false
     notarize: false
     extendInfo:
-        NSAudioCaptureUsageDescription: 'System audio access is required for mpv visualizer capture in Feishin'
-        NSLocalNetworkUsageDescription: 'Local network is necessary for accessing servers hosted on the same system as Feishin'
+        NSAudioCaptureUsageDescription: 'System audio access is required for mpv visualizer capture in Worbus'
+        NSLocalNetworkUsageDescription: 'Local network is necessary for accessing servers hosted on the same system as Worbus'
 
 dmg:
     contents: [{ x: 130, y: 220 }, { x: 410, y: 220, type: link, path: /Applications }]
@@ -62,6 +64,11 @@ linux:
         - tar.xz
     category: AudioVideo;Audio;Player
     icon: assets/icons/icon.png
+    # Worbus P5 (walk): the window's WM_CLASS is ("worbus", "worbus"); electron-builder would write
+    # StartupWMClass=Worbus (productName), and the taskbar would not group the window with its entry.
+    desktop:
+        entry:
+            StartupWMClass: worbus
     artifactName: ${productName}-${os}-${arch}.${ext}
 
 toolsets:
@@ -69,9 +76,13 @@ toolsets:
 
 npmRebuild: false
 afterAllArtifactBuild: scripts/after-all-artifact-build.mjs
+# Worbus P4 (design §6.9): the fork, never upstream. CI builds with `--publish never` and its own
+# job drafts the release (.github/workflows/release.yml). Nothing reads this at run time: a packaged
+# build never constructs the updater (src/main/index.ts), so the app-update.yml it writes into the
+# build is not consulted.
 publish:
     provider: github
-    owner: jeffvli
-    repo: feishin
+    owner: illuminator69
+    repo: worbus-desktop
     channel: latest
     releaseType: draft

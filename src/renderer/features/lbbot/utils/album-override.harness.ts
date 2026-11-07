@@ -690,7 +690,7 @@ test('item 6: picked equals current, zero changes, a cover chosen -> cover only'
         albumCommit({ changing: 3, coverChosen: true, current: 'r1', picked: 'r1' }),
         'apply',
     );
-    // another release with nothing to change stays disabled (documented divergence from Navic)
+    // another release with nothing to change stays disabled (documented divergence from Worbus for Android)
     assert.equal(
         albumCommit({ changing: 0, coverChosen: true, current: 'r1', picked: 'r2' }),
         'nothing',

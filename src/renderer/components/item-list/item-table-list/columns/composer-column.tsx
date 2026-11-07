@@ -1,5 +1,3 @@
-import clsx from 'clsx';
-
 import styles from './composer-column.module.css';
 
 import {
@@ -8,6 +6,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { JoinedArtists } from '/@/renderer/features/albums/components/joined-artists';
 import { Album, RelatedArtist, Song } from '/@/shared/types/domain-types';
 
@@ -21,10 +20,8 @@ export const ComposerColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <div
-                    className={clsx(styles.composersContainer, {
-                        [styles.compact]: props.size === 'compact',
-                        [styles.large]: props.size === 'large',
-                    })}
+                    className={styles.composersContainer}
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                 >
                     <JoinedArtists
                         artistName=""

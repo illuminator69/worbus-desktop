@@ -1,5 +1,5 @@
 /*
- * Glassy overrides for the Catppuccin themes — a faithful port of Feishin's built-in
+ * Glassy overrides for the Catppuccin themes — a faithful port of the built-in
  * "Glassy Dark" (src/shared/themes/glassy-dark/glassy_overrides.css): the same frosted
  * surfaces, backdrop blur, and rounded element shapes, but with the hardcoded near-black
  * translucent fills swapped for palette-driven color-mix() so the file works on BOTH

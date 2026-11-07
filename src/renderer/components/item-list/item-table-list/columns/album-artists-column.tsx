@@ -1,5 +1,3 @@
-import clsx from 'clsx';
-
 import styles from './album-artists-column.module.css';
 
 import {
@@ -8,6 +6,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { JoinedArtists } from '/@/renderer/features/albums/components/joined-artists';
 import { Album, RelatedAlbumArtist, Song } from '/@/shared/types/domain-types';
 
@@ -22,20 +21,15 @@ const AlbumArtistsColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <div
-                    className={clsx(styles.artistsContainer, {
-                        [styles.compact]: props.size === 'compact',
-                        [styles.large]: props.size === 'large',
-                    })}
+                    className={styles.artistsContainer}
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                 >
                     <JoinedArtists
                         artistName={albumArtistString}
                         artists={row}
                         linkProps={{ fw: 400, isMuted: true }}
                         rootTextProps={{
-                            className: clsx(styles.artistsContainer, {
-                                [styles.compact]: props.size === 'compact',
-                                [styles.large]: props.size === 'large',
-                            }),
+                            className: styles.artistsContainer,
                             fw: 400,
                             isMuted: true,
                             size: 'sm',

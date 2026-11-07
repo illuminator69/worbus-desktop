@@ -1,25 +1,27 @@
-# Feishin — navi-connect fork
+<img src="assets/icons/icon.png" alt="Worbus logo" title="Worbus" align="right" height="60px" width="60px" />
 
-> ### This is a fork of **[jeffvli/feishin](https://github.com/jeffvli/feishin)**
-> All credit for Feishin itself belongs to [Jeff Li](https://github.com/jeffvli) and its
-> contributors. This fork only adds the features below; **upstream's own README follows
-> unchanged further down**, and upstream is where you should go for Feishin itself, its
-> releases, and its issue tracker.
->
-> Licensed **GPL-3.0**, same as upstream. This repository is the corresponding source for
-> the binaries on its own [releases page](https://github.com/illuminator69/feishin-gaps/releases).
+# Worbus for desktop
 
-## What this fork adds
+> **Download and issues: see [Worbus](https://github.com/illuminator69/worbus).** That is where the
+> Worbus Server, both apps' downloads and the one issue tracker live. This repository holds the
+> desktop app's code.
 
-It turns Feishin into a client for **[navi-connect](https://github.com/illuminator69/navi-connect)**,
-a shared playback session across devices, and a front end for
+Worbus for desktop is a fork of Feishin by Jeff Li
+([jeffvli/feishin](https://github.com/jeffvli/feishin)); all credit for Feishin itself belongs to
+him and its contributors. Licensed GPL-3.0, like the original. Worbus is not affiliated with
+Navidrome.
+
+## What it is
+
+A music player for your own music server (Navidrome, Jellyfin or any OpenSubsonic server), and a
+client of the **Worbus Server**: a shared playback session across devices, and a front end for
 **[lb-bot](https://github.com/illuminator69/lb-bot)**, which knows what your library is missing.
-Its Android counterpart is **[Navic](https://github.com/illuminator69/navic-gaps)** with the same
-layer, and the two are kept in step.
+Its Android counterpart is **[Worbus for Android](https://github.com/illuminator69/worbus-android)**,
+and the two are kept in step.
 
 **The albums you don't own, on the artist page next to the ones you do.**
 
-![Feishin artist page showing owned albums alongside greyed-out ones marked NOT IN LIBRARY, with a +38 MISSING badge](docs/screenshots/feishin-artist-missing-albums.png)
+![The artist page showing owned albums alongside greyed-out ones marked NOT IN LIBRARY, with a +38 MISSING badge](docs/screenshots/feishin-artist-missing-albums.png)
 
 **Downloads are reviewed, not fired blind:** pick the edition, check it against the canonical
 MusicBrainz tracklist, choose a quality, then look at real Soulseek sources ranked by coverage.
@@ -30,289 +32,132 @@ Also:
 
 - **One session across devices.** The player bar drives local *or* remote playback; there is no
   separate remote UI. Move a song mid-play to a phone or a Chromecast and it resumes where it was.
-  A play, pause, seek or volume change shows at once and holds until the hub confirms it.
+  A play, pause, seek or volume change shows at once and holds until the server confirms it.
 - **Devices.** The picker says what each device is and how loud it is, and any device's volume can
   be set from its own row, playing or not. The sleep timer belongs to the session, so it works from
   every device.
 - **Chromecast bridge.** `bonjour-service` + `castv2-client` in the main process; no Cast SDK. Every
-  discovered speaker is registered with the hub so it shows up in every client's device picker.
-- **Stations.** Radio and autoplay are computed by the hub from
+  discovered speaker is registered with the server so it shows up in every client's device picker.
+- **Stations.** Radio and autoplay are computed by the Worbus Server from
   [AudioMuse-AI](https://github.com/NeptuneHub/AudioMuse-AI) (or Navidrome's similar songs alone),
   so every device continues the same station. Autoplay sits in the queue as four chips (Off,
   Close, Balanced, Explore), and a chip changes the upcoming songs at once on whichever device is
-  playing. Without the hub's engine, upstream's Auto DJ takes over.
+  playing. Without the server's engine, the built-in Auto DJ takes over.
 - **Mixed for You.** Radio, Your mix (built from what you play most), Genre and Artist mixes,
-  offered the same way as in Navic, plus AudioMuse's text-to-music search.
+  offered the same way as in Worbus for Android, plus AudioMuse's text-to-music search.
 - **Discover and Listening.** A Discover page of rows (fresh releases, ListenBrainz playlists,
   rediscovery, similar artists, moods, mixes) and a listening-history page mirrored from
   ListenBrainz.
 - **lb-bot in the library.** Missing albums and their review, downloads, a wishlist, library
-  matches, and album and artist corrections, all through the hub.
-- **Saved queues / Continue Listening**, synced through the hub and shared with Navic.
+  matches, and album and artist corrections, all through the server.
+- **Saved queues / Continue Listening**, synced through the server and shared with Worbus for
+  Android.
 
-## Setup
+## Install
 
-Don't start here: the stack has several pieces and they have an order.
-**→ [navi-connect setup guide](https://github.com/illuminator69/navi-connect/blob/main/TESTING-SETUP.md)**
+Follow [Worbus's install guide](https://github.com/illuminator69/worbus/blob/main/INSTALL.md): the
+server comes first, then the apps. Nothing is code-signed: Windows shows a SmartScreen warning (if
+Defender quarantines the installer, use the portable `.zip`), and the macOS builds are not
+notarized, so Gatekeeper blocks them until you allow the app.
 
-Prebuilt binaries for Windows, macOS and Linux are on this repo's
-[releases page](https://github.com/illuminator69/feishin-gaps/releases), as pre-releases named
-`<feishin version>-navi-connect-<date>`. Nothing there is code-signed: Windows shows a SmartScreen
-warning (if Defender quarantines the installer, use the portable `.zip`), and the macOS builds are
-not notarized, so Gatekeeper blocks them until you allow the app.
-
-To build instead, upstream's instructions below still apply, for example:
+To build instead:
 
 ```bash
 pnpm install
-pnpm run build && pnpm exec electron-builder --linux --x64 --dir   # → dist/linux-unpacked/
+pnpm run build && pnpm exec electron-builder --linux --x64 --dir   # -> dist/linux-unpacked/
 ```
 
-## Relationship to upstream
+### Coming from Feishin
 
-This fork tracks upstream and merges its releases; it is on **`v1.17.0`**. Upstream's full history
-is preserved here precisely so that merging the next tag keeps working:
+Worbus keeps its settings in its own folder: `~/.config/Worbus` on Linux, `%APPDATA%\Worbus` on
+Windows, `~/Library/Application Support/Worbus` on macOS. The first time it starts it copies your
+Feishin folder (`feishin`) into it: servers, themes, EQ presets, custom CSS and the rest. Feishin's
+folder is left as it was, so Feishin keeps working.
 
-```bash
-git remote add upstream https://github.com/jeffvli/feishin.git
-git fetch upstream --tags
-git merge v1.18.0        # whichever upstream tag is next
-```
-
-Please report bugs in **Feishin itself** to [upstream](https://github.com/jeffvli/feishin/issues);
-they will not be fixed here. Bugs in the hub, stations, cast, lb-bot or AudioMuse layers belong in
-[navi-connect](https://github.com/illuminator69/navi-connect/issues).
-
----
-
-<sub>Upstream README follows, unmodified.</sub>
-
----
-
-<img src="assets/icons/icon.png" alt="logo" title="feishin" align="right" height="60px" width="60px" />
-
-# Feishin
-
-  <p align="center">
-    <a href="https://github.com/jeffvli/feishin/blob/main/LICENSE">
-      <img src="https://img.shields.io/github/license/jeffvli/feishin?style=flat-square&color=brightgreen"
-      alt="License">
-    </a>
-      <a href="https://github.com/jeffvli/feishin/releases">
-      <img src="https://img.shields.io/github/v/release/jeffvli/feishin?style=flat-square&color=blue"
-      alt="Release">
-    </a>
-    <a href="https://github.com/jeffvli/feishin/releases">
-      <img src="https://img.shields.io/github/downloads/jeffvli/feishin/total?style=flat-square&color=orange"
-      alt="Downloads">
-    </a>
-  </p>
-  <p align="center">
-    <a href="https://discord.gg/FVKpcMDy5f">
-      <img src="https://img.shields.io/discord/922656312888811530?color=black&label=discord&logo=discord&logoColor=white"
-      alt="Discord">
-    </a>
-    <a href="https://matrix.to/#/#sonixd:matrix.org">
-      <img src="https://img.shields.io/matrix/sonixd:matrix.org?color=black&label=matrix&logo=matrix&logoColor=white"
-      alt="Matrix">
-    </a>
-  </p>
-
----
-
-Rewrite of [Sonixd](https://github.com/jeffvli/sonixd).
-
-## Features
-
-- [x] MPV player backend
-- [x] Web player backend
-- [x] Modern UI
-- [x] Scrobble playback to your server
-- [x] Smart playlist editor (Navidrome)
-- [x] Synchronized and unsynchronized lyrics support
-- [ ] [Request a feature](https://github.com/jeffvli/feishin/issues) or [view taskboard](https://github.com/users/jeffvli/projects/5/views/1)
-
-## Screenshots
-
-<a href="./media/preview_full_screen_player.png"><img src="./media/preview_full_screen_player.png" width="49.5%"/></a> <a href="./media/preview_album_artist_detail.png"><img src="./media/preview_album_artist_detail.png" width="49.5%"/></a> <a href="./media/preview_album_detail.png"><img src="./media/preview_album_detail.png" width="49.5%"/></a> <a href="./media/preview_smart_playlist.png"><img src="./media/preview_smart_playlist.png" width="49.5%"/></a>
-
-## Getting Started
-
-### Desktop (recommended)
-
-Download the [latest desktop client](https://github.com/jeffvli/feishin/releases). The desktop client is the recommended way to use Feishin. It supports both the MPV and web player backends, as well as includes built-in fetching for lyrics.
-
-#### macOS Notes
-
-If you're using a device running macOS 12 (Monterey) or higher, [check here](https://github.com/jeffvli/feishin/issues/104#issuecomment-1553914730) for instructions on how to remove the app from quarantine.
-
-For media keys to work, you will be prompted to allow Feishin to be a Trusted Accessibility Client. After allowing, you will need to restart Feishin for the privacy settings to take effect.
-
-#### Linux Notes
-
-Feishin is available in [Flathub](https://flathub.org/en/apps/org.jeffvli.feishin).
-
-Alternatively, you can install it as an Appimage. We provide a small install script to download the latest `.AppImage`, make it executable, and also download the icons required by Desktop Environments. Finally, it generates a `.desktop` file to add Feishin to your Application Launcher.
-
-Simply run the installer like this:
-
-```sh
-dir=/your/application/directory
-curl 'https://raw.githubusercontent.com/jeffvli/feishin/refs/heads/development/install-feishin-appimage' | sh -s -- "$dir"
-```
-
-The script also has an option to add launch arguments to run Feishin in native Wayland mode. Note that this is experimental in Electron and therefore not officially supported. If you want to use it, run this instead:
-
-```sh
-dir=/your/application/directory
-curl 'https://raw.githubusercontent.com/jeffvli/feishin/refs/heads/development/install-feishin-appimage' | sh -s -- "$dir" wayland-native
-```
-
-It also provides a simple uninstall routine, removing the downloaded files:
-
-```sh
-dir=/your/application/directory
-curl 'https://raw.githubusercontent.com/jeffvli/feishin/refs/heads/development/install-feishin-appimage' | sh -s -- "$dir" remove
-```
-
-The entry should show up in your Application Launcher immediately. If it does not, simply log out, wait 10 seconds, and log back in. Your Desktop Environment may alternatively provide a way to reload entries.
-
-### Web and Docker
-
-Visit [https://feishin.vercel.app](https://feishin.vercel.app) to use the hosted web version of Feishin. The web client only supports the web player backend.
-
-Feishin is also available as a Docker image. The images are hosted via `ghcr.io` and are available to view [here](https://github.com/jeffvli/feishin/pkgs/container/feishin). You can run the container using the following commands:
-
-```bash
-# Run the latest version
-docker run --name feishin -p 9180:9180 ghcr.io/jeffvli/feishin:latest
-
-# Build the image locally
-docker build -t feishin .
-docker run --name feishin -p 9180:9180 feishin
-```
-
-#### Docker Compose
-
-To install via Docker Compose, use the following snippet. This also works on Portainer.
-
-```yaml
-services:
-    feishin:
-        container_name: feishin
-        image: 'ghcr.io/jeffvli/feishin:latest'
-        restart: unless-stopped
-        environment:
-            - SERVER_NAME=jellyfin # pre-defined server name
-            - SERVER_LOCK=true # When true AND name/type/url are set, only username/password can be toggled
-            - SERVER_TYPE=jellyfin # the allowed types are: jellyfin, navidrome, subsonic. These values are case insensitive
-            - SERVER_URL= # http://address:port or https://address:port
-            - REMOTE_URL= # http://address or https://address
-            - LEGACY_AUTHENTICATION=false # When SERVER_LOCK is true, sets the legacy (plaintext) authentication flag for Subsonic/OpenSubsonic servers
-            - ANALYTICS_DISABLED=true # Set to true to disable Umami analytics tracking
-        ports:
-            - 9180:9180
-            # Alternatively, to restrict to only localhost, - 127.0.0.1:9180:8190
-```
+- **The Worbus Server sign-in is not copied.** Worbus signs in as a new device, named after your
+  computer; Feishin stays signed in.
+- **Close Feishin first.** While Feishin is running Worbus copies nothing; it asks you to close
+  Feishin and start Worbus again.
+- **Saved passwords** may not survive the move on Linux, where the system keyring keys them by the
+  app's name. Worbus then says so and asks you to sign in to that server once.
 
 ### Configuration
 
-1. Upon startup you will be greeted with a prompt to select the path to your MPV binary. If you do not have MPV installed, you can download it [here](https://mpv.io/installation/) or install it using any package manager supported by your OS. After inputting the path, restart the app.
-
-2. After restarting the app, you will be prompted to select a server. Click the `Open menu` button and select `Manage servers`. Click the `Add server` button in the popup and fill out all applicable details. You will need to enter the full URL to your server, including the protocol and port if applicable (e.g. `https://navidrome.my-server.com` or `http://192.168.0.1:4533`).
-
-- **Navidrome** - For the best experience, select "Save password" when creating the server and configure the `SessionTimeout` setting in your Navidrome config to a larger value (e.g. 72h).
-    - **Linux users** - The default password store uses `libsecret`. `kwallet4/5/6` are also supported, but must be explicitly set in Settings > Window > Passwords/secret store.
-
-3. _Optional_ - If you want to host Feishin on a subpath (not `/`), then pass in the following environment variable: `PUBLIC_PATH=PATH`. For example, to host on `/feishin`, pass in `PUBLIC_PATH=/feishin`.
-
-4. _Optional_ - To hard code the server url, pass the following environment variables: `SERVER_NAME`, `SERVER_TYPE` (one of `jellyfin` or `navidrome` or `subsonic`), `SERVER_URL`. To prevent users from changing these settings, pass `SERVER_LOCK=true`. This can only be set if all three of the previous values are set. When `SERVER_LOCK=true`, you can also set `LEGACY_AUTHENTICATION=true` or `LEGACY_AUTHENTICATION=false` to configure the legacy authentication flag for the server (only applicable for Subsonic/OpenSubsonic servers).
-
-5. _Optional_ - If your server uses a separate public-facing URL than what integrating applications use internally to communicate with your server, such as a separate Navidrome `ShareURL`, set `REMOTE_URL` to said public-facing URL.
-
-6. _Optional_ - To disable Umami analytics tracking in the Docker/web version, set the environment variable `ANALYTICS_DISABLED=true`. When enabled, the analytics script will not be loaded and all tracking will be disabled.
-
-7. _Optional_ - App settings (theme, language, sidebar options, etc.) can be overridden with environment variables on first run. The variables use the `FS_` prefix (e.g. `FS_GENERAL_THEME=defaultDark`, `FS_GENERAL_LANGUAGE=de`). See [the settings environment variable documentation](docs/ENV_SETTINGS.md) for the full list.
+1. On first start you are asked for the path to your MPV binary. If you do not have MPV installed,
+   download it [here](https://mpv.io/installation/) or install it with your package manager, then
+   restart the app.
+2. Add your music server: open the menu, **Manage servers**, **Add server**, and enter the full URL,
+   with the protocol and port if needed (e.g. `https://navidrome.my-server.com` or
+   `http://192.168.0.1:4533`).
+    - **Navidrome**: select "Save password" and set Navidrome's `SessionTimeout` to a larger value
+      (e.g. 72h).
+    - **Linux**: the default password store is `libsecret`; `kwallet4/5/6` can be chosen in
+      Settings > Window > Passwords/secret store.
+3. _Optional_: app settings can be preset with `FS_` environment variables on first run (e.g.
+   `FS_GENERAL_THEME=defaultDark`); see [the settings environment variables](docs/ENV_SETTINGS.md).
 
 ## FAQ
 
 ### MPV is either not working or is rapidly switching between pause/play states
 
-First thing to do is check that your MPV binary path is correct. Navigate to the settings page and re-set the path and restart the app. If your issue still isn't resolved, try reinstalling MPV. Known working versions include `v0.35.x` and `v0.36.x`. `v0.34.x` is a known broken version.
+Check that the MPV binary path in Settings is correct, set it again and restart the app. If that
+does not help, reinstall MPV. `v0.35.x` and `v0.36.x` are known to work; `v0.34.x` is known broken.
 
-### What music servers does Feishin support?
+### Which music servers work?
 
-Feishin supports any music server that implements a [Navidrome](https://www.navidrome.org/), [Jellyfin](https://jellyfin.org/), or [OpenSubsonic compatible](https://opensubsonic.netlify.app/) API.
+Any server with a [Navidrome](https://www.navidrome.org/), [Jellyfin](https://jellyfin.org/), or
+[OpenSubsonic compatible](https://opensubsonic.netlify.app/) API. The Worbus Server's features
+(sessions, stations, lb-bot) need Navidrome.
 
-- [Navidrome](https://github.com/navidrome/navidrome)
-- [Jellyfin](https://github.com/jellyfin/jellyfin)
-- [OpenSubsonic](https://opensubsonic.netlify.app/) compatible servers, such as...
-    - [Airsonic-Advanced](https://github.com/airsonic-advanced/airsonic-advanced)
-    - [Ampache](https://ampache.org)
-    - [Astiga](https://asti.ga/)
-    - [Funkwhale](https://www.funkwhale.audio/)
-    - [Gonic](https://github.com/sentriz/gonic)
-    - [LMS](https://github.com/epoupon/lms)
-    - [Nextcloud Music](https://apps.nextcloud.com/apps/music)
-    - [Supysonic](https://github.com/spl0k/supysonic)
-    - [Qm-Music](https://github.com/chenqimiao/qm-music)
-    - More (?)
+### "The SUID sandbox helper binary was found, but is not configured correctly" on Linux
 
-- [Plex](https://www.plex.tv/media-server-downloads)
-    - [Feishin fork by lux032](https://github.com/lux032/feishin) - Plex is not natively supported. Use the fork by lux032 to use Plex with Feishin.
-
-### I have the issue "The SUID sandbox helper binary was found, but is not configured correctly" on Linux
-
-This happens when you have user (unprivileged) namespaces disabled (`sysctl kernel.unprivileged_userns_clone` returns 0). You can fix this by either enabling unprivileged namespaces, or by making the `chrome-sandbox` Setuid.
+User (unprivileged) namespaces are disabled (`sysctl kernel.unprivileged_userns_clone` returns 0).
+Enable them, or make `chrome-sandbox` setuid:
 
 ```bash
 chmod 4755 chrome-sandbox
 sudo chown root:root chrome-sandbox
 ```
 
-Ubuntu 24.04 specifically introduced breaking changes that affect how namespaces work. Please see https://discourse.ubuntu.com/t/ubuntu-24-04-lts-noble-numbat-release-notes/39890#:~:text=security%20improvements%20 for possible fixes.
+Ubuntu 24.04 changed how namespaces work; see its
+[release notes](https://discourse.ubuntu.com/t/ubuntu-24-04-lts-noble-numbat-release-notes/39890)
+for fixes.
 
 ### How can I add custom themes?
 
-On the desktop app, you can add custom themes by dropping JSON files into the Themes folder (Settings → General → Theme → Open Folder). See [the custom themes documentation](docs/CUSTOM_THEMES.md) for the file format and examples.
+Drop JSON files into the Themes folder (Settings > General > Theme > Open Folder). See
+[the custom themes documentation](docs/CUSTOM_THEMES.md).
 
 ## Development
 
-Built and tested using Node `v23.11.0`.
+Built with [electron-vite](https://github.com/alex8088/electron-vite) on Node 24 and pnpm (pinned
+by `packageManager`).
 
-This project is built off of [electron-vite](https://github.com/alex8088/electron-vite)
+- `pnpm run dev` - start the development app
+- `pnpm run build` - build the app (main, preload, renderer and the remote page)
+- `pnpm run package:linux` / `package:mac` / `package:win` - package locally
+- `./node_modules/.bin/tsc --noEmit -p tsconfig.web.json --composite false` and
+  `-p tsconfig.node.json` - type-check (the renderer, then main and preload)
+- `node --test $(git ls-files '*.harness.ts')` - the harness tests
+- `tools/check-names.sh` - no upstream name left where a person reads the app's name
+- `pnpm run lint` / `pnpm run lint:fix` - lint
 
-- `pnpm run dev` - Start the development server
-- `pnpm run dev:watch` - Start the development server in watch mode (for main / preload HMR)
-- `pnpm run start` - Starts the app in production preview mode
-- `pnpm run build` - Builds the app for desktop
-- `pnpm run build:electron` - Build the electron app (main, preload, and renderer)
-- `pnpm run build:remote` - Build the remote app (remote)
-- `pnpm run build:web` - Build the standalone web app (renderer)
-- `pnpm run package` - Package the project
-- `pnpm run package:dev` - Package the project for development locally
-- `pnpm run package:linux` - Package the project for Linux locally
-- `pnpm run package:mac` - Package the project for Mac locally
-- `pnpm run package:win` - Package the project for Windows locally
-- `pnpm run publish:linux` - Publish the project for Linux
-- `pnpm run publish:linux:beta` - Publish the project for Linux (beta channel)
-- `pnpm run publish:linux-arm64` - Publish the project for Linux ARM64
-- `pnpm run publish:linux-arm64:beta` - Publish the project for Linux ARM64 (beta channel)
-- `pnpm run publish:mac` - Publish the project for Mac
-- `pnpm run publish:mac:beta` - Publish the project for Mac (beta channel)
-- `pnpm run publish:win` - Publish the project for Windows
-- `pnpm run publish:win:beta` - Publish the project for Windows (beta channel)
-- `pnpm run typecheck` - Type check the project
-- `pnpm run typecheck:node` - Type check the project with tsconfig.node.json
-- `pnpm run typecheck:web` - Type check the project with tsconfig.web.json
-- `pnpm run lint` - Lint the project
-- `pnpm run lint:fix` - Lint the project and fix linting errors
-- `pnpm run i18next` - Generate i18n files
+## Relationship to upstream
 
-## Translation
+This fork merges upstream's releases by hand and is on upstream **`v1.17.0`**. Upstream's full
+history is kept here so a fix can still be ported: add upstream's repository (linked above) as a
+remote named `upstream` and merge or cherry-pick from its tags.
 
-This project uses [Weblate](https://hosted.weblate.org/projects/feishin/) for translations. If you would like to contribute, please visit the link and submit a translation.
+Translations come from upstream's [Weblate project](https://hosted.weblate.org/projects/feishin/)
+and arrive with its releases; the brand word is changed here.
+
+## Icons
+
+The icons in `assets/icons/`, `resources/icon.png`, `media/worbus.svg` and the Discord images in
+`assets/discord/` are Worbus's own (Kelp and clay), generated on the maintainer's workstation by
+`worbus-icons/tools/make_icons.py` and committed as generated. The macOS `.icns` is made by
+electron-builder from `assets/icons/1024x1024.png`.
 
 ## License
 
-[GNU General Public License v3.0 ©](https://github.com/jeffvli/feishin/blob/dev/LICENSE)
+[GNU General Public License v3.0](LICENSE), like the original.

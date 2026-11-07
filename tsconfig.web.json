@@ -16,6 +16,7 @@
     "src/shared/**/*.harness.ts"
   ],
   "compilerOptions": {
+    "allowImportingTsExtensions": true,
     "composite": true,
     "jsx": "react-jsx",
     "baseUrl": ".",

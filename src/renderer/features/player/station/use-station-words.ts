@@ -3,6 +3,7 @@ import type { StationCharacterId } from '/@/shared/types/station-types';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { stationStatusKey } from '/@/renderer/features/player/station/station-chips';
 import {
     characterLabel,
     charactersOf,
@@ -50,19 +51,24 @@ export const useStationWords = () => {
         [t],
     );
 
-    /**
-     * What happens next, for the line under the chips. Off (a stopped station, or no station and
-     * Autoplay off) means the queue stops at its end, radios included.
-     */
+    /** What happens next, for the line under the chips (station-chips.ts says when). */
+    const statusKey = stationStatusKey({ autoplay, bound, inFlight, lastPartial, mode });
     const status = useMemo((): null | string => {
-        if (mode !== 'stations') return null;
-        if (bound ? bound.stopped : !autoplay) return t('naviConnect.station.offStops');
-        if (bound?.exhausted) return t('naviConnect.station.exhausted');
-        if (inFlight) return t('naviConnect.station.finding');
-        if (lastPartial) return t('naviConnect.station.partial');
-        if (!bound) return t('naviConnect.station.continues');
-        return null;
-    }, [autoplay, bound, inFlight, lastPartial, mode, t]);
+        switch (statusKey) {
+            case 'continues':
+                return t('naviConnect.station.continues');
+            case 'exhausted':
+                return t('naviConnect.station.exhausted');
+            case 'finding':
+                return t('naviConnect.station.finding');
+            case 'offStops':
+                return t('naviConnect.station.offStops');
+            case 'partial':
+                return t('naviConnect.station.partial');
+            default:
+                return null;
+        }
+    }, [statusKey, t]);
 
     return {
         autoplay,

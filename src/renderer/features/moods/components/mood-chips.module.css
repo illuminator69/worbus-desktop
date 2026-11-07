@@ -1,0 +1,55 @@
+/* The chips row: one line that scrolls sideways (`SidewaysRow`: its fades, buttons, no scrollbar). */
+.row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+
+    /* Room for the focus ring, which the scrolling row would otherwise clip. */
+    padding: 4px;
+    margin: -4px;
+}
+
+.chip,
+.clear {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.chip {
+    padding: 0 12px;
+}
+
+.clear {
+    width: 30px;
+    padding: 0;
+}
+
+.chip[aria-pressed='true'] {
+    color: var(--theme-colors-primary-contrast);
+    background: var(--theme-colors-primary-filled);
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}

@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { queryKeys } from '/@/renderer/api/query-keys';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
+import { keepsCurrentSong } from '/@/renderer/features/player/station/keep-current'; // navi-connect (B-175)
 import {
+    currentSongId, // navi-connect (B-175)
     playStationRadio,
     trackRadioSeed,
 } from '/@/renderer/features/player/station/station-client';
@@ -69,7 +71,14 @@ export const PlayTrackRadioAction = ({
                     const shouldSkipFirstSong =
                         skipFirstSong && (playType === Play.NEXT || playType === Play.LAST);
                     const queueSongs = shouldSkipFirstSong ? similarSongs : [song, ...similarSongs];
-                    if (playType === Play.NOW) markNextQueueSource('radio', song.name);
+                    if (playType === Play.NOW) {
+                        markNextQueueSource('radio', song.name);
+                        // navi-connect (B-175): from the song playing now, keep it playing.
+                        if (keepsCurrentSong(queueSongs, currentSongId())) {
+                            player.playKeepingCurrent(queueSongs);
+                            return;
+                        }
+                    }
                     player.addToQueueByData(queueSongs, playType);
                 }
             } catch (error) {

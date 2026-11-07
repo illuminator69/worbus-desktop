@@ -7,13 +7,28 @@ import styles from './sidebar-item.module.css';
 import { Button, ButtonProps } from '/@/shared/components/button/button';
 
 interface SidebarItemProps extends Omit<ButtonProps, 'component' | 'ref'> {
+    /** Every path that marks this row selected (the Library row's chip pages); wins over `selectedTo`. */
+    selectedRoutes?: string[];
+    /** The path that marks this row selected when it is not `to`; `''` means never selected. */
+    selectedTo?: string;
     to: LinkProps['to'];
 }
 
-export const SidebarItem = ({ children, className, to, ...props }: SidebarItemProps) => {
+export const SidebarItem = ({
+    children,
+    className,
+    selectedRoutes,
+    selectedTo,
+    to,
+    ...props
+}: SidebarItemProps) => {
     const location = useLocation();
-    const toPath = typeof to === 'string' ? to : to.pathname || '';
-    const isActive = location.pathname === toPath;
+    const toPath = selectedTo ?? (typeof to === 'string' ? to : to.pathname || '');
+    const path =
+        location.pathname.length > 1 ? location.pathname.replace(/\/+$/, '') : location.pathname;
+    const isActive = selectedRoutes
+        ? selectedRoutes.includes(path)
+        : toPath !== '' && path === toPath;
 
     const handleLinkDragStart = (e: React.DragEvent<HTMLButtonElement>) => {
         e.preventDefault();

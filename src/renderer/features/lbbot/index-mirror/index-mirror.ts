@@ -3,13 +3,19 @@ import type { LbBotDiscography, LbBotIndexArtist, LbBotStatus } from '/@/shared/
 
 import { clear, createStore, entries, promisifyRequest, UseStore } from 'idb-keyval';
 import isElectron from 'is-electron';
-import { useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
+import {
+    currentServerKey,
+    serverRecordKnown,
+} from '/@/renderer/features/hub/utils/current-server-key';
+import { hubSecretHeld, hubSetUp } from '/@/renderer/features/hub/utils/hub-credential';
 import {
     EMPTY_MIRROR_META,
     lookupByNdId,
     MirrorMeta,
     mirrorTotals,
+    mirrorVerdict,
     ndIdsOf,
     PageDelta,
     pageSeqLookup,
@@ -17,8 +23,10 @@ import {
     planPage,
     toDiscography,
 } from '/@/renderer/features/lbbot/index-mirror/mirror-logic';
+import { gapCount } from '/@/renderer/features/library/library-model';
 import { queryClient } from '/@/renderer/lib/react-query';
-import { useHubStore } from '/@/renderer/store/hub.store';
+import { hubSetUpNow, useHubSetUp } from '/@/renderer/store/hub-set-up';
+import { lbBotDownNow, useHubStore } from '/@/renderer/store/hub.store';
 import { useSettingsStore } from '/@/renderer/store/settings.store';
 import { logger } from '/@/renderer/utils/logger';
 import { routeAdvertised } from '/@/shared/utils/lbbot-wire';
@@ -84,6 +92,22 @@ const MAX_RESYNCS_PER_SYNC = 2;
  *  hub identity check is the same value for the same reason: the mirror and
  *  `lbStatus` both describe "the hub this app is currently pointed at". */
 const currentHubUrl = (): string => useSettingsStore.getState().hub?.url ?? '';
+
+/**
+ * Worbus P3 (design §6.5): B-014's identity is the server key now (`id:<serverId>`, else the
+ * address as before), so the same server at another address keeps its mirror and another id
+ * still clears it (`mirrorVerdict`).
+ */
+const currentIdentity = () => ({
+    hubUrl: currentHubUrl(),
+    known: serverRecordKnown(),
+    serverKey: currentServerKey(),
+});
+
+const identityStamp = (identity: { hubUrl: string; serverKey: string }) => ({
+    hubUrl: identity.hubUrl,
+    serverKey: identity.serverKey,
+});
 
 // ---------------------------------------------------------------------------
 // State
@@ -183,6 +207,7 @@ const isStoredMeta = (value: unknown): value is StoredMeta => {
         typeof v.cursor === 'number' &&
         typeof v.epoch === 'string' &&
         typeof v.hubUrl === 'string' &&
+        (v.serverKey === undefined || typeof v.serverKey === 'string') &&
         typeof v.scanVersion === 'number' &&
         typeof v.ttlDays === 'number'
     );
@@ -222,18 +247,21 @@ export const loadIndexMirror = (): Promise<void> => {
             // it) under a hub that never built it. Empty `hubUrl` is a store
             // from before a page ever committed, or a genuinely unconfigured
             // hub; either way there is nothing to conflict with yet.
-            if (
-                isStoredMeta(storedMeta) &&
-                storedMeta.hubUrl &&
-                storedMeta.hubUrl !== currentHubUrl()
-            ) {
+            // P3: by server key - the same id at another address is the same hub; a project 2
+            // meta under the typed address is adopted (stamped at the next commit), not cleared.
+            const verdict = isStoredMeta(storedMeta)
+                ? mirrorVerdict(storedMeta, currentIdentity())
+                : null;
+            if (verdict === 'clear') {
                 await clear(store());
             } else if (isStoredMeta(storedMeta)) {
+                const identity = currentIdentity();
                 meta = {
                     cursor: storedMeta.cursor,
                     epoch: storedMeta.epoch,
-                    hubUrl: storedMeta.hubUrl,
+                    hubUrl: verdict === 'adopt' ? identity.hubUrl : storedMeta.hubUrl,
                     scanVersion: storedMeta.scanVersion,
+                    serverKey: verdict === 'adopt' ? identity.serverKey : storedMeta.serverKey,
                     ttlDays: storedMeta.ttlDays,
                 };
                 for (const [key, value] of rows) {
@@ -298,9 +326,20 @@ const commit = async (delta: PageDelta, next: MirrorMeta, wipe = false): Promise
  * move that happens while this app is closed is instead caught by
  * `loadIndexMirror` reading the mismatch back in at the next launch.
  */
-export const clearIndexMirrorForHubChange = (): void => {
+export const clearIndexMirrorForHubChange = (force = false): void => {
     void loadIndexMirror().then(() => {
-        if (!meta.hubUrl || meta.hubUrl === currentHubUrl()) return;
+        // Worbus P2: `force` - a Navidrome logout or account switch on the same hub. The mirror
+        // was read under the old account and goes with it.
+        if (!force) {
+            const identity = currentIdentity();
+            const verdict = mirrorVerdict(meta, identity);
+            if (verdict === 'keep') return;
+            // P3: the first welcome with the id - the same server's mirror, re-stamped, kept.
+            if (verdict === 'adopt') {
+                void commit({ deletes: [], puts: [] }, { ...meta, ...identityStamp(identity) });
+                return;
+            }
+        }
         // Reset to the empty sentinel, not stamped with the new URL: no page
         // has been pulled under it yet, and `pull()` stamps it on the first
         // one that lands.
@@ -374,7 +413,7 @@ const scheduleRetry = (status: number) => {
     // would fail the same way and log it. lb-bot announces itself when it comes
     // up — its index push at boot reaches this client as an `index` frame — and
     // the next welcome and the 15-min interval still pull.
-    const hubSaysDown = useHubStore.getState().lbStatus?.available === false;
+    const hubSaysDown = lbBotDownNow();
     if (hubSaysDown || !RETRYABLE_STATUSES.has(status) || retryAttempt >= RETRY_DELAYS_MS.length) {
         retryAttempt = 0;
         return;
@@ -416,6 +455,8 @@ const pull = async (): Promise<null | number> => {
     // that wipe's own mismatch check forever. Guarded below, every time a
     // response lands.
     const hubUrl = currentHubUrl();
+    // P3: the server this pull is for; a page that lands after it changed is not committed.
+    const serverKey = currentServerKey();
     for (;;) {
         const since = cursor;
         const result = await lbBot.indexChanges(since, epoch);
@@ -442,7 +483,7 @@ const pull = async (): Promise<null | number> => {
         // not necessarily the hub configured NOW. Abort without committing —
         // the new hub (if any) gets its own correctly-stamped pull from its
         // own welcome/interval trigger; there is nothing here worth keeping.
-        if (currentHubUrl() !== hubUrl) return null;
+        if (currentServerKey() !== serverKey) return null;
 
         // `resync`, or a normal answer under an epoch that is not ours (which
         // lb-bot would itself have answered with resync, so this is defence
@@ -475,6 +516,7 @@ const pull = async (): Promise<null | number> => {
                 epoch: page.epoch,
                 hubUrl,
                 scanVersion: page.scanVersion,
+                serverKey,
                 ttlDays: page.ttlDays,
             },
             pendingWipe,
@@ -510,7 +552,7 @@ const pull = async (): Promise<null | number> => {
         const keys = await lbBot.indexKeys();
         if (!keys.ok || !keys.data) return keys.status;
         // B-014: same guard as above — this response also crossed an await.
-        if (currentHubUrl() !== hubUrl) return null;
+        if (currentServerKey() !== serverKey) return null;
         // A different epoch: the next changes read answers resync; loop to it.
         if (keys.data.epoch !== meta.epoch) continue;
 
@@ -563,7 +605,7 @@ const runSync = async (): Promise<void> => {
         feedMissing ||
         !feedAdvertised() ||
         !mirrorShown() ||
-        useHubStore.getState().lbStatus?.available === false
+        lbBotDownNow()
     ) {
         setSyncState({
             id: runId,
@@ -572,9 +614,13 @@ const runSync = async (): Promise<void> => {
                 ? 'not connected to the hub'
                 : !mirrorShown()
                   ? 'the hub is switched off in settings'
-                  : useHubStore.getState().lbStatus?.available === false
-                    ? 'the hub reports lb-bot unavailable'
-                    : 'this hub does not serve the index feed',
+                  : useHubStore.getState().lbRefused
+                    ? 'lb-bot refused this hub'
+                    : useHubStore.getState().lbTooOld
+                      ? 'lb-bot is too old for this account'
+                      : useHubStore.getState().lbStatus?.available === false
+                        ? 'the hub reports lb-bot unavailable'
+                        : 'this hub does not serve the index feed',
         });
         return;
     }
@@ -669,6 +715,14 @@ export const onIndexFrame = (seq: number, epoch: string): void => {
     else requestIndexSync('index');
 };
 
+/**
+ * Worbus P1: what the mirror has pulled up to, for telling a progress-only `index` frame from a
+ * head move (`isProgressOnlyFrame`) - the same comparison {@link onIndexFrame} skips on. Null
+ * before the stored mirror is read.
+ */
+export const indexMirrorCursor = (): null | { epoch: string; seq: number } =>
+    loaded ? { epoch: meta.epoch, seq: meta.cursor } : null;
+
 /** Mount once (from `useHub`): reads the stored mirror at startup and runs the
  *  15-minute backstop sync. */
 export const useLbBotIndexSync = (): void => {
@@ -684,13 +738,10 @@ export const useLbBotIndexSync = (): void => {
 // Reading the mirror — the API artist and `mb:` pages consume
 // ---------------------------------------------------------------------------
 
-/** The predicate behind {@link mirrorShown}, over a given hub setting. */
-const hubConfigured = (hub?: { enabled: boolean; token: string; url: string }): boolean =>
-    Boolean(hub?.enabled && hub.url && hub.token);
-
 /**
  * Whether the mirror is shown at all: the hub is switched on in settings and
- * has a URL and a token (Ruling R21) — the same definition as Navic's
+ * has a URL and a credential (Ruling R21; Worbus P2: a device secret held, or a
+ * typed token - hub-credential.ts) — the same definition as Worbus for Android's
  * `LbBotManager.isConfigured`, and as `hubRouteConfigured` in the AudioMuse
  * client here. A preference read, not a probe.
  *
@@ -702,12 +753,12 @@ const hubConfigured = (hub?: { enabled: boolean; token: string; url: string }): 
  * renders then. Nothing is deleted either; the stored mirror stays in memory
  * and on disk, so switching the hub back on shows it again at once.
  */
-export const mirrorShown = (): boolean => hubConfigured(useSettingsStore.getState().hub);
+export const mirrorShown = (): boolean => hubSetUpNow();
 
 /** {@link mirrorShown} as a hook, re-rendering when it flips — for the lb-bot
  *  answers kept outside the mirror (react-query's persisted reads), which the
  *  same rule governs. */
-export const useMirrorShown = (): boolean => useSettingsStore((state) => hubConfigured(state.hub));
+export const useMirrorShown = (): boolean => useHubSetUp();
 
 let watchingHubSetting = false;
 
@@ -718,9 +769,13 @@ const watchHubSetting = () => {
     if (watchingHubSetting) return;
     watchingHubSetting = true;
     useSettingsStore.subscribe(
-        (state) => hubConfigured(state.hub),
+        (state) => hubSetUp(state.hub, hubSecretHeld(useHubStore.getState())),
         () => notify(),
     );
+    // Worbus P2: a sign-in (or a sign-out) flips it too, with no setting moving.
+    useHubStore.subscribe((state, prev) => {
+        if (hubSecretHeld(state) !== hubSecretHeld(prev)) notify();
+    });
 };
 
 /** Called on every change that could alter a lookup. Subscribing starts the
@@ -744,6 +799,46 @@ export const getMirrorArtistByNdId = (
     mbid?: null | string,
 ): LbBotIndexArtist | undefined =>
     mirrorShown() ? lookupByNdId(byKey, keysByNdId, ndId, mbid) : undefined;
+
+/**
+ * F6: the Library's "N with gaps" pill: how many of a library artist's indexed releases are
+ * `incomplete`. Null when lb-bot has not indexed the artist or the hub is not configured
+ * ({@link mirrorShown}): no pill, never "0 with gaps".
+ */
+export const mirrorArtistGaps = (ndId: string, mbid?: null | string): null | number => {
+    const artist = getMirrorArtistByNdId(ndId, mbid);
+    return artist ? gapCount(artist.rows) : null;
+};
+
+/**
+ * F6: every mirrored artist with an MBID that names a Navidrome artist, for the Library's ownership
+ * by MBID (an artist Navidrome holds without its own MBID tag can still own a MusicBrainz candidate).
+ * Empty while the hub is not configured.
+ */
+export const mirrorLibraryArtists = (): { mbid: string; ndArtistId: string }[] => {
+    if (!mirrorShown()) return [];
+    const out: { mbid: string; ndArtistId: string }[] = [];
+    for (const artist of byKey.values()) {
+        if (artist.mbid && artist.ndArtistId) {
+            out.push({ mbid: artist.mbid, ndArtistId: artist.ndArtistId });
+        }
+    }
+    return out;
+};
+
+/** {@link mirrorLibraryArtists}, read again only when the mirror changes. */
+export const useMirrorLibraryArtists = (): { mbid: string; ndArtistId: string }[] => {
+    const version = useSyncExternalStore(
+        subscribeIndexMirror,
+        () => getIndexMirrorSnapshot().version,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return useMemo(() => mirrorLibraryArtists(), [version]);
+};
+
+/** {@link mirrorArtistGaps} for one row, re-rendering only when its number changes. */
+export const useMirrorGaps = (ndId: string, mbid?: null | string): null | number =>
+    useSyncExternalStore(subscribeIndexMirror, () => mirrorArtistGaps(ndId, mbid));
 
 /** A mirrored artist in the network discography read's shape (`scan: null`),
  *  with `stale` computed against the envelope the mirror last saw. */

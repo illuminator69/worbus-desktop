@@ -114,7 +114,7 @@ export default defineConfig({
                         type: 'image/png',
                     },
                 ],
-                name: 'Feishin',
+                name: 'Worbus',
                 orientation: 'portrait',
                 screenshots: [
                     {
@@ -125,7 +125,7 @@ export default defineConfig({
                         type: 'image/webp',
                     },
                 ],
-                short_name: 'Feishin',
+                short_name: 'Worbus',
                 start_url: '/',
                 theme_color: '#1E003D',
             },

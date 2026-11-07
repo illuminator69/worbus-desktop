@@ -11,6 +11,8 @@ import {
 } from '/@/renderer/features/hub/utils/remote-queue';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
+    autoplayIsOn,
+    autoplayToggleChip,
     ChipId,
     ChipTapPlan,
     keepsNext,
@@ -19,6 +21,7 @@ import {
     remoteEditActs,
     removableStationRows,
     REPLACE_COUNT,
+    selectedChip,
 } from '/@/renderer/features/player/station/station-chips';
 import {
     currentCharacter,
@@ -47,6 +50,7 @@ import {
 } from '/@/renderer/features/player/station/station-logic';
 import {
     getStationMode,
+    servedIdsOf,
     useStationMode,
     useStationStore,
 } from '/@/renderer/features/player/station/station-store';
@@ -102,12 +106,7 @@ const readSnapshot = (): Snapshot => {
     const deviceId = hub.myDeviceId ?? undefined;
     // What the bound station served this client: how a remote session's rows, which carry ids
     // only, are told apart from the user's (and a local row a controller added).
-    const served = useStationStore.getState().served;
-    const servedIds = new Set(
-        served.stationId && served.stationId === useStationStore.getState().bound?.stationId
-            ? served.ids
-            : [],
-    );
+    const servedIds = servedIdsOf(useStationStore.getState());
     if (isRemoteSessionActive()) {
         const ids = hub.remoteQueue.map((track) => track.id);
         const order = hub.remoteOrder;
@@ -307,6 +306,21 @@ export const tapStationChip = (chip: ChipId): void => {
             ...(plan.signal.kind === 'character' ? { value: plan.signal.value } : {}),
         });
     }
+};
+
+/**
+ * The side queue's Autoplay toggle (F4): a tap on Off or on a character, through the same plan as
+ * the chips. Turning a stopped station back on restarts it in its own character, not this
+ * device's preference. A tap that would select what is already selected does nothing.
+ */
+export const toggleStationAutoplay = (on: boolean): void => {
+    const settings = useSettingsStore.getState();
+    const bound = useStationStore.getState().bound;
+    const mode = getStationMode();
+    const preferred = settings.station?.character ?? 'balanced';
+    const selected = selectedChip({ autoplay: settings.autoDJ.enabled, bound, mode, preferred });
+    if (autoplayIsOn(selected) === on) return;
+    tapStationChip(autoplayToggleChip(on, mode !== 'fallback', bound?.character ?? preferred));
 };
 
 const StationAutoplayInner = () => {

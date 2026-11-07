@@ -7,8 +7,10 @@ import os from 'node:os';
 import path from 'node:path';
 import util from 'node:util';
 
+import { serverVersionNow } from '/@/main/features/core/hub/server-version';
+import { diagnosticsEntries, diagnosticsHeader } from '/@/main/redact';
 import { createZipBuffer } from '/@/main/utils/zip';
-import { sanitizeForDiagnostics } from '/@/shared/utils/sanitize-for-diagnostics';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 export type { LogLevel };
 export type { LogSeverity } from '/@/shared/logger/types';
@@ -126,7 +128,7 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
     const parentWindow = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     const stamp = new Date().toISOString().slice(0, 10);
     const saveOptions = {
-        defaultPath: `feishin-diagnostics-${stamp}.zip`,
+        defaultPath: `worbus-diagnostics-${stamp}.zip`,
         filters: [{ extensions: ['zip'], name: 'Zip' }],
     };
     const result = parentWindow
@@ -139,19 +141,22 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
 
     const logFile = log.transports.file.getFile();
     const logsDir = path.dirname(logFile.path);
-    const entries: { data: Buffer; name: string }[] = [];
+    const logs: { data: Buffer; name: string }[] = [];
 
     const { store } = await import('/@/main/features/core/settings');
 
+    const exportedAt = new Date().toISOString();
+    const appVersion = appVersionLine(app.getVersion());
+    const serverVersion = serverVersionNow();
     const diagnostics = {
         app: {
             name: app.getName(),
-            version: app.getVersion(),
+            version: appVersion,
         },
         arch: process.arch,
         chrome: process.versions.chrome,
         electron: process.versions.electron,
-        exportedAt: new Date().toISOString(),
+        exportedAt,
         locale: app.getLocale(),
         logLevel: payload.logLevel ?? null,
         node: process.versions.node,
@@ -162,6 +167,7 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
         },
         platform: process.platform,
         server: payload.server ?? null,
+        serverVersion,
         settings: {
             ignoreCors: store.get('ignore_cors'),
             ignoreSsl: store.get('ignore_ssl'),
@@ -169,33 +175,11 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
         },
     };
 
-    entries.push({
-        data: Buffer.from(`${JSON.stringify(diagnostics, null, 2)}\n`, 'utf8'),
-        name: 'diagnostics.json',
-    });
-
+    let configRaw: null | string = null;
     try {
-        const configRaw = await fs.readFile(store.path, 'utf8');
-        const configJson = JSON.parse(configRaw) as unknown;
-        entries.push({
-            data: Buffer.from(
-                `${JSON.stringify(sanitizeForDiagnostics(configJson), null, 2)}\n`,
-                'utf8',
-            ),
-            name: 'main-config.json',
-        });
+        configRaw = await fs.readFile(store.path, 'utf8');
     } catch (error) {
         log.warn('Failed to read main config for diagnostics export', error);
-    }
-
-    if (payload.rendererSettings) {
-        entries.push({
-            data: Buffer.from(
-                `${JSON.stringify(sanitizeForDiagnostics(payload.rendererSettings), null, 2)}\n`,
-                'utf8',
-            ),
-            name: 'renderer-settings.json',
-        });
     }
 
     try {
@@ -206,15 +190,15 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
             }
             const filePath = path.join(logsDir, fileName);
             const data = await fs.readFile(filePath);
-            entries.push({ data, name: `logs/${fileName}` });
+            logs.push({ data, name: `logs/${fileName}` });
         }
     } catch (error) {
         log.warn('Failed to read log files for export', error);
     }
 
-    if (!entries.some((entry) => entry.name.startsWith('logs/'))) {
+    if (logs.length === 0) {
         try {
-            entries.push({
+            logs.push({
                 data: await fs.readFile(logFile.path),
                 name: `logs/${path.basename(logFile.path)}`,
             });
@@ -224,7 +208,24 @@ const exportDiagnosticsArchive = async (payload: ExportDiagnosticsPayload = {}) 
         }
     }
 
-    const zipBuffer = createZipBuffer(entries);
+    // Worbus P4 (design §6.8): every file goes through the redaction rule (`redact.ts`), the
+    // header first (ruling R1: the app's and the server's versions).
+    const zipBuffer = createZipBuffer(
+        diagnosticsEntries({
+            configRaw,
+            diagnostics,
+            header: diagnosticsHeader({
+                appVersion,
+                arch: process.arch,
+                electron: process.versions.electron,
+                exportedAt,
+                os: `${os.type()} ${os.release()}`,
+                serverVersion,
+            }),
+            logs,
+            rendererSettings: payload.rendererSettings ?? null,
+        }),
+    );
     await fs.writeFile(result.filePath, zipBuffer);
 
     return { canceled: false, path: result.filePath };

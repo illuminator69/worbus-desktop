@@ -1,9 +1,16 @@
 .group {
+    position: relative;
     display: flex;
-    flex-direction: column;
-    gap: 2px;
-    align-items: flex-end;
-    justify-content: center;
+    align-items: center;
+}
+
+/* Above the volume row, right-aligned with the slider's end, out of the row's flow. */
+.rating {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 2px);
+    display: flex;
+    white-space: nowrap;
 }
 
 .volume {

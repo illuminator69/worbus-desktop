@@ -3,6 +3,8 @@ import type {
     StationCatalog,
     StationCharacter,
     StationCharacterId,
+    StationCount,
+    StationCountBody,
     StationEngine,
     StationNextBody,
     StationResult,
@@ -11,11 +13,12 @@ import type {
     StationSignalBody,
     StationStartBody,
     StationTrack,
+    StationVariety,
 } from '/@/shared/types/station-types';
 
 import { ipcMain } from 'electron';
 
-import { getHubConfig } from '../hub';
+import { getHubConfig, hubAuth } from '../hub';
 
 import log from '/@/main/logger';
 
@@ -39,8 +42,9 @@ const STATION_TIMEOUT_MS = 15_000;
 
 /** `ws://host:4790` → `http://host:4790`; null when the hub isn't configured. */
 const hubBase = (): null | string => {
-    const { enabled, token, url } = getHubConfig();
-    if (!enabled || !url || !token) return null;
+    const { enabled, url } = getHubConfig();
+    // Worbus P2: the device secret, else the typed token (hubAuth); neither means no hub.
+    if (!enabled || !url || !hubAuth.bearer()) return null;
     return url
         .replace(/^ws/, 'http')
         .replace(/\/+$/, '')
@@ -133,12 +137,34 @@ const toCatalog = (body: Json): StationCatalog => {
               ];
           })
         : [];
+    const strs = (v: unknown): string[] =>
+        Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
     return {
         available: body.available === true,
         characters,
         configured: body.configured === true,
+        count: body.count === true,
         default: toCharacterId(body.default) ?? 'balanced',
         engine: toEngine(body.engine),
+        filters: strs(body.filters),
+        varieties: strs(body.varieties).filter(
+            (v): v is StationVariety => v === 'low' || v === 'medium' || v === 'high',
+        ),
+    };
+};
+
+/** A count's answer; null when the body is not one. */
+const toCount = (body: Json): null | StationCount => {
+    if (typeof body.count !== 'number' || !Number.isFinite(body.count)) return null;
+    return {
+        anchors: num(body.anchors),
+        character: toCharacterId(body.character) ?? 'balanced',
+        count: Math.max(0, Math.trunc(body.count)),
+        engine: toEngine(body.engine),
+        partial: body.partial === true,
+        unknown: Array.isArray(body.unknown)
+            ? body.unknown.filter((x): x is string => typeof x === 'string')
+            : [],
     };
 };
 
@@ -163,7 +189,7 @@ const request = async <T>(
         res = await fetch(`${base}${path}`, {
             ...(body ? { body: JSON.stringify(body) } : {}),
             headers: {
-                Authorization: `Bearer ${getHubConfig().token}`,
+                Authorization: `Bearer ${hubAuth.bearer() ?? ''}`,
                 ...(body ? { 'Content-Type': 'application/json' } : {}),
             },
             method,
@@ -212,6 +238,13 @@ ipcMain.handle(
     'station-start',
     async (_event, body: StationStartBody): Promise<StationResult<StationAnswer>> =>
         request('POST', '/sonic/station/start', body as unknown as Json, toAnswer),
+);
+
+// P5: read-only, creates no station; a hub without the route answers 404 with no `code`.
+ipcMain.handle(
+    'station-count',
+    async (_event, body: StationCountBody): Promise<StationResult<StationCount>> =>
+        request('POST', '/sonic/station/count', body as unknown as Json, toCount),
 );
 
 ipcMain.handle(

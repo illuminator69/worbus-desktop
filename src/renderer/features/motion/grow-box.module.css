@@ -1,0 +1,8 @@
+.box {
+    min-width: 0;
+}
+
+/* Clipped only while the height moves. */
+.box[data-moving] {
+    overflow: clip;
+}

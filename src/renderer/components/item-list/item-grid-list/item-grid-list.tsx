@@ -1,6 +1,5 @@
 import clsx from 'clsx';
 import throttle from 'lodash/throttle';
-import { motion } from 'motion/react';
 import { useOverlayScrollbars } from 'overlayscrollbars-react';
 import React, {
     CSSProperties,
@@ -40,7 +39,6 @@ import {
 } from '/@/renderer/components/item-list/helpers/item-list-state';
 import { useListHotkeys } from '/@/renderer/components/item-list/helpers/use-list-hotkeys';
 import { ItemControls, ItemListHandle } from '/@/renderer/components/item-list/types';
-import { animationProps } from '/@/shared/components/animations/animation-props';
 import { useElementSize } from '/@/shared/hooks/use-element-size';
 import { useFocusWithin } from '/@/shared/hooks/use-focus-within';
 import { useMergedRef } from '/@/shared/hooks/use-merged-ref';
@@ -335,7 +333,6 @@ export interface ItemGridListProps {
     data: unknown[];
     dataVersion?: number;
     enableDrag?: boolean;
-    enableEntranceAnimation?: boolean;
     enableExpansion?: boolean;
     enableMultiSelect?: boolean;
     enableSelection?: boolean;
@@ -366,7 +363,6 @@ const BaseItemGridList = ({
     data,
     dataVersion,
     enableDrag = true,
-    enableEntranceAnimation = true,
     enableExpansion = false,
     enableMultiSelect = false,
     enableSelection = true,
@@ -800,15 +796,13 @@ const BaseItemGridList = ({
     });
 
     return (
-        <motion.div
+        <div
             className={styles.itemGridContainer}
             data-overlayscrollbars-initialize=""
             onKeyDown={handleKeyDown}
             onMouseDown={(e) => (e.currentTarget as HTMLDivElement).focus()}
             ref={mergedContainerRef}
             tabIndex={0}
-            {...animationProps.fadeIn}
-            transition={{ duration: enableEntranceAnimation ? 0.5 : 0, ease: 'anticipate' }}
         >
             <AutoSizer>
                 {({ height, width }) => (
@@ -840,7 +834,7 @@ const BaseItemGridList = ({
                     />
                 )}
             </AutoSizer>
-        </motion.div>
+        </div>
     );
 };
 

@@ -2,6 +2,10 @@
 .slot {
     --fold: 300ms cubic-bezier(0.3, 0.7, 0.2, 1);
 
+    /* Closing is slower and keeps the content opaque until the end: at the opening speed, with
+       the fade running alongside, the fold read as no animation at all. */
+    --fold-close: 420ms cubic-bezier(0.4, 0, 0.2, 1);
+
     position: relative;
     display: flex;
     flex-shrink: 0;
@@ -103,16 +107,16 @@
     display: grid;
     visibility: hidden;
     grid-template-rows: 0fr;
-    width: 352px;
+    width: 282px;
     background: var(--theme-colors-background);
     border: 1px solid alpha(var(--theme-colors-border), 0.8);
     border-radius: var(--theme-radius-md);
     box-shadow: 0 8px 32px rgb(0 0 0 / 35%);
     opacity: 0;
     transition:
-        grid-template-rows var(--fold),
-        opacity var(--fold),
-        visibility 0s var(--fold);
+        grid-template-rows var(--fold-close),
+        opacity 160ms ease 260ms,
+        visibility 0s 420ms;
 }
 
 .box.open {
@@ -128,11 +132,17 @@
 .box-inner {
     display: flex;
     flex-direction: column;
+
+    /* Anchored at the pill: mid-fold the list is cut at its top, and the footer stays put. */
+    justify-content: flex-end;
     min-height: 0;
     overflow: hidden;
 }
 
 .box-list {
+    /* Keeps its own height while the box folds around it, so the box clips it and no scrollbar
+       shows mid-fold; it scrolls only when the list is taller than 60vh. */
+    flex-shrink: 0;
     max-height: 60vh;
     padding: var(--theme-spacing-xs);
     overflow-y: auto;

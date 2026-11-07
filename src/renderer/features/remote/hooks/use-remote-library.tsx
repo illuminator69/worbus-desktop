@@ -7,7 +7,9 @@ import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { albumQueries } from '/@/renderer/features/albums/api/album-api';
 import { notePlayRequest } from '/@/renderer/features/hub/utils/play-request';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
+import { keepsCurrentSong } from '/@/renderer/features/player/station/keep-current'; // navi-connect (B-175)
 import {
+    currentSongId, // navi-connect (B-175)
     playStationRadio,
     trackRadioSeed,
 } from '/@/renderer/features/player/station/station-client';
@@ -151,6 +153,7 @@ export const useRemoteLibrary = () => {
         clearSelected,
         getQueue,
         moveSelectedTo,
+        playKeepingCurrent, // navi-connect (B-175)
     } = usePlayer();
     const radioCount = useArtistRadioCount();
 
@@ -384,7 +387,7 @@ export const useRemoteLibrary = () => {
                 (playType ?? Play.NOW) === Play.NOW &&
                 (await playStationRadio({
                     ...trackRadioSeed(song),
-                    player: { addToQueueByData },
+                    player: { addToQueueByData, playKeepingCurrent }, // navi-connect (B-175)
                     serverId: server.id,
                     sessionName: song.name,
                     skipConfirmation: true,
@@ -404,7 +407,16 @@ export const useRemoteLibrary = () => {
                 });
 
                 if (similarSongs && similarSongs.length > 0) {
-                    addToQueueByData([song, ...similarSongs], playType, song.id, undefined, true);
+                    const queueSongs = [song, ...similarSongs];
+                    // navi-connect (B-175): a radio from the song playing now keeps it playing.
+                    if (
+                        (playType ?? Play.NOW) === Play.NOW &&
+                        keepsCurrentSong(queueSongs, currentSongId())
+                    ) {
+                        playKeepingCurrent(queueSongs, true);
+                    } else {
+                        addToQueueByData(queueSongs, playType, song.id, undefined, true);
+                    }
                 }
                 ackOperation(requestId);
             } catch {
@@ -537,6 +549,7 @@ export const useRemoteLibrary = () => {
         clearSelected,
         getQueue,
         moveSelectedTo,
+        playKeepingCurrent, // navi-connect (B-175)
         radioCount,
     ]);
 };

@@ -5,10 +5,9 @@ import { Link, useNavigate } from 'react-router';
 
 import styles from './app-menu.module.css';
 
-import { UpdateAvailableButton } from '/@/renderer/features/settings/components/update-available-button';
 import { openSettingsModal } from '/@/renderer/features/settings/utils/open-settings-modal';
 import { ServerSelector } from '/@/renderer/features/sidebar/components/server-selector';
-import { openReleaseNotesModal } from '/@/renderer/release-notes-modal';
+import { useSidebarFolded } from '/@/renderer/layouts/default-layout/use-shell-fit';
 import {
     useAppStore,
     useAppStoreActions,
@@ -20,10 +19,10 @@ import {
 } from '/@/renderer/store';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { DropdownMenu, MenuItemProps } from '/@/shared/components/dropdown-menu/dropdown-menu';
-import { Flex } from '/@/shared/components/flex/flex';
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
 import { toast } from '/@/shared/components/toast/toast';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
 const browser = isElectron() ? window.api.browser : null;
 
@@ -57,6 +56,7 @@ type MenuItem = ConditionalGroupItem | ConditionalItem | CustomItem | DividerIte
 
 interface RegularMenuItem extends BaseMenuItem {
     component?: 'a' | typeof Link;
+    disabled?: boolean;
     href?: string;
     icon?: keyof typeof import('/@/shared/components/icon/icon').AppIcon;
     iconColor?:
@@ -81,7 +81,10 @@ interface RegularMenuItem extends BaseMenuItem {
 export const AppMenu = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const collapsed = useAppStore((state) => state.sidebar.collapsed);
+    // What the window shows: a sidebar folded to its rail for width (R6, B-198) reads as collapsed,
+    // and its toggle is off until the window widens (the fold would hide any change).
+    const folded = useSidebarFolded();
+    const collapsed = useAppStore((state) => state.sidebar.collapsed) || folded;
     const privateMode = useAppStore((state) => state.privateMode);
     const { setPrivateMode, setSideBar } = useAppStoreActions();
     const { setSettings } = useSettingsStoreActions();
@@ -119,6 +122,10 @@ export const AppMenu = () => {
 
     const handleQuit = () => {
         browser?.quit();
+    };
+
+    const handleAbout = () => {
+        browser?.about();
     };
 
     const handleSetSideQueueLayout = (sideQueueLayout: 'horizontal' | 'vertical') => {
@@ -188,6 +195,7 @@ export const AppMenu = () => {
             condition: collapsed,
             id: 'sidebar-expand',
             item: {
+                disabled: folded,
                 icon: 'panelRightOpen',
                 id: 'expand-sidebar',
                 label: t('page.appMenu.expandSidebar'),
@@ -247,14 +255,24 @@ export const AppMenu = () => {
             type: 'divider',
         },
         {
-            icon: 'brandGitHub',
+            // A plain label: this fork has no release feed to read (upstream's is not ours).
+            disabled: true,
             id: 'version',
-            label: t('page.appMenu.version', { version: currentVersion }),
-            onClick: () =>
-                openReleaseNotesModal(
-                    t('common.newVersion', { version: currentVersion }) as string,
-                ),
+            label: t('page.appMenu.version', { version: appVersionLine(currentVersion) }),
             type: 'item',
+        },
+        {
+            // Worbus P5 (design §6.8): the version, the credit and the Navidrome line.
+            condition: isElectron(),
+            id: 'about',
+            item: {
+                icon: 'info',
+                id: 'about-app',
+                label: t('page.appMenu.about'),
+                onClick: handleAbout,
+                type: 'item',
+            },
+            type: 'conditional-item',
         },
         {
             condition: isElectron(),
@@ -279,15 +297,6 @@ export const AppMenu = () => {
                 type: 'item',
             },
             type: 'conditional-item',
-        },
-        {
-            component: (
-                <Flex align="center" justify="center" w="100%">
-                    <UpdateAvailableButton />
-                </Flex>
-            ),
-            id: 'update-available',
-            type: 'custom',
         },
         {
             condition: settings.sideQueueType === 'sideQueue',
@@ -383,6 +392,7 @@ export const AppMenu = () => {
                     ...(item.to && { to: item.to }),
                     ...(item.href && { href: item.href }),
                     ...(item.target && { target: item.target }),
+                    ...(item.disabled && { disabled: true }),
                 } as MenuItemProps;
 
                 return (

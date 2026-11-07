@@ -64,7 +64,8 @@ export const DiscordSettings = memo(() => {
             ),
             description: t('setting.discordApplicationId', {
                 context: 'description',
-                defaultId: '1165957668758900787',
+                // Worbus P5 (design §6.9): an empty field means Worbus's own application.
+                defaultId: 'Worbus',
                 discord: 'Discord',
             }),
             isHidden: !isElectron(),
@@ -135,7 +136,7 @@ export const DiscordSettings = memo(() => {
                     aria-label={t('setting.discordDisplayType')}
                     clearable={false}
                     data={[
-                        { label: 'Feishin', value: DiscordDisplayType.FEISHIN },
+                        { label: 'Worbus', value: DiscordDisplayType.FEISHIN },
                         {
                             label: t('setting.discordDisplayType', {
                                 context: 'songname',

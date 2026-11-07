@@ -40,4 +40,12 @@
     border: 1px solid transparent;
     border-radius: var(--theme-radius-md);
     box-shadow: 2px 2px 10px 2px rgb(0 0 0 / 40%);
+
+    /* With the cover wash the surface role is translucent: a floating layer keeps its tint over the
+       opaque page colour, so what is under it does not show through. */
+    :root[data-cover-wash='true'] & {
+        background:
+            linear-gradient(var(--theme-colors-surface), var(--theme-colors-surface)),
+            var(--theme-colors-background);
+    }
 }

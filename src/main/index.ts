@@ -1,5 +1,7 @@
 import type { UpdateCheckResult } from 'electron-updater';
 
+// First, before anything that reads the settings path (Worbus P5, design §6.4).
+import './first-start';
 import { is } from '@electron-toolkit/utils';
 import { createHash } from 'crypto';
 import {
@@ -7,6 +9,7 @@ import {
     BrowserWindow,
     BrowserWindowConstructorOptions,
     desktopCapturer,
+    dialog,
     globalShortcut,
     ipcMain,
     Menu,
@@ -39,12 +42,23 @@ import { hotkeyToElectronAccelerator } from './utils';
 
 import { disableAutoUpdates, isLinux, isMacOS, isWindows } from '/@/main/env';
 import {
+    COPY_FAILED_BODY,
+    firstStart,
+    firstStartLine,
+    stopsAtFirstStart,
+} from '/@/main/first-start';
+import {
     clampWindowBoundsToDisplay,
     DEFAULT_WINDOW_BOUNDS,
     resolveWindowBounds,
 } from '/@/main/utils/window-bounds';
 import { PlayerRepeat, PlayerStatus, PlayerType, TitleTheme } from '/@/shared/types/types';
+import { appVersionLine } from '/@/shared/utils/version-line';
 
+// No update feed of our own exists yet, and upstream's must never be one: it would replace this
+// fork with upstream's build. These stay empty until the rename gives the fork a release channel
+// (S-090 D, which also changes electron-builder.yml's publish block). A packaged build does not
+// construct AppUpdater at all, see the call site below.
 const ALPHA_UPDATER_CONFIG: {
     bucket: string;
     channel: string;
@@ -53,14 +67,14 @@ const ALPHA_UPDATER_CONFIG: {
 } = {
     bucket: '',
     channel: 'alpha',
-    endpoint: 'https://feishin-nightly-bucket.jeffvli.org',
+    endpoint: '',
     provider: 's3',
 };
 
 const GITHUB_UPDATER_CONFIG = {
-    owner: 'jeffvli',
+    owner: '',
     provider: 'github' as const,
-    repo: 'feishin',
+    repo: '',
 };
 
 type UpdaterInstance = AppImageUpdater | MacUpdater | NsisUpdater | typeof autoUpdater;
@@ -370,6 +384,7 @@ let currentPlaybackStatus: PlayerStatus = PlayerStatus.PAUSED;
 let currentPrivateMode = false;
 let currentRepeatMode: PlayerRepeat = PlayerRepeat.NONE;
 let currentSidebarCollapsed = false;
+let currentSidebarFolded = false;
 let currentShuffleEnabled = false;
 
 app.on('before-quit', () => {
@@ -436,7 +451,21 @@ const getAssetPath = (...paths: string[]): string => {
     return path.join(RESOURCES_PATH, ...paths);
 };
 
-const BASE_APP_USER_MODEL_ID = 'org.jeffvli.feishin';
+// Worbus P5 (design §6.8): the About panel (the app menu's About, the Help menu's About Worbus)
+// names the app, its version, where it comes from and what it is not.
+app.setAboutPanelOptions({
+    applicationName: 'Worbus',
+    applicationVersion: appVersionLine(packageJson.version),
+    copyright: [
+        'Worbus for desktop is a fork of Feishin by Jeff Li (https://github.com/jeffvli/feishin).',
+        'Licensed GPL-3.0, like the original.',
+        'Worbus is not affiliated with Navidrome.',
+    ].join('\n'),
+    iconPath: getAssetPath('icons/icon.png'),
+    website: 'https://github.com/illuminator69/worbus',
+});
+
+const BASE_APP_USER_MODEL_ID = 'app.worbus.desktop';
 
 // Windows resolves a taskbar button's icon, grouping and pin identity through the
 // AppUserModelID, NOT through the window icon. Claiming the installer's id from a copy that
@@ -508,6 +537,7 @@ const getMainMenuState = (): MenuPlaybackState => ({
     repeatMode: currentRepeatMode,
     shuffleEnabled: currentShuffleEnabled,
     sidebarCollapsed: currentSidebarCollapsed,
+    sidebarFolded: currentSidebarFolded,
 });
 
 const rebuildMainMenu = () => {
@@ -633,7 +663,7 @@ const createTray = () => {
         });
     }
 
-    tray.setToolTip('Feishin');
+    tray.setToolTip('Worbus');
     tray.setContextMenu(contextMenu);
 };
 
@@ -742,6 +772,10 @@ async function createWindow(first = true): Promise<void> {
 
     ipcMain.on('window-close', () => {
         mainWindow?.close();
+    });
+
+    ipcMain.on('window-about', () => {
+        app.showAboutPanel();
     });
 
     ipcMain.on('window-quit', () => {
@@ -931,7 +965,13 @@ async function createWindow(first = true): Promise<void> {
             });
     });
 
-    if (!disableAutoUpdates() && store.get('disable_auto_updates') !== true) {
+    // Worbus settings F1: a packaged build never updates itself (upstream's feed would replace the
+    // fork). The stored switch is forced on so nothing reads it as "updates wanted"; the updater is
+    // only ever constructed in an unpackaged run, where electron-updater skips the check anyway.
+    if (app.isPackaged) {
+        store.set('disable_auto_updates', true);
+    }
+    if (!app.isPackaged && !disableAutoUpdates() && store.get('disable_auto_updates') !== true) {
         new AppUpdater();
     }
 
@@ -978,7 +1018,7 @@ const shouldDisableMediaFeatures =
     isLinux() || !enableMediaSession || playbackType !== PlayerType.WEB;
 
 const chromiumDisabledFeatures: string[] = [];
-// Fractional scaling on Wayland: https://github.com/jeffvli/feishin/issues/1271#issuecomment-4063326712
+// Fractional scaling on Wayland: upstream's issue 1271 (its comment 4063326712).
 if (isLinux()) {
     chromiumDisabledFeatures.push('WaylandFractionalScaleV1');
 }
@@ -1191,13 +1231,23 @@ if (!singleInstance) {
 
     app.whenReady()
         .then(() => {
+            // The old Feishin is running, or another Worbus is copying: first-start.ts quits.
+            if (stopsAtFirstStart) return;
+            log.info(firstStartLine());
+            if ('error' in firstStart) {
+                void dialog.showMessageBox({
+                    buttons: ['OK'],
+                    message: COPY_FAILED_BODY,
+                    type: 'warning',
+                });
+            }
             log.info('App ready', {
                 arch: process.arch,
                 electron: process.versions.electron,
                 ignoreCors: !!store.get('ignore_cors'),
                 ignoreSsl: !!store.get('ignore_ssl'),
                 platform: process.platform,
-                version: packageJson.version,
+                version: appVersionLine(packageJson.version),
             });
 
             protocol.handle('feishin', async () => {
@@ -1250,7 +1300,7 @@ if (!singleInstance) {
                     responseHeaders: {
                         ...details.responseHeaders,
                         'Content-Security-Policy': [
-                            "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://umami.jeffvli.org; style-src 'self' 'unsafe-inline'; media-src 'self' http: https: data: blob:; img-src 'self' http: https: data: blob:; connect-src 'self' http: https: ws: wss:; default-src 'self';",
+                            "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; media-src 'self' http: https: data: blob:; img-src 'self' http: https: data: blob:; connect-src 'self' http: https: ws: wss:; default-src 'self';",
                         ],
                     },
                 });
@@ -1329,10 +1379,15 @@ ipcMain.on('update-private-mode', (_event, privateMode: boolean) => {
     updateMainMenu();
 });
 
-ipcMain.on('update-sidebar-collapsed', (_event, collapsedSidebar: boolean) => {
-    currentSidebarCollapsed = collapsedSidebar;
+// The second value (R6): the sidebar is a rail because the window is narrow, so its item is off.
+ipcMain.on(
+    'update-sidebar-collapsed',
+    (_event, collapsedSidebar: boolean, foldedSidebar = false) => {
+        currentSidebarCollapsed = collapsedSidebar;
+        currentSidebarFolded = foldedSidebar;
 
-    if (!isMacOS()) return;
+        if (!isMacOS()) return;
 
-    updateMainMenu();
-});
+        updateMainMenu();
+    },
+);

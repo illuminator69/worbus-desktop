@@ -1,0 +1,30 @@
+/*
+ * Fills its element (which must be positioned) under the element's content and any band drawn at
+ * z-index -1, and clips the window-sized copy of the wash to the element's box.
+ */
+.underlay {
+    position: absolute;
+    inset: 0;
+    z-index: -2;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* The window, shifted so the copy lines up with the wash behind the whole window (its viewport origin). */
+.window {
+    position: absolute;
+    top: calc(-1 * var(--wash-y, 0px));
+    left: calc(-1 * var(--wash-x, 0px));
+    width: 100vw;
+    height: 100vh;
+    isolation: isolate;
+}
+
+/* The page card's translucent surface over the wash (main-content.module.css, .main-content-body). */
+.window::after {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    content: '';
+    background: var(--theme-colors-background-alternate);
+}

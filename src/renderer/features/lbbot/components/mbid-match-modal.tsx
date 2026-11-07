@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import styles from './mbid-match-modal.module.css';
 
+import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import { ArtistMergeBlock } from '/@/renderer/features/lbbot/components/artist-merge-block';
 import {
     LbModalLayout,
@@ -16,6 +17,7 @@ import {
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { parseMbidInput } from '/@/renderer/features/lbbot/utils/artist-override';
 import { readState } from '/@/renderer/features/listening/listening-logic';
+import { useHubRoles } from '/@/renderer/store/hub.store';
 import { Badge } from '/@/shared/components/badge/badge';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
@@ -67,6 +69,8 @@ const MbidMatchModal = ({
     const [pasted, setPasted] = useState('');
     const available = useLbBotAvailable();
     const controls = useOverrideControls();
+    // Worbus P2 (review M6): a demotion while the dialog is open hides the controls; say why.
+    const roles = useHubRoles();
     const search = useLbBotArtistSearch(debounced ?? '');
     const kind = useArtistOverrideKind(ndId, tagMbid);
     const { failure, pending, remove, set } = useArtistOverrideActions(ndId, indexArtist);
@@ -114,7 +118,9 @@ const MbidMatchModal = ({
                 <Text isMuted size="sm">
                     {!available
                         ? 'lb-bot is not reachable, so nothing can be searched or changed right now.'
-                        : 'This lb-bot is older and cannot store overrides yet.'}
+                        : !allows(roles, 'artistMatch')
+                          ? 'Only an admin of this server can change this.'
+                          : 'This lb-bot is older and cannot store overrides yet.'}
                 </Text>
             )}
             <TextInput

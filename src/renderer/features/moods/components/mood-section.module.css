@@ -1,0 +1,9 @@
+/* One child of Home's Stack: the spacing under the chips sits inside each fold, so a closed fold costs no gap. */
+.section {
+    display: flex;
+    flex-direction: column;
+}
+
+.space {
+    padding-top: var(--theme-spacing-xl);
+}

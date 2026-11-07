@@ -5,12 +5,17 @@
 // The hub re-sends the whole list on `welcome` and on every `devices` frame, including frames
 // that only change a volume or the active flag, so only presence is compared. The first snapshot
 // of a connection is a baseline: a reconnect lists every device, and none of them just arrived.
-// A device that drops for a moment (a socket reconnecting) is not an arrival either: it must
-// have been offline or missing for ARRIVAL_MIN_ABSENCE_MS. `lastSeen` is bumped by every inbound
-// frame, so it says nothing about presence and is not read.
+// A device that drops for a moment (a network blip) is not an arrival either: it must have been
+// offline or missing for ARRIVAL_MIN_ABSENCE_MS. `lastSeen` is bumped by every inbound frame, so
+// it says nothing about presence and is not read.
+//
+// The minimum is short on purpose. Worbus for Android keeps its hub socket while it is in the background, so
+// bringing it forward is not a connection at all; it reconnects when its process restarts or the
+// network changes, and its backoff starts at 1 s, so it is back within seconds. A 15 s minimum
+// hid exactly those arrivals.
 
 /** How long a device must have been gone before coming back counts as connecting. */
-export const ARRIVAL_MIN_ABSENCE_MS = 15_000;
+export const ARRIVAL_MIN_ABSENCE_MS = 3_000;
 
 /** How long "Switch to <name>" is offered after the device connects. */
 export const ARRIVAL_PROPOSAL_MS = 30_000;
@@ -37,8 +42,8 @@ export interface ArrivalTracker {
     dismiss(id: string): void;
     /** When the proposal of this device ends, or null if it is not an arrival. */
     expiresAt(id: string): null | number;
-    /** Feed one `devices` snapshot, taken at `now`. */
-    observe(devices: readonly ArrivalDevice[], now: number): void;
+    /** Feed one `devices` snapshot, taken at `now`. Returns the devices that just arrived. */
+    observe(devices: readonly ArrivalDevice[], now: number): ArrivalDevice[];
     /** The device to propose at `now`, or null. */
     proposal(now: number, ctx: ArrivalContext): ArrivalDevice | null;
     /** Forget everything: the next snapshot is a baseline (hub disconnect, reconnect). */
@@ -74,18 +79,20 @@ export function createArrivalTracker(): ArrivalTracker {
 
         observe(devices, now) {
             const next = new Map<string, Presence>();
+            const arrived: ArrivalDevice[] = [];
             for (const device of devices) {
                 const prev = presence.get(device.id);
                 if (device.online) {
-                    const arrived =
+                    const isArrival =
                         !baseline &&
                         (!prev ||
                             (!prev.lastOnline &&
                                 prev.offlineSince !== undefined &&
                                 now - prev.offlineSince >= ARRIVAL_MIN_ABSENCE_MS));
-                    if (arrived) {
+                    if (isArrival) {
                         arrivals = arrivals.filter((a) => a.id !== device.id);
                         arrivals.push({ at: now, id: device.id });
+                        arrived.push(device);
                     }
                     next.set(device.id, { lastOnline: true });
                 } else {
@@ -107,6 +114,7 @@ export function createArrivalTracker(): ArrivalTracker {
             latest = new Map(devices.map((d) => [d.id, d]));
             arrivals = arrivals.filter((a) => now - a.at < ARRIVAL_PROPOSAL_MS);
             baseline = false;
+            return arrived;
         },
 
         proposal(now, ctx) {

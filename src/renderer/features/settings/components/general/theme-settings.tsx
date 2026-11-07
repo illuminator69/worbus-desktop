@@ -3,7 +3,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import i18n from '/@/i18n/i18n';
-import { StylesSettings } from '/@/renderer/features/settings/components/advanced/styles-settings';
+import { KEYWORDS } from '/@/renderer/features/settings/components/settings-keywords';
 import { SettingsOptions } from '/@/renderer/features/settings/components/settings-option';
 import {
     SettingOption,
@@ -15,6 +15,7 @@ import { THEME_DATA, useSetColorScheme } from '/@/renderer/themes/use-app-theme'
 import { Button } from '/@/shared/components/button/button';
 import { ColorInput } from '/@/shared/components/color-input/color-input';
 import { Group } from '/@/shared/components/group/group';
+import { SegmentedControl } from '/@/shared/components/segmented-control/segmented-control';
 import { Select } from '/@/shared/components/select/select';
 import { Slider } from '/@/shared/components/slider/slider';
 import { Stack } from '/@/shared/components/stack/stack';
@@ -198,6 +199,57 @@ export const ThemeSettings = memo(() => {
     const groupedThemeData = useMemo(() => getGroupedThemeData(customThemes), [customThemes]);
 
     const themeOptions: SettingOption[] = [
+        {
+            control: (
+                <Switch
+                    checked={settings.coverColours}
+                    onChange={(e) => {
+                        setSettings({
+                            general: {
+                                coverColours: e.currentTarget.checked,
+                            },
+                        });
+                    }}
+                />
+            ),
+            description: t('setting.coverColours', {
+                context: 'description',
+            }),
+            isHidden: false,
+            keywords: KEYWORDS.coverColours,
+            title: t('setting.coverColours'),
+        },
+        {
+            control: (
+                <SegmentedControl
+                    aria-label={t('setting.coverColoursMode')}
+                    data={[
+                        {
+                            label: t('setting.coverColoursMode', { context: 'optionDark' }),
+                            value: 'dark',
+                        },
+                        {
+                            label: t('setting.coverColoursMode', { context: 'optionLight' }),
+                            value: 'light',
+                        },
+                    ]}
+                    onChange={(value) => {
+                        setSettings({
+                            general: {
+                                coverColoursMode: value === 'light' ? 'light' : 'dark',
+                            },
+                        });
+                    }}
+                    value={settings.coverColoursMode}
+                />
+            ),
+            description: t('setting.coverColoursMode', {
+                context: 'description',
+            }),
+            // With `Use system theme` the system decides, so there is nothing to choose here.
+            isHidden: !settings.coverColours || settings.followSystemTheme,
+            title: t('setting.coverColoursMode'),
+        },
         {
             control: (
                 <Switch
@@ -395,37 +447,14 @@ export const ThemeSettings = memo(() => {
             isHidden: settings.useThemePrimaryShade,
             title: t('setting.primaryShade'),
         },
-        {
-            control: (
-                <Switch
-                    checked={settings.expressiveMotion}
-                    onChange={(e) => {
-                        setSettings({
-                            general: {
-                                expressiveMotion: e.currentTarget.checked,
-                            },
-                        });
-                    }}
-                />
-            ),
-            description: t('setting.expressiveMotion', {
-                context: 'description',
-            }),
-            isHidden: false,
-            title: t('setting.expressiveMotion'),
-        },
     ];
 
     return (
         <SettingsSection
-            extra={
-                <>
-                    <CustomThemesManager />
-                    <StylesSettings />
-                </>
-            }
+            extra={<CustomThemesManager />}
+            extraKeywords={['custom themes', 'themes folder', 'theme folder']}
             options={themeOptions}
-            title={t('page.setting.theme')}
+            title={t('page.setting.colours')}
         />
     );
 });

@@ -13,6 +13,7 @@ import { ipc } from './ipc';
 import { lbBot } from './lbbot';
 import { localSettings } from './local-settings';
 import { lyrics } from './lyrics';
+import { mood } from './mood';
 import { mpris } from './mpris';
 import { mpvPlayer, mpvPlayerListener } from './mpv-player';
 import { preview } from './preview';
@@ -38,6 +39,7 @@ const api = {
     lbBot,
     localSettings,
     lyrics,
+    mood,
     mpris,
     mpvPlayer,
     mpvPlayerListener,

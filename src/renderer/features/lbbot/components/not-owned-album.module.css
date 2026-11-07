@@ -1,0 +1,111 @@
+/* The not-owned album page (boards AlbumUnowned, Sources, Requests). */
+.body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--theme-spacing-xl);
+    min-width: 0;
+}
+
+/* `.two` at 340 px: About on the left, the tracklist on the right; one column below 1000 px. */
+.columns {
+    display: flex;
+    flex-direction: column;
+    gap: var(--theme-spacing-xl);
+    min-width: 0;
+}
+
+@container (width >= 960px) {
+    .columns {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 340px;
+        gap: 32px;
+        align-items: start;
+    }
+}
+
+.label {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--theme-colors-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.label small {
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.muted {
+    margin: 0;
+    font-size: 13px;
+    color: var(--theme-colors-foreground-muted);
+}
+
+/* Find it under About: the same distance from the text above as the page's sections. */
+.find-it {
+    margin-top: var(--theme-spacing-xl);
+}
+
+/* The downloads-off line under the hero's buttons (it folds in below them). */
+.off-line {
+    padding-top: var(--theme-spacing-xs);
+}
+
+.actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 6px;
+}
+
+/* Tracklist rows: number, title, a muted Missing pill; 38 px. */
+.track {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr) auto auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 38px;
+    font-size: 13.5px;
+}
+
+.track-number {
+    font-variant-numeric: tabular-nums;
+    color: var(--theme-colors-foreground-muted);
+    text-align: right;
+}
+
+.track-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pickers {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ghost {
+    height: 14px;
+    margin: 8px 0;
+    background: linear-gradient(135deg, var(--theme-colors-surface), var(--theme-colors-background-alternate));
+    border-radius: 6px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .ghost {
+        animation: pulse 1.4s ease-in-out infinite;
+    }
+}
+
+@keyframes pulse {
+    50% {
+        opacity: 0.55;
+    }
+}

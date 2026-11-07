@@ -126,6 +126,53 @@ button {
 }
 
 
+/* Figtree (text) and Bricolage Grotesque (titles), OFL-1.1, from @fontsource-variable 5.3.0: latin and latin-ext. */
+@font-face {
+    font-family: Figtree;
+    font-style: normal;
+    font-weight: 300 900;
+    src: url('../../../assets/fonts/figtree-latin-wght-normal.woff2') format('woff2');
+    font-display: swap;
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+        U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: Figtree;
+    font-style: normal;
+    font-weight: 300 900;
+    src: url('../../../assets/fonts/figtree-latin-ext-wght-normal.woff2') format('woff2');
+    font-display: swap;
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+        U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 200 800;
+    src: url('../../../assets/fonts/bricolage-grotesque-latin-wght-normal.woff2') format('woff2');
+    font-display: swap;
+    unicode-range:
+        U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+        U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+    font-family: 'Bricolage Grotesque';
+    font-style: normal;
+    font-weight: 200 800;
+    src: url('../../../assets/fonts/bricolage-grotesque-latin-ext-wght-normal.woff2') format('woff2');
+    font-display: swap;
+    unicode-range:
+        U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+        U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+        U+A720-A7FF;
+}
+
 @font-face {
     font-family: Inter;
     font-weight: 100 1000;
@@ -262,6 +309,20 @@ button {
 }
 
 :root {
+    /* The arrival grammar (design brief 8): arrivals rise and fade, sections fold. */
+    --arrive-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+    --arrive-ms: 240ms;
+    --fold-ease: cubic-bezier(0.3, 0.7, 0.2, 1);
+    --fold-ms: 300ms;
+    --fold-ms-tall: 450ms;
+
+    /* The shell's own tweens (the grid when the sidebar minimises or the queue opens). */
+    --motion-duration: 300ms;
+    --motion-duration-long: 450ms;
+    --motion-ease: var(--fold-ease);
+
+    /* Titles are Bricolage Grotesque, over the content stack (not user-selectable). */
+    --theme-title-font-family: 'Bricolage Grotesque', var(--theme-content-font-family);
     --theme-background-noise: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJhIiB4PSIwIiB5PSIwIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjc1IiBzdGl0Y2hUaWxlcz0ic3RpdGNoIi8+PGZlQ29sb3JNYXRyaXggdHlwZT0ic2F0dXJhdGUiIHZhbHVlcz0iMCIvPjwvZmlsdGVyPjxwYXRoIGZpbHRlcj0idXJsKCNhKSIgb3BhY2l0eT0iLjA1IiBkPSJNMCAwaDMwMHYzMDBIMHoiLz48L3N2Zz4=');
     --theme-fullscreen-player-text-shadow: black 0px 0px 10px;
     --theme-font-size-xs: var(--mantine-font-size-xs);
@@ -337,16 +398,143 @@ button {
     }
 }
 
+
 /*
- * Expressive motion tokens for CSS-driven transitions (left-sidebar minimize, side-queue
- * open/collapse, global-search category expand). Enabled by the Appearance "Expressive
- * motion" toggle, which sets data-motion on the root (see use-app-theme.ts). When the
- * toggle is off these vars are undefined and each call site keeps its instant fallback, so
- * OFF is behaviourally identical to before. Duration + emphasized easing mirror the M3
- * tokens in shared/components/animations/motion-tokens.ts so CSS and motion/react match.
+ * Cover colours (src/renderer/themes/cover): the window's colour roles, registered as colours. They are
+ * not transitioned: easing these inherited roles restyled every element on every frame (audit A-01), so
+ * the wash cross-fades its own layers and the page switches once (colour-change.ts). The initial values
+ * are the neutral dark roles (nothing playing). Every built-in theme and this file set each `--theme-colors-*` here to a colour, so with
+ * the wash off (and in the remote SPA, which never turns it on) the initial values never show.
  */
-:root[data-motion='true'] {
-    --motion-duration: 300ms;
-    --motion-duration-long: 450ms;
-    --motion-ease: cubic-bezier(0.2, 0, 0, 1);
+
+@property --wash-top {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(36% 0.019 260deg);
+}
+
+@property --wash-mid {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(29% 0.015 260deg);
+}
+
+@property --wash-bot {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(20% 0.012 260deg);
+}
+
+@property --wash-bar {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(15% 0.009 260deg / 94%);
+}
+
+@property --wash-surf {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(90% 0.007 260deg / 8%);
+}
+
+@property --wash-surf2 {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(90% 0.007 260deg / 15%);
+}
+
+@property --wash-acc {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(88% 0.024 260deg);
+}
+
+@property --wash-accc {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(45% 0.020 260deg);
+}
+
+@property --wash-accct {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(94% 0.007 260deg);
+}
+
+@property --theme-colors-background {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(29% 0.015 260deg);
+}
+
+@property --theme-colors-background-alternate {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(90% 0.007 260deg / 8%);
+}
+
+@property --theme-colors-surface {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(90% 0.007 260deg / 15%);
+}
+
+@property --theme-colors-surface-foreground {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(97% 0.003 260deg);
+}
+
+@property --theme-colors-foreground {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(97% 0.003 260deg);
+}
+
+@property --theme-colors-foreground-muted {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(91% 0.006 260deg);
+}
+
+@property --theme-colors-primary {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: rgb(206 216 232);
+}
+
+@property --theme-colors-primary-filled {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(88% 0.024 260deg);
+}
+
+@property --theme-colors-primary-contrast {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(20% 0.011 260deg);
+}
+
+@property --theme-colors-border {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(92% 0.007 260deg / 14%);
+}
+
+@property --theme-colors-state-error {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(75.9% 0.125 25deg);
+}
+
+@property --theme-colors-state-warning {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(83.7% 0.142 82deg);
+}
+
+@property --theme-colors-state-success {
+    syntax: '<color>';
+    inherits: true;
+    initial-value: oklch(79% 0.126 160deg);
 }

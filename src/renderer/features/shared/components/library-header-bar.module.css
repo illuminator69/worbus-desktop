@@ -15,3 +15,12 @@
     align-items: center;
     justify-content: center;
 }
+
+/* In the Library frame's title row: the content's own width, no row padding. */
+.header-container.in-frame {
+    gap: 12px;
+    width: auto;
+    max-width: none;
+    height: auto;
+    padding: 0;
+}

@@ -4,6 +4,7 @@ import { useParams } from 'react-router';
 
 import { useItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NativeScrollArea } from '/@/renderer/components/native-scroll-area/native-scroll-area';
+import { useNativeScrollPersist } from '/@/renderer/components/native-scroll-area/use-native-scroll-persist'; // navi-connect (B-228)
 import { albumQueries } from '/@/renderer/features/albums/api/album-api';
 import { AlbumDetailContent } from '/@/renderer/features/albums/components/album-detail-content';
 import { AlbumDetailHeader } from '/@/renderer/features/albums/components/album-detail-header';
@@ -15,8 +16,9 @@ import {
 import { LibraryContainer } from '/@/renderer/features/shared/components/library-container';
 import { LibraryHeaderBar } from '/@/renderer/features/shared/components/library-header-bar';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
-import { useFastAverageColor } from '/@/renderer/hooks';
 import { useAlbumBackground, useCurrentServerId } from '/@/renderer/store';
+import { useCoverWashOn } from '/@/renderer/themes/cover/cover-wash.store';
+import { useCoverHeaderWash } from '/@/renderer/themes/cover/use-cover-header-wash';
 import { LibraryItem } from '/@/shared/types/domain-types';
 
 const ALBUM_DETAIL_BG_FALLBACK = 'var(--theme-colors-foreground-muted)';
@@ -25,6 +27,9 @@ const AlbumDetailRoute = () => {
     const scrollAreaRef = useRef<HTMLDivElement>(null);
     const headerRef = useRef<HTMLDivElement>(null);
     const { albumBackground, albumBackgroundBlur } = useAlbumBackground();
+
+    // navi-connect (B-228): Back to an album lands where it was left, as on the artist page.
+    useNativeScrollPersist({ enabled: true, scrollRef: scrollAreaRef });
 
     const { albumId } = useParams() as { albumId: string };
     const serverId = useCurrentServerId();
@@ -40,21 +45,35 @@ const AlbumDetailRoute = () => {
             type: 'itemCard',
         }) || '';
 
-    const { background: backgroundColor } = useFastAverageColor({
-        id: albumId,
+    const washOn = useCoverWashOn();
+    const { background: headerBackground } = useCoverHeaderWash({
+        id: detailQuery?.data?.imageId || undefined,
+        serverId,
         src: imageUrl,
-        srcLoaded: true,
     });
 
-    const background = backgroundColor ?? ALBUM_DETAIL_BG_FALLBACK;
+    // With the cover wash on, no band while the cover is unresolved: the window wash shows instead.
+    const background = headerBackground ?? (washOn ? undefined : ALBUM_DETAIL_BG_FALLBACK);
 
     const showBlurredImage = albumBackground;
+
+    // The hero's band, drawn behind the hero and again in the bar (B-216), laid out against the hero.
+    const band = showBlurredImage ? (
+        <LibraryBackgroundImage
+            blur={albumBackgroundBlur}
+            headerRef={headerRef}
+            imageUrl={imageUrl}
+        />
+    ) : (
+        <LibraryBackgroundOverlay background={background} headerRef={headerRef} />
+    );
 
     return (
         <AnimatedPage key={`album-detail-${albumId}`}>
             <NativeScrollArea
                 pageHeaderProps={{
-                    backgroundColor: backgroundColor ?? ALBUM_DETAIL_BG_FALLBACK,
+                    backgroundColor: background,
+                    band,
                     children: (
                         <LibraryHeaderBar>
                             <LibraryHeaderBar.PlayButton
@@ -65,20 +84,13 @@ const AlbumDetailRoute = () => {
                             <LibraryHeaderBar.Title>{detailQuery.data.name}</LibraryHeaderBar.Title>
                         </LibraryHeaderBar>
                     ),
-                    offset: 200,
+                    // The bar follows the hero's title, not a pixel offset (B-220).
+                    fadeWithTitle: true,
                     target: headerRef,
                 }}
                 ref={scrollAreaRef}
             >
-                {showBlurredImage ? (
-                    <LibraryBackgroundImage
-                        blur={albumBackgroundBlur}
-                        headerRef={headerRef}
-                        imageUrl={imageUrl}
-                    />
-                ) : (
-                    <LibraryBackgroundOverlay backgroundColor={background} headerRef={headerRef} />
-                )}
+                {band}
                 <LibraryContainer>
                     <AlbumDetailHeader ref={headerRef as React.Ref<HTMLDivElement>} />
                     <AlbumDetailContent />

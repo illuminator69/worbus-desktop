@@ -10,7 +10,7 @@ Plan: `PLAN-feishin-bottom-bar-2026-10-20.md` (kept outside the repo). Written 2
 | `tsc -p tsconfig.node.json` | clean | clean |
 | eslint / stylelint, `--max-warnings=0`, every changed file | - | clean |
 | `device-rows.harness.ts` | 21 pass | 21 pass |
-| `device-arrivals.harness.ts` (new) | - | 16 pass |
+| `device-arrivals.harness.ts` (new) | - | 18 pass |
 | `device-control-state.harness.ts` (new) | - | 7 pass |
 | `more-menu-items.harness.ts` (new) | - | 5 pass |
 
@@ -89,3 +89,21 @@ Seen working:
 5. Equaliser reuses the existing `setting.equalizer` key ("Equalizer"); Auto DJ reuses `setting.autoDJ`.
 6. The tracker gained `expiresAt(id)` so the hook schedules its one re-render at the exact expiry.
 7. A device seen offline in the first snapshot and online soon after is not proposed (its real absence is unknown).
+
+## Owner review, round 1 (2026-10-20)
+
+- **"Switch to" never showed for a newly connected device.** The plan's 15 s minimum absence was the cause. Navic keeps
+  its hub socket while backgrounded (HubManager is app-level), so bringing it forward is no connection at all; it
+  reconnects when its process restarts or the network changes, with a backoff that starts at 1 s, so it is back within
+  seconds. The minimum is now 3 s. Every arrival is logged (`[hub] device connected`, with hidden / active / local-song
+  flags), so a pill that still stays quiet can be read from the app log. Watched: 5 s offline, then online, proposes.
+  Not covered: a reconnect that replaces a still-live socket (the hub swaps sockets and never reports the device
+  offline), which is a network blip rather than an arrival.
+- **Heart** moved after the song's text block, vertically centred on it, at the normal icon size.
+- **Device box:** 282 px wide (0.8 of 352). The list keeps its height while the box folds and the content is anchored at
+  the pill, so no frame shows a scrollbar (sampled every animation frame, opening and closing). Closing is 420 ms and
+  stays opaque until its last 160 ms. "Offline & hidden" folds open and shut the same way.
+- **Volume:** the stars float above the slider, so the speaker and slider sit on the same centre line as the other
+  icons (measured: device icon, queue, speaker, slider and More all at the same y). Stars watched with a stand-in
+  Navidrome server.
+- **More:** moving into a panel slides it in from the right, Back from the left (240 ms, off with reduced motion).

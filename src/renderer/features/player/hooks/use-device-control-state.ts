@@ -1,5 +1,5 @@
 import isElectron from 'is-electron';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
     ArrivalDevice,
@@ -19,6 +19,7 @@ import {
     useHubSettings,
     usePlayerSong,
 } from '/@/renderer/store';
+import { logger } from '/@/renderer/utils/logger';
 
 const hasHub = Boolean(isElectron() && window.api.hub);
 
@@ -51,9 +52,27 @@ export function useDeviceControlState(pickerOpen: boolean): {
     );
 
     // Declared before the effect that reads the proposal, so it runs first on the same commit.
+    // The other reasons a connected device is not offered, logged with it so a missing pill can
+    // be read from the app log. Kept in a ref: they must not re-run the observe below.
+    const why = useRef({ activeId, hiddenIds, localHasSong, myId });
+    why.current = { activeId, hiddenIds, localHasSong, myId };
+
     useEffect(() => {
-        if (connected) tracker.observe(devices, Date.now());
-        else tracker.reset();
+        if (!connected) {
+            tracker.reset();
+            return;
+        }
+        for (const device of tracker.observe(devices, Date.now())) {
+            const w = why.current;
+            logger.info('[hub] device connected', {
+                hidden: w.hiddenIds.has(device.id),
+                id: device.id,
+                isActive: device.id === w.activeId,
+                localHasSong: w.localHasSong,
+                name: device.name,
+                reachable: device.reachable ?? null,
+            });
+        }
     }, [connected, devices, tracker]);
 
     useEffect(() => {

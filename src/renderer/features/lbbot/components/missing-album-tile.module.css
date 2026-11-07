@@ -1,9 +1,5 @@
-/* The state badge laid over the cover by DiscoverTile: one line, centred. */
-.badge {
-    justify-content: center;
-    width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    opacity: 0.9;
+/* A running fill's progress, under its pill on the cover. */
+.progress {
+    width: 72px;
+    margin-top: 4px;
 }

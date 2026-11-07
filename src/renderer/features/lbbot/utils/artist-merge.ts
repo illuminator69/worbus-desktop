@@ -3,7 +3,7 @@ import type { LbBotMergeRow, LbBotSiblingGroup } from '/@/shared/types/lbbot-typ
 import type { PollSpec } from './album-override';
 
 /**
- * I-023 "Merge into one name": the logic that has no React in it. Navic mirrors it
+ * I-023 "Merge into one name": the logic that has no React in it. Worbus for Android mirrors it
  * by hand (PROTOCOL §15.5).
  */
 

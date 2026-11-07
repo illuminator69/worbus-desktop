@@ -52,15 +52,13 @@
 
 .item-table-pinned-rows-grid-container.header-fixed {
     position: fixed !important;
-    top: 65px;
+
+    /* Under the window bar, the top bar and the page's sticky title row (L5-01). */
+    top: calc(var(--window-bar-height, 0px) + var(--top-bar-height, 0px) + var(--page-header-height, 0px));
     z-index: 15;
     background-color: var(--theme-bg-primary);
     box-shadow: 0 -1px 0 0 var(--theme-colors-border);
     transition: position 0.2s ease-in-out;
-}
-
-.item-table-pinned-rows-grid-container.header-window-bar {
-    top: 95px;
 }
 
 .item-table-list-container.header-fixed-margin {

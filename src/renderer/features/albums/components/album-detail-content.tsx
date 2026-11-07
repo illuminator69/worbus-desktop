@@ -4,9 +4,10 @@ import type {
 } from '/@/renderer/components/item-list/helpers/item-list-state';
 
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { ReactNode, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { generatePath, useParams } from 'react-router';
+import { generatePath, Link, useParams } from 'react-router';
 
 import styles from './album-detail-content.module.css';
 
@@ -19,11 +20,13 @@ import { SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-
 import { ItemTableList } from '/@/renderer/components/item-list/item-table-list/item-table-list';
 import { ItemTableListColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { ItemControls } from '/@/renderer/components/item-list/types';
+import { aboutRow } from '/@/renderer/features/albums/album-page-layout';
 import { albumQueries } from '/@/renderer/features/albums/api/album-api';
 import { AlbumInfiniteCarousel } from '/@/renderer/features/albums/components/album-infinite-carousel';
-import { MetaAbout } from '/@/renderer/features/lbbot/components/meta-about';
+import { AlbumGapBox } from '/@/renderer/features/lbbot/components/gap-box';
 import { SimilarAlbumsShelf } from '/@/renderer/features/lbbot/components/similar-albums-shelf';
 import { useLbBotAlbumMeta } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { ClampFold } from '/@/renderer/features/motion/clamp-fold';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     ListConfigMenu,
@@ -33,7 +36,6 @@ import {
     CLIENT_SIDE_SONG_FILTERS,
     ListSortByDropdownControlled,
 } from '/@/renderer/features/shared/components/list-sort-by-dropdown';
-import { ListSortOrderToggleButtonControlled } from '/@/renderer/features/shared/components/list-sort-order-toggle-button';
 import { FILTER_KEYS, searchLibraryItems } from '/@/renderer/features/shared/utils';
 import { useHotkeys } from '/@/renderer/hooks/use-hotkeys';
 import { AppRoute } from '/@/renderer/router/routes';
@@ -49,9 +51,7 @@ import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Checkbox } from '/@/shared/components/checkbox/checkbox';
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
-import { Pill, PillLink } from '/@/shared/components/pill/pill';
 import { Skeleton } from '/@/shared/components/skeleton/skeleton';
-import { Spoiler } from '/@/shared/components/spoiler/spoiler';
 import { Stack } from '/@/shared/components/stack/stack';
 import { TextInput } from '/@/shared/components/text-input/text-input';
 import { TextTitle } from '/@/shared/components/text-title/text-title';
@@ -67,38 +67,14 @@ import {
     SongListSort,
     SortOrder,
 } from '/@/shared/types/domain-types';
-import { LbBotMetaCredit } from '/@/shared/types/lbbot-types';
+import { LbBotMeta, LbBotMetaCredit } from '/@/shared/types/lbbot-types';
 import { ItemListKey, ListDisplayType } from '/@/shared/types/types';
 
-const MetadataPillGroup = ({
-    items,
-    title,
-}: {
-    items: undefined | { id: string; value: ReactNode | string | undefined }[];
-    title: string;
-}) => {
-    if (!items || items.length === 0) return null;
-
-    return (
-        <Stack align="center" className={styles.metadataPillGroup} gap="xs">
-            <Text fw={600} isNoSelect size="sm" tt="uppercase">
-                {title}
-            </Text>
-            <div className={styles['pill-group-wrapper']}>
-                <Pill.Group>
-                    {items.map((tag, index) => (
-                        <Pill key={`item-${tag.id}-${index}`} size="md">
-                            {tag.value}
-                        </Pill>
-                    ))}
-                </Pill.Group>
-            </div>
-        </Stack>
-    );
-};
-
-interface AlbumMetadataTagsProps {
-    album: Album | undefined;
+/** One chip in the About row's right column (board `.tags span`): a link when it has `to`. */
+interface AlbumChip {
+    id: string;
+    label: string;
+    to?: null | string;
 }
 
 const MOOD_TAG = 'mood';
@@ -106,206 +82,108 @@ const GROUPING_TAG = 'grouping';
 const RELEASE_COUNTRY_TAG = 'releasecountry';
 const RELEASE_STATUS_TAG = 'releasestatus';
 
-const AlbumMetadataTags = ({ album }: AlbumMetadataTagsProps) => {
+/**
+ * The right column's chips, in the board's two lines: the genres, then the tags (release types,
+ * country, status, explicit or clean, moods, groupings) with the record label last as
+ * "Record label: X". The label used to be a ℗ line under the table; it is a chip here.
+ */
+const useAlbumChips = (album: Album | undefined): { genres: AlbumChip[]; tags: AlbumChip[] } => {
     const { t } = useTranslation();
 
-    const defaultTagItems = useMemo(() => {
-        if (!album) return [];
+    return useMemo(() => {
+        if (!album) return { genres: [], tags: [] };
+
+        const genres: AlbumChip[] = (album.genres ?? []).map((genre) => ({
+            id: `genre-${genre.id}`,
+            label: genre.name,
+            to: generatePath(AppRoute.LIBRARY_GENRES_DETAIL, { genreId: genre.id }),
+        }));
 
         const releaseTypes = [...(album.releaseTypes ?? [])];
-
-        const hasCompilationReleaseType = releaseTypes.some(
-            (type) => type.toLowerCase() === 'compilation',
-        );
-
-        if (album.isCompilation && !hasCompilationReleaseType) {
+        if (
+            album.isCompilation &&
+            !releaseTypes.some((type) => type.toLowerCase() === 'compilation')
+        ) {
             releaseTypes.push('compilation');
         }
 
-        const releaseTypeItems = normalizeReleaseTypes(releaseTypes, t).map((type) => ({
-            id: type,
-            value: titleCase(type),
-        }));
+        const tags: AlbumChip[] = [
+            ...normalizeReleaseTypes(releaseTypes, t).map((type) => ({
+                id: `type-${type}`,
+                label: titleCase(type),
+            })),
+            ...(album.tags?.[RELEASE_COUNTRY_TAG] ?? []).map((country) => ({
+                id: `country-${country}`,
+                label: country,
+            })),
+            ...(album.tags?.[RELEASE_STATUS_TAG] ?? []).map((status) => ({
+                id: `status-${status}`,
+                label: status,
+            })),
+        ];
 
-        const releaseCountries =
-            album.tags?.[RELEASE_COUNTRY_TAG]?.map((country) => ({
-                id: country,
-                value: country,
-            })) || [];
+        if (album.explicitStatus === ExplicitStatus.EXPLICIT) {
+            tags.push({ id: 'explicit', label: t('common.explicit') });
+        } else if (album.explicitStatus === ExplicitStatus.CLEAN) {
+            tags.push({ id: 'clean', label: t('common.clean') });
+        }
 
-        const releaseStatuses =
-            album.tags?.[RELEASE_STATUS_TAG]?.map((status) => ({
-                id: status,
-                value: status,
-            })) || [];
+        for (const mood of album.tags?.[MOOD_TAG] ?? []) {
+            tags.push({ id: `mood-${mood}`, label: mood });
+        }
 
-        const items: Array<{ id: string; value: ReactNode | string | undefined }> = [];
+        for (const grouping of album.tags?.[GROUPING_TAG] ?? []) {
+            tags.push({
+                id: `grouping-${grouping}`,
+                label: grouping,
+                to:
+                    album._serverType === ServerType.NAVIDROME
+                        ? `${AppRoute.LIBRARY_ALBUMS}?${setJsonSearchParam(
+                              new URLSearchParams(),
+                              FILTER_KEYS.ALBUM._CUSTOM,
+                              { grouping: [grouping] },
+                          ).toString()}`
+                        : null,
+            });
+        }
 
-        items.push(...releaseTypeItems, ...releaseCountries, ...releaseStatuses, {
-            id: 'explicitStatus',
-            value:
-                album.explicitStatus === ExplicitStatus.EXPLICIT
-                    ? t('common.explicit')
-                    : album.explicitStatus === ExplicitStatus.CLEAN
-                      ? t('common.clean')
-                      : undefined,
-        });
+        for (const label of album.recordLabels ?? []) {
+            tags.push({
+                id: `label-${label}`,
+                label: t('page.albumDetail.recordLabelChip', { label }),
+                to:
+                    album._serverType === ServerType.SUBSONIC
+                        ? null
+                        : `${AppRoute.LIBRARY_ALBUMS}?${setJsonSearchParam(
+                              new URLSearchParams(),
+                              FILTER_KEYS.ALBUM._CUSTOM,
+                              album._serverType === ServerType.JELLYFIN
+                                  ? { Studios: [label] }
+                                  : { recordlabel: [label] },
+                          ).toString()}`,
+            });
+        }
 
-        return items.filter((item) => item.value);
+        return { genres, tags };
     }, [album, t]);
-
-    const moodTagItems = useMemo(() => {
-        if (!album) return [];
-
-        return album.tags?.[MOOD_TAG]?.map((tag) => ({
-            id: tag,
-            value: tag,
-        }));
-    }, [album]);
-
-    const groupingItems = useMemo(() => {
-        if (!album) return [];
-
-        return (
-            album.tags?.[GROUPING_TAG]?.map((tag) => {
-                if (album._serverType !== ServerType.NAVIDROME) {
-                    return { id: tag, label: tag, url: null };
-                }
-
-                const searchParams = new URLSearchParams();
-                const paramsWithCustom = setJsonSearchParam(
-                    searchParams,
-                    FILTER_KEYS.ALBUM._CUSTOM,
-                    { grouping: [tag] },
-                );
-                return {
-                    id: tag,
-                    label: tag,
-                    url: `${AppRoute.LIBRARY_ALBUMS}?${paramsWithCustom.toString()}`,
-                };
-            }) ?? []
-        );
-    }, [album]);
-
-    const recordLabels = useMemo(() => {
-        if (!album?.recordLabels || album.recordLabels.length === 0) return [];
-
-        return album.recordLabels.map((label) => {
-            if (album._serverType === ServerType.SUBSONIC) {
-                return { id: label, label: label, url: null };
-            }
-
-            const searchParams = new URLSearchParams();
-            const customFilters =
-                album._serverType === ServerType.JELLYFIN
-                    ? { Studios: [label] }
-                    : { recordlabel: [label] };
-            const paramsWithCustom = setJsonSearchParam(
-                searchParams,
-                FILTER_KEYS.ALBUM._CUSTOM,
-                customFilters,
-            );
-            const url = `${AppRoute.LIBRARY_ALBUMS}?${paramsWithCustom.toString()}`;
-
-            return {
-                id: label,
-                label,
-                url,
-            };
-        });
-    }, [album]);
-
-    return (
-        <>
-            <MetadataPillGroup items={defaultTagItems} title={t('common.tags')} />
-
-            {recordLabels.length > 0 && (
-                <Stack align="center" className={styles.metadataPillGroup} gap="xs">
-                    <Text fw={600} isNoSelect size="sm" tt="uppercase">
-                        {t('common.recordLabel')}
-                    </Text>
-                    <div className={styles['pill-group-wrapper']}>
-                        <Pill.Group>
-                            {recordLabels.map((recordLabel) =>
-                                recordLabel.url ? (
-                                    <PillLink
-                                        key={`recordlabel-${recordLabel.id}`}
-                                        size="md"
-                                        to={recordLabel.url}
-                                    >
-                                        {recordLabel.label}
-                                    </PillLink>
-                                ) : (
-                                    <Pill key={`recordlabel-${recordLabel.id}`} size="md">
-                                        {recordLabel.label}
-                                    </Pill>
-                                ),
-                            )}
-                        </Pill.Group>
-                    </div>
-                </Stack>
-            )}
-
-            <MetadataPillGroup items={moodTagItems} title={t('common.mood')} />
-
-            {groupingItems.length > 0 && (
-                <Stack align="center" className={styles.metadataPillGroup} gap="xs">
-                    <Text fw={600} isNoSelect size="sm" tt="uppercase">
-                        {t('common.grouping')}
-                    </Text>
-                    <div className={styles['pill-group-wrapper']}>
-                        <Pill.Group>
-                            {groupingItems.map((item) =>
-                                item.url ? (
-                                    <PillLink key={`grouping-${item.id}`} size="md" to={item.url}>
-                                        {item.label}
-                                    </PillLink>
-                                ) : (
-                                    <Pill key={`grouping-${item.id}`} size="md">
-                                        {item.label}
-                                    </Pill>
-                                ),
-                            )}
-                        </Pill.Group>
-                    </div>
-                </Stack>
-            )}
-        </>
-    );
 };
 
-interface AlbumMetadataGenresProps {
-    genres?: Array<{ id: string; name: string }>;
-}
-
-const AlbumMetadataGenres = ({ genres }: AlbumMetadataGenresProps) => {
-    const { t } = useTranslation();
-
-    if (!genres || genres.length === 0) return null;
-
-    return (
-        <Stack gap="xs">
-            <Text fw={600} isNoSelect size="sm" tt="uppercase">
-                {t('entity.genre', {
-                    count: genres.length,
-                })}
-            </Text>
-            <Pill.Group>
-                {genres.map((genre) => (
-                    <PillLink
-                        key={`genre-${genre.id}`}
-                        size="md"
-                        to={generatePath(AppRoute.LIBRARY_GENRES_DETAIL, {
-                            genreId: genre.id,
-                        })}
-                    >
-                        {genre.name}
-                    </PillLink>
-                ))}
-            </Pill.Group>
-        </Stack>
-    );
-};
+const ChipLine = ({ chips }: { chips: AlbumChip[] }) =>
+    chips.length > 0 ? (
+        <div className={styles.chips}>
+            {chips.map((chip) =>
+                chip.to ? (
+                    <Link className={styles.chipTag} key={chip.id} to={chip.to}>
+                        {chip.label}
+                    </Link>
+                ) : (
+                    <span className={styles.chipTag} key={chip.id}>
+                        {chip.label}
+                    </span>
+                ),
+            )}
+        </div>
+    ) : null;
 
 // interface AlbumMetadataArtistsProps {
 //     artists?: Array<{ id: string; name: string }>;
@@ -340,20 +218,6 @@ const AlbumMetadataGenres = ({ genres }: AlbumMetadataGenresProps) => {
 //     );
 // };
 
-interface AlbumMetadataExternalLinksProps {
-    albumArtist?: string;
-    albumName?: string;
-    externalLinks: boolean;
-    lastFM: boolean;
-    listenBrainz: boolean;
-    mbzId?: null | string;
-    mbzReleaseGroupId?: null | string;
-    musicBrainz: boolean;
-    nativeSpotify: boolean;
-    qobuz: boolean;
-    spotify: boolean;
-}
-
 const getListenBrainzUrl = (
     mbzReleaseGroupId: null | string,
     albumArtist?: string,
@@ -378,144 +242,98 @@ const getQobuzUrl = (albumArtist?: string, albumName?: string) => {
     return null;
 };
 
-const AlbumMetadataExternalLinks = ({
-    albumArtist,
-    albumName,
-    externalLinks,
-    lastFM,
-    listenBrainz,
-    mbzId,
-    mbzReleaseGroupId,
-    musicBrainz,
-    nativeSpotify,
-    qobuz,
-    spotify,
-}: AlbumMetadataExternalLinksProps) => {
+/** One external link in the right column (board `.lnk`): the service's name, opened outside. */
+interface AlbumLink {
+    href: string;
+    key: string;
+    label: string;
+    newWindow: boolean;
+    title: string;
+}
+
+/**
+ * The external links the user's settings allow, as the board's text links. Service names are
+ * proper nouns and stay as written; the "Open in X" tooltip carries the translation.
+ */
+const useAlbumLinks = (album: Album | undefined): AlbumLink[] => {
     const { t } = useTranslation();
+    const { externalLinks, lastFM, listenBrainz, musicBrainz, nativeSpotify, qobuz, spotify } =
+        useExternalLinks();
 
-    const listenBrainzUrl = getListenBrainzUrl(mbzReleaseGroupId || null, albumArtist, albumName);
+    if (!album || !externalLinks) return [];
+
+    const albumArtist = album.albumArtistName;
+    const albumName = album.name;
+    const links: AlbumLink[] = [];
+
+    if (lastFM) {
+        links.push({
+            href: `https://www.last.fm/music/${encodeURIComponent(
+                albumArtist || '',
+            )}/${encodeURIComponent(albumName || '')}`,
+            key: 'lastfm',
+            label: 'Last.fm',
+            newWindow: true,
+            title: t('action.openIn.lastfm'),
+        });
+    }
+    if (album.mbzId && musicBrainz) {
+        links.push({
+            href: `https://musicbrainz.org/release/${album.mbzId}`,
+            key: 'musicbrainz',
+            label: 'MusicBrainz',
+            newWindow: true,
+            title: t('action.openIn.musicbrainz'),
+        });
+    }
+    const listenBrainzUrl = getListenBrainzUrl(
+        album.mbzReleaseGroupId || null,
+        albumArtist,
+        albumName,
+    );
+    if (listenBrainz && listenBrainzUrl) {
+        links.push({
+            href: listenBrainzUrl,
+            key: 'listenbrainz',
+            label: 'ListenBrainz',
+            newWindow: true,
+            title: t('action.openIn.listenbrainz'),
+        });
+    }
     const qobuzUrl = getQobuzUrl(albumArtist, albumName);
-
-    if (!externalLinks || (!lastFM && !listenBrainz && !musicBrainz && !qobuz && !spotify)) {
-        return null;
+    if (qobuz && qobuzUrl) {
+        links.push({
+            href: qobuzUrl,
+            key: 'qobuz',
+            label: 'Qobuz',
+            newWindow: true,
+            title: t('action.openIn.qobuz'),
+        });
+    }
+    if (spotify) {
+        links.push({
+            href: nativeSpotify
+                ? `spotify:search:${encodeURIComponent(albumArtist || '')}%20${encodeURIComponent(albumName || '')}`
+                : `https://open.spotify.com/search/${encodeURIComponent(albumArtist || '')}%20${encodeURIComponent(albumName || '')}`,
+            key: 'spotify',
+            label: 'Spotify',
+            newWindow: !nativeSpotify,
+            title: t('action.openIn.spotify'),
+        });
     }
 
-    return (
-        <Stack gap="xs">
-            <Text fw={600} isNoSelect size="sm" tt="uppercase">
-                {t('common.externalLinks')}
-            </Text>
-            <Group className={styles.externalLinksGroup} gap="xs">
-                {lastFM && (
-                    <ActionIcon
-                        component="a"
-                        href={`https://www.last.fm/music/${encodeURIComponent(
-                            albumArtist || '',
-                        )}/${encodeURIComponent(albumName || '')}`}
-                        icon="brandLastfm"
-                        iconProps={{
-                            size: '2xl',
-                        }}
-                        radius="md"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                        tooltip={{
-                            label: t('action.openIn.lastfm'),
-                        }}
-                        variant="subtle"
-                    />
-                )}
-                {mbzId && musicBrainz ? (
-                    <ActionIcon
-                        component="a"
-                        href={`https://musicbrainz.org/release/${mbzId}`}
-                        icon="brandMusicBrainz"
-                        iconProps={{
-                            size: '2xl',
-                        }}
-                        radius="md"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                        tooltip={{
-                            label: t('action.openIn.musicbrainz'),
-                        }}
-                        variant="subtle"
-                    />
-                ) : null}
-                {listenBrainz && listenBrainzUrl && (
-                    <ActionIcon
-                        component="a"
-                        href={listenBrainzUrl}
-                        icon="brandListenBrainz"
-                        iconProps={{
-                            size: '2xl',
-                        }}
-                        radius="md"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                        tooltip={{
-                            label: t('action.openIn.listenbrainz'),
-                        }}
-                        variant="subtle"
-                    />
-                )}
-                {qobuz && qobuzUrl && (
-                    <ActionIcon
-                        component="a"
-                        href={qobuzUrl}
-                        icon="brandQobuz"
-                        iconProps={{
-                            size: '2xl',
-                        }}
-                        radius="md"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                        tooltip={{
-                            label: t('action.openIn.qobuz'),
-                        }}
-                        variant="subtle"
-                    />
-                )}
-                {spotify && (
-                    <ActionIcon
-                        component="a"
-                        href={
-                            nativeSpotify
-                                ? `spotify:search:${encodeURIComponent(albumArtist || '')}%20${encodeURIComponent(albumName || '')}`
-                                : `https://open.spotify.com/search/${encodeURIComponent(albumArtist || '')}%20${encodeURIComponent(albumName || '')}`
-                        }
-                        icon="brandSpotify"
-                        iconProps={{
-                            size: '2xl',
-                        }}
-                        radius="md"
-                        rel="noopener noreferrer"
-                        target={nativeSpotify ? undefined : '_blank'}
-                        tooltip={{
-                            label: t('action.openIn.spotify'),
-                        }}
-                        variant="subtle"
-                    />
-                )}
-            </Group>
-        </Stack>
-    );
+    return links;
 };
 
 export const AlbumDetailContent = () => {
+    const { t } = useTranslation();
     const { albumId } = useParams() as { albumId: string };
     const server = useCurrentServer();
     const detailQuery = useSuspenseQuery(
         albumQueries.detail({ query: { id: albumId }, serverId: server.id }),
     );
 
-    const { externalLinks, lastFM, listenBrainz, musicBrainz, nativeSpotify, qobuz, spotify } =
-        useExternalLinks();
-
     const comment = detailQuery?.data?.comment;
-
-    const releaseYear = detailQuery?.data?.releaseYear;
-    const labels = detailQuery?.data?.recordLabels;
 
     const mbzId = detailQuery?.data?.mbzId;
     const mbzReleaseGroupId = detailQuery?.data?.mbzReleaseGroupId;
@@ -547,97 +365,200 @@ export const AlbumDetailContent = () => {
     const descriptionLoading =
         notesPending || (!notes && !comment && Boolean(mbzReleaseGroupId) && metaQuery.isLoading);
 
+    const chips = useAlbumChips(detailQuery?.data);
+    const links = useAlbumLinks(detailQuery?.data);
+    const row = aboutRow({
+        aboutLoading: descriptionLoading,
+        hasAbout: hasDescription,
+        linkCount: links.length,
+        tagCount: chips.genres.length + chips.tags.length,
+    });
+    const showAbout = row === 'two' || row === 'about-only';
+    const showSide = row === 'two' || row === 'side-only';
+
     return (
         <div className={styles.contentContainer}>
             <div className={styles.detailContainer}>
-                {/* ONE description, and the slot is filled by the response
-                    this page already blocks on. These used to be unconditional
-                    siblings, so an album carrying both `notes` and a `comment`
-                    tag rendered two unlabelled descriptions stacked on top of
-                    each other, and the lb-bot block popped in above whatever
-                    you had started reading.
+                {/* The About row, in the artist page's order (R13, B-243): the text folded to five
+                    lines, then the genres, the tags with the record label, and the links, full
+                    width under it; nothing when neither side has anything (album-page-layout.ts). */}
+                {row !== 'none' && (
+                    <div className={styles.aboutRow} data-about-row={row}>
+                        {/* ONE description, and the slot is filled by the response
+                            this page already blocks on. These used to be unconditional
+                            siblings, so an album carrying both `notes` and a `comment`
+                            tag rendered two unlabelled descriptions stacked on top of
+                            each other, and the lb-bot block popped in above whatever
+                            you had started reading.
 
-                    Order is arrival order, which is also preference order:
-                    Navidrome's `notes` and the ID3 `comment` are both part of
-                    the album detail this page waits for anyway, so they are on
-                    screen at once and never move. lb-bot's Wikipedia prose is
-                    last — it arrives a second or more later behind a
-                    MusicBrainz hop, so it may only ever fill a slot that was
-                    EMPTY. It must never replace text already being read. */}
-                {descriptionLoading && (
-                    <Stack gap="xs" pb="md">
-                        <TextTitle fw={700} order={3}>
-                            About
-                        </TextTitle>
-                        <Skeleton height={16} />
-                        <Skeleton height={16} />
-                        <Skeleton height={16} width="70%" />
-                    </Stack>
-                )}
-                {!descriptionLoading && hasDescription && (
-                    <Stack gap="xs" pb="md">
-                        <TextTitle fw={700} order={3}>
-                            About
-                        </TextTitle>
-                        {notes ? (
-                            // Editorial notes are HTML — "<b>100 Best Albums</b>",
-                            // "<i>Dummy</i>" — so they go through the sanitizer
-                            // like the artist biography, not into a plain Text.
-                            <Spoiler maxHeight={120}>
-                                <Text dangerouslySetInnerHTML={{ __html: sanitize(notes) }} />
-                            </Spoiler>
-                        ) : comment ? (
-                            <Spoiler maxHeight={120}>
-                                <Text>{replaceURLWithHTMLLinks(comment)}</Text>
-                            </Spoiler>
-                        ) : (
-                            meta && <MetaAbout maxHeight={120} meta={meta} />
+                            Order is arrival order, which is also preference order:
+                            Navidrome's `notes` and the ID3 `comment` are both part of
+                            the album detail this page waits for anyway, so they are on
+                            screen at once and never move. lb-bot's Wikipedia prose is
+                            last, it arrives a second or more later behind a
+                            MusicBrainz hop, so it may only ever fill a slot that was
+                            EMPTY. It must never replace text already being read. */}
+                        {showAbout &&
+                            (descriptionLoading ? (
+                                <section className={styles.about}>
+                                    <div className={styles.label}>
+                                        {t('page.albumDetail.about')}
+                                    </div>
+                                    <Stack gap="xs">
+                                        <Skeleton height={16} />
+                                        <Skeleton height={16} />
+                                        <Skeleton height={16} width="70%" />
+                                    </Stack>
+                                </section>
+                            ) : (
+                                <AlbumAbout
+                                    albumId={albumId}
+                                    // lb-bot's prose carries its CC BY-SA attribution and
+                                    // its links, outside the clamp, so collapsing never
+                                    // hides them.
+                                    footer={
+                                        !notes && !comment && meta ? (
+                                            <MetaSource meta={meta} />
+                                        ) : null
+                                    }
+                                >
+                                    {notes ? (
+                                        // Editorial notes are HTML ("<b>100 Best Albums</b>",
+                                        // "<i>Dummy</i>"), so they go through the sanitizer
+                                        // like the artist biography, not into a plain Text.
+                                        <div
+                                            dangerouslySetInnerHTML={{ __html: sanitize(notes) }}
+                                        />
+                                    ) : comment ? (
+                                        <div>{replaceURLWithHTMLLinks(comment)}</div>
+                                    ) : (
+                                        meta && (
+                                            <div>
+                                                {(meta.paragraphs.length > 0
+                                                    ? meta.paragraphs
+                                                    : [meta.summary]
+                                                )
+                                                    .filter(Boolean)
+                                                    .map((paragraph, index) => (
+                                                        <p key={index}>{paragraph}</p>
+                                                    ))}
+                                            </div>
+                                        )
+                                    )}
+                                </AlbumAbout>
+                            ))}
+                        {showSide && (
+                            <div className={styles.side}>
+                                <ChipLine chips={chips.genres} />
+                                <ChipLine chips={chips.tags} />
+                                {links.length > 0 && (
+                                    <div className={styles.links}>
+                                        {links.map((link) => (
+                                            <a
+                                                className={styles.link}
+                                                href={link.href}
+                                                key={link.key}
+                                                rel="noopener noreferrer"
+                                                target={link.newWindow ? '_blank' : undefined}
+                                                title={link.title}
+                                            >
+                                                {link.label}
+                                                <Icon icon="externalLink" size="sm" />
+                                            </a>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
                         )}
-                    </Stack>
+                    </div>
                 )}
-                {/* Credits are a section of their own, not a sibling inside the
-                    prose stack. They come from lb-bot and so land late, which
-                    is fine: nothing was there before them. */}
-                {meta && meta.credits.length > 0 && (
-                    <Stack gap="md" pb="md">
-                        <AlbumCredits credits={meta.credits} />
-                    </Stack>
-                )}
-                <div className={styles.contentLayout}>
+                {detailQuery?.data?.songs && detailQuery.data.songs.length > 0 && (
                     <div className={styles.songsColumn}>
-                        {detailQuery?.data?.songs && detailQuery.data.songs.length > 0 && (
-                            <AlbumDetailSongsTable songs={detailQuery.data.songs} />
-                        )}
+                        {/* R11 (B-223): lb-bot's gaps box, above the toolbar, only for an album
+                            the library holds part of. */}
+                        <AlbumGapBox album={detailQuery.data} />
+                        <AlbumDetailSongsTable songs={detailQuery.data.songs} />
                     </div>
-                    <div className={styles.metadataColumn}>
-                        <AlbumMetadataGenres genres={detailQuery?.data?.genres} />
-                        <AlbumMetadataTags album={detailQuery?.data} />
-                        <AlbumMetadataExternalLinks
-                            albumArtist={detailQuery?.data?.albumArtistName}
-                            albumName={detailQuery?.data?.name}
-                            externalLinks={externalLinks}
-                            lastFM={lastFM}
-                            listenBrainz={listenBrainz}
-                            mbzId={mbzId || undefined}
-                            mbzReleaseGroupId={detailQuery?.data?.mbzReleaseGroupId}
-                            musicBrainz={musicBrainz}
-                            nativeSpotify={nativeSpotify}
-                            qobuz={qobuz}
-                            spotify={spotify}
-                        />
-                    </div>
-                </div>
-                {labels && (
-                    <Stack gap="xs">
-                        {labels.map((label) => (
-                            <Text isMuted key={`label-${label}`} size="sm">
-                                ℗{releaseYear ? ` ${releaseYear}` : ''} {label}
-                            </Text>
-                        ))}
+                )}
+                {/* Credits are a section of their own, below the tracklist. They come
+                    from lb-bot and so land late, which is fine: nothing is under them
+                    but the carousels, which land late as well. */}
+                {meta && meta.credits.length > 0 && (
+                    <Stack className={styles.credits} gap="md">
+                        <AlbumCredits credits={meta.credits} />
                     </Stack>
                 )}
                 <AlbumDetailCarousels data={detailQuery?.data} />
             </div>
+        </div>
+    );
+};
+
+/** The About open state as the person set it this session, per album (not persisted). */
+const aboutOpen = new Set<string>();
+
+/**
+ * The About (R13, B-243): the board's `.lbl` label, then the text at 14 px / 1.55, 62ch wide,
+ * folded like the artist page's About (`ClampFold`: five lines, the arrow at the cut, the fold's
+ * motion). The tags and links sit under it, so a folded About leaves no empty band beside them.
+ */
+const AlbumAbout = ({
+    albumId,
+    children,
+    footer,
+}: {
+    albumId: string;
+    children: ReactNode;
+    footer?: ReactNode;
+}) => {
+    const { t } = useTranslation();
+    return (
+        <section className={styles.about}>
+            <div className={styles.label}>{t('page.albumDetail.about')}</div>
+            <ClampFold
+                className={styles.aboutText}
+                initialOpen={aboutOpen.has(albumId)}
+                name="album-about"
+                onOpenChange={(open) => {
+                    if (open) aboutOpen.add(albumId);
+                    else aboutOpen.delete(albumId);
+                }}
+            >
+                {children}
+            </ClampFold>
+            {footer}
+        </section>
+    );
+};
+
+/** lb-bot's attribution (a CC BY-SA condition) and its links, under its prose. */
+const MetaSource = ({ meta }: { meta: LbBotMeta }) => {
+    const { t } = useTranslation();
+    if (!meta.source && meta.links.length === 0) return null;
+    return (
+        <div className={styles.metaSource}>
+            {meta.source && (
+                <Text isMuted size="sm">
+                    {t('page.albumDetail.aboutSource', {
+                        license: meta.source.license,
+                        name: meta.source.name,
+                    })}{' '}
+                    <a href={meta.source.url} rel="noreferrer" target="_blank">
+                        {t('page.albumDetail.readMore')}
+                    </a>
+                </Text>
+            )}
+            {meta.links.length > 0 && (
+                <Group gap="sm">
+                    {meta.links.map((link) => (
+                        <Text isMuted key={link.url} size="sm">
+                            <a href={link.url} rel="noreferrer" target="_blank">
+                                {link.label}
+                            </a>
+                        </Text>
+                    ))}
+                </Group>
+            )}
         </div>
     );
 };
@@ -847,6 +768,22 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
         return tableConfig?.columns || [];
     }, [tableConfig?.columns]);
 
+    // On an album the id order is the album's own order: the board calls it "Track number".
+    const sortFilters = useMemo(
+        () =>
+            CLIENT_SIDE_SONG_FILTERS.map((filter) =>
+                filter.value === SongListSort.ID
+                    ? { ...filter, name: t('page.albumDetail.sortTrackNumber') }
+                    : filter,
+            ),
+        [t],
+    );
+    const sortLabel = sortFilters.find((filter) => filter.value === sortBy)?.name ?? '';
+    // The chip flips the order, so its name says what the order is now, not what a press does.
+    const sortOrderLabel = t('page.albumDetail.sortOrderChip', {
+        value: t(sortOrder === SortOrder.ASC ? 'common.ascending' : 'common.descending'),
+    });
+
     const filteredSongs = useMemo(() => {
         return sortSongList(
             searchLibraryItems(songs, debouncedSearchTerm, LibraryItem.SONG),
@@ -982,19 +919,21 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
     const currentSongId = currentSong?.id;
 
     return (
-        <Stack gap="md">
-            <Group gap="sm" w="100%">
+        <>
+            {/* The board's toolbar: the search field, the sort as one chip with its order
+                beside it, a spacer, the table settings. */}
+            <div className={styles.toolbar}>
                 <TextInput
-                    classNames={{ input: styles.searchTextInput }}
-                    flex={1}
+                    aria-label={t('page.albumDetail.searchTracks')}
+                    classNames={{ input: styles.searchInput, root: styles.search }}
                     leftSection={<Icon icon="search" />}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder={t('common.search')}
-                    radius="xl"
+                    placeholder={t('page.albumDetail.searchTracks')}
                     ref={searchInputRef}
                     rightSection={
                         searchTerm ? (
                             <ActionIcon
+                                aria-label={t('common.clear')}
                                 icon="x"
                                 onClick={() => setSearchTerm('')}
                                 size="sm"
@@ -1005,16 +944,38 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                     value={searchTerm}
                 />
                 <ListSortByDropdownControlled
-                    filters={CLIENT_SIDE_SONG_FILTERS}
+                    filters={sortFilters}
                     itemType={LibraryItem.SONG}
                     setSortBy={(value) => setSortBy(value as SongListSort)}
                     sortBy={sortBy}
+                    target={
+                        <button className={styles.chip} data-sort-select={sortBy} type="button">
+                            <Icon icon="sort" size="sm" />
+                            {t('page.albumDetail.sortChip', { value: sortLabel })}
+                            <Icon icon="arrowDownS" size="sm" />
+                        </button>
+                    }
                 />
-                <ListSortOrderToggleButtonControlled
-                    setSortOrder={(value) => setSortOrder(value as SortOrder)}
-                    sortOrder={sortOrder}
-                />
+                <button
+                    aria-label={sortOrderLabel}
+                    className={clsx(styles.chip, styles.iconChip)}
+                    data-sort-order={sortOrder}
+                    onClick={() =>
+                        setSortOrder(sortOrder === SortOrder.ASC ? SortOrder.DESC : SortOrder.ASC)
+                    }
+                    title={sortOrderLabel}
+                    type="button"
+                >
+                    <Icon icon={sortOrder === SortOrder.ASC ? 'sortAsc' : 'sortDesc'} size="sm" />
+                </button>
+                <span className={styles.spacer} />
                 <ListConfigMenu
+                    buttonProps={{
+                        'aria-label': t('page.albumDetail.tableSettings'),
+                        className: styles.settings,
+                        icon: 'mediaSettings',
+                        tooltip: { label: t('page.albumDetail.tableSettings') },
+                    }}
                     displayTypes={[
                         { hidden: true, value: ListDisplayType.GRID },
                         ...SONG_DISPLAY_TYPES,
@@ -1028,7 +989,7 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                     }}
                     tableColumnsData={SONG_TABLE_COLUMNS}
                 />
-            </Group>
+            </div>
             <ItemTableList
                 activeRowId={currentSongId}
                 autoFitColumns={tableConfig.autoFitColumns}
@@ -1038,7 +999,6 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                 enableAlternateRowColors={tableConfig.enableAlternateRowColors}
                 enableDrag
                 enableDragScroll={false}
-                enableEntranceAnimation={false}
                 enableExpansion={false}
                 enableHeader={tableConfig.enableHeader}
                 enableHorizontalBorders={tableConfig.enableHorizontalBorders}
@@ -1055,6 +1015,6 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                 overrideControls={overrideControls}
                 size={tableConfig.size}
             />
-        </Stack>
+        </>
     );
 };

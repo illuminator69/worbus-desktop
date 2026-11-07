@@ -1,7 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import isElectron from 'is-electron';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+    lazy,
+    KeyboardEvent as ReactKeyboardEvent,
+    ReactNode,
+    PointerEvent as ReactPointerEvent,
+    Suspense,
+    useCallback,
+    useEffect,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
 import { Pane, SplitPane, usePersistence } from 'react-split-pane';
@@ -11,19 +23,25 @@ import styles from './sidebar-play-queue.module.css';
 import { ItemListHandle } from '/@/renderer/components/item-list/types';
 import { lyricsQueries } from '/@/renderer/features/lyrics/api/lyrics-api';
 import { Lyrics } from '/@/renderer/features/lyrics/lyrics';
+import { Fold } from '/@/renderer/features/motion/fold';
+import { GROW_MS_TALL } from '/@/renderer/features/motion/grow';
 import { DockedSimilarSongs } from '/@/renderer/features/now-playing/components/docked-similar-songs';
 import { PlayQueue } from '/@/renderer/features/now-playing/components/play-queue';
-import { PlayQueueListControls } from '/@/renderer/features/now-playing/components/play-queue-list-controls';
+import { QueuePanelHeader } from '/@/renderer/features/now-playing/components/queue-panel-header';
+import { QueueSheetTab } from '/@/renderer/features/now-playing/components/queue-sheet-tabs';
 import {
-    QueueSheetTab,
-    QueueSheetTabs,
-} from '/@/renderer/features/now-playing/components/queue-sheet-tabs';
+    clampLyricsHeight,
+    lyricsHeightRange,
+} from '/@/renderer/features/now-playing/utils/lyrics-height';
+import { movePanel } from '/@/renderer/features/now-playing/utils/panel-order';
 import { AppRoute } from '/@/renderer/router/routes';
 import {
     useCombinedLyricsAndVisualizer,
     useFullScreenPlayerStore,
     usePlaybackSettings,
     usePlayerSong,
+    useQueueLyricsHeight,
+    useQueueLyricsOpen,
     useSettingsStore,
     useSettingsStoreActions,
     useShowLyricsInSidebar,
@@ -34,6 +52,7 @@ import {
 } from '/@/renderer/store';
 import { ActionIcon, ActionIconGroup } from '/@/shared/components/action-icon/action-icon';
 import { Flex } from '/@/shared/components/flex/flex';
+import { Icon } from '/@/shared/components/icon/icon';
 import { Stack } from '/@/shared/components/stack/stack';
 import { ItemListKey, Platform } from '/@/shared/types/types';
 
@@ -137,21 +156,28 @@ export const SidebarPlayQueue = () => {
         storage: localStorage,
     });
 
+    // F4: one header for both queue branches, in place of the icon tabs, the toolbar and the chips.
+    const header = (
+        <QueuePanelHeader
+            activeTab={activeTab}
+            listKey={ItemListKey.SIDE_QUEUE}
+            onSearch={setSearch}
+            onTabChange={setActiveTab}
+            searchTerm={search}
+            tableRef={tableRef}
+        />
+    );
+
     const renderPanel = (panelType: SidebarPanelType) => {
         if (panelType === 'queue') {
             return (
                 <Stack gap={0} h="100%" w="100%">
-                    <QueueSheetTabs activeTab={activeTab} onChange={setActiveTab} />
+                    {header}
                     {activeTab === 'queue' ? (
                         <>
-                            <PlayQueueListControls
-                                handleSearch={setSearch}
-                                searchTerm={search}
-                                tableRef={tableRef}
-                                type={ItemListKey.SIDE_QUEUE}
-                            />
                             <div className={styles.playQueueSection}>
                                 <PlayQueue
+                                    grouped
                                     listKey={ItemListKey.SIDE_QUEUE}
                                     ref={tableRef}
                                     searchTerm={search}
@@ -255,6 +281,31 @@ export const SidebarPlayQueue = () => {
             {showPanel ? (
                 orderedPanels.length === 1 ? (
                     <div className={styles.panelsContainer}>{renderPanel(orderedPanels[0])}</div>
+                ) : orderedPanels.includes('queue') ? (
+                    /*
+                     * R6 (B-207): with the queue, the lyrics/visualiser area is a strip across the
+                     * panel's bottom that opens (the board's QueueStates), in place of the fixed
+                     * split that left the queue a few rows. The order setting still orders lyrics
+                     * and visualiser inside the area.
+                     */
+                    <div className={clsx(styles.panelsContainer, styles.panelsWithStrip)}>
+                        <div className={styles.queueArea}>{renderPanel('queue')}</div>
+                        <QueueLyricsStrip
+                            kind={
+                                orderedPanels.includes('lyrics') && showLyricsInSidebar
+                                    ? 'lyrics'
+                                    : 'visualizer'
+                            }
+                        >
+                            {orderedPanels
+                                .filter((panel) => panel !== 'queue')
+                                .map((panel) => (
+                                    <div className={styles.stripPanel} key={panel}>
+                                        {renderPanel(panel)}
+                                    </div>
+                                ))}
+                        </QueueLyricsStrip>
+                    </div>
                 ) : (
                     <SplitPane
                         className={styles.panelsContainer}
@@ -272,18 +323,13 @@ export const SidebarPlayQueue = () => {
             ) : (
                 showQueue && (
                     <Stack className={styles.queueOnly} gap={0} w="100%">
-                        <QueueSheetTabs activeTab={activeTab} onChange={setActiveTab} />
+                        {header}
                         {activeTab === 'queue' ? (
                             <>
-                                <PlayQueueListControls
-                                    handleSearch={setSearch}
-                                    searchTerm={search}
-                                    tableRef={tableRef}
-                                    type={ItemListKey.SIDE_QUEUE}
-                                />
                                 <Flex className={styles.queueOnlyContent} direction="column">
                                     <div className={styles.playQueueSection}>
                                         <PlayQueue
+                                            grouped
                                             listKey={ItemListKey.SIDE_QUEUE}
                                             ref={tableRef}
                                             searchTerm={search}
@@ -305,49 +351,191 @@ export const SidebarPlayQueue = () => {
     );
 };
 
+/**
+ * The queue panel's lyrics/visualiser area as a 40 px strip (R6, B-207): folded, one row with the
+ * area's icon, its name and a chevron, and nothing else mounted; open, the area takes at most
+ * 320 px and at most 40 % of the panel. Open or folded is the user's, persisted
+ * (`general.queueLyricsOpen`), so it holds across songs and restarts. The area folds on the kit's
+ * clock (Fold), instant under reduced motion; it mounts before opening and unmounts once folded.
+ */
+const QueueLyricsStrip = ({
+    children,
+    kind,
+}: {
+    children: ReactNode;
+    kind: 'lyrics' | 'visualizer';
+}) => {
+    const { t } = useTranslation();
+    const open = useQueueLyricsOpen();
+    const wanted = useQueueLyricsHeight();
+    const { setSettings } = useSettingsStoreActions();
+    const [mounted, setMounted] = useState(open);
+    const [shown, setShown] = useState(open);
+    const rootRef = useRef<HTMLDivElement>(null);
+    const [panel, setPanel] = useState(0);
+    // The height while the handle is held: written to the setting on release, not on every move.
+    const [live, setLive] = useState<null | number>(null);
+    const dragRef = useRef<null | { last: number; startHeight: number; startY: number }>(null);
+
+    useEffect(() => {
+        if (open) {
+            let second = 0;
+            const first = requestAnimationFrame(() => {
+                setMounted(true);
+                second = requestAnimationFrame(() => setShown(true));
+            });
+            return () => {
+                cancelAnimationFrame(first);
+                cancelAnimationFrame(second);
+            };
+        }
+        const close = requestAnimationFrame(() => setShown(false));
+        const unmount = window.setTimeout(() => setMounted(false), GROW_MS_TALL + 50);
+        return () => {
+            cancelAnimationFrame(close);
+            window.clearTimeout(unmount);
+        };
+    }, [open]);
+
+    // The panel the strip shares with the queue and its header (the `queue-panel` container): the
+    // limits of the area's height follow it, so a window shrunk after a drag never lets the area take it.
+    useLayoutEffect(() => {
+        const parent = rootRef.current?.parentElement;
+        if (!parent) return undefined;
+        setPanel(parent.clientHeight);
+        const observer = new ResizeObserver(() => setPanel(parent.clientHeight));
+        observer.observe(parent);
+        return () => observer.disconnect();
+    }, []);
+
+    // Until the panel is measured the stylesheet's default height holds.
+    const height = panel > 0 ? clampLyricsHeight({ panel, wanted: live ?? wanted }) : undefined;
+    // What the handle can reach, announced as the separator's range.
+    const range = panel > 0 ? lyricsHeightRange(panel) : undefined;
+
+    const commit = (next: null | number) => setSettings({ general: { queueLyricsHeight: next } });
+
+    const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0 || height === undefined) return;
+        // A selection left anywhere (a double-click selects the strip's text) would turn this press
+        // into a native drag of it, and Chromium then cancels the pointer after the first move.
+        event.preventDefault();
+        window.getSelection()?.removeAllRanges();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragRef.current = { last: height, startHeight: height, startY: event.clientY };
+        setLive(height);
+    };
+
+    // 1:1 with the pointer, no easing: the area is as tall as the pointer says it is.
+    const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = dragRef.current;
+        if (!drag || panel <= 0) return;
+        drag.last = clampLyricsHeight({
+            panel,
+            wanted: drag.startHeight + (drag.startY - event.clientY),
+        });
+        setLive(drag.last);
+    };
+
+    const onPointerEnd = (event: ReactPointerEvent<HTMLDivElement>) => {
+        const drag = dragRef.current;
+        if (!drag) return;
+        dragRef.current = null;
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        // A click on the grip without moving keeps the setting: committing it would turn the
+        // default (null, which follows the window) into a fixed number.
+        if (drag.last !== drag.startHeight) commit(drag.last);
+        setLive(null);
+    };
+
+    const onHandleKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (height === undefined || panel <= 0) return;
+        const step = event.shiftKey ? 48 : 16;
+        if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            commit(
+                clampLyricsHeight({
+                    panel,
+                    wanted: height + (event.key === 'ArrowUp' ? step : -step),
+                }),
+            );
+        }
+    };
+
+    const label = t(`naviConnect.queue.strip.${kind}`);
+
+    return (
+        <div className={styles.lyricsStrip} data-open={open ? 'true' : 'false'} ref={rootRef}>
+            {open && (
+                <div
+                    aria-label={t('naviConnect.queue.strip.resize')}
+                    aria-orientation="horizontal"
+                    aria-valuemax={range?.max}
+                    aria-valuemin={range?.min}
+                    aria-valuenow={height}
+                    className={styles.stripHandle}
+                    data-dragging={live !== null ? 'true' : undefined}
+                    onDoubleClick={() => commit(null)}
+                    onKeyDown={onHandleKeyDown}
+                    onLostPointerCapture={() => {
+                        dragRef.current = null;
+                        setLive(null);
+                    }}
+                    onPointerCancel={onPointerEnd}
+                    onPointerDown={onPointerDown}
+                    onPointerMove={onPointerMove}
+                    onPointerUp={onPointerEnd}
+                    role="separator"
+                    tabIndex={0}
+                />
+            )}
+            <button
+                aria-expanded={open}
+                className={styles.stripRow}
+                onClick={() => setSettings({ general: { queueLyricsOpen: !open } })}
+                type="button"
+            >
+                <Icon icon={kind === 'lyrics' ? 'microphone' : 'audioLines'} />
+                <span className={styles.stripLabel}>{label}</span>
+                <Icon className={styles.stripChevron} icon={open ? 'arrowDownS' : 'arrowUpS'} />
+            </button>
+            {/* Tall: the area is usually more than the kit's GROW_TALL_PX (up to 320 px). */}
+            <Fold name="queue-lyrics" open={shown} tall>
+                {mounted && (
+                    <div
+                        className={styles.stripArea}
+                        style={height === undefined ? undefined : { height }}
+                    >
+                        {children}
+                    </div>
+                )}
+            </Fold>
+        </div>
+    );
+};
+
 const PanelReorderControls = ({ panelType }: { panelType: 'lyrics' | 'visualizer' }) => {
     const { t } = useTranslation();
     const { setSettings } = useSettingsStoreActions();
     const sidebarPanelOrder = useSidebarPanelOrder();
     const combinedLyricsAndVisualizer = useCombinedLyricsAndVisualizer();
 
-    const currentIndex = sidebarPanelOrder.indexOf(panelType);
-    const canMoveUp = currentIndex > 0;
-    const canMoveDown = currentIndex < sidebarPanelOrder.length - 1;
+    // R6 (B-207): the arrows order lyrics and the visualiser between themselves, and show only
+    // when both are on; the queue's place is the strip's, so a move past it did nothing.
+    const panels = useSidebarPanels();
+    const bothShown = panels.includes('lyrics') && panels.includes('visualizer');
+    const movedUp = movePanel(sidebarPanelOrder, panelType, 'up');
+    const movedDown = movePanel(sidebarPanelOrder, panelType, 'down');
 
     const handleMoveUp = useCallback(() => {
-        if (!canMoveUp) return;
-
-        const newOrder = [...sidebarPanelOrder];
-        const targetIndex = currentIndex - 1;
-
-        [newOrder[currentIndex], newOrder[targetIndex]] = [
-            newOrder[targetIndex],
-            newOrder[currentIndex],
-        ];
-
-        setSettings({
-            general: {
-                sidebarPanelOrder: newOrder,
-            },
-        });
-    }, [canMoveUp, currentIndex, sidebarPanelOrder, setSettings]);
+        if (movedUp) setSettings({ general: { sidebarPanelOrder: movedUp } });
+    }, [movedUp, setSettings]);
 
     const handleMoveDown = useCallback(() => {
-        if (!canMoveDown) return;
-
-        const newOrder = [...sidebarPanelOrder];
-        [newOrder[currentIndex], newOrder[currentIndex + 1]] = [
-            newOrder[currentIndex + 1],
-            newOrder[currentIndex],
-        ];
-
-        setSettings({
-            general: {
-                sidebarPanelOrder: newOrder,
-            },
-        });
-    }, [canMoveDown, currentIndex, sidebarPanelOrder, setSettings]);
+        if (movedDown) setSettings({ general: { sidebarPanelOrder: movedDown } });
+    }, [movedDown, setSettings]);
 
     const handleClose = useCallback(() => {
         if (combinedLyricsAndVisualizer && panelType === 'lyrics') {
@@ -375,28 +563,32 @@ const PanelReorderControls = ({ panelType }: { panelType: 'lyrics' | 'visualizer
     return (
         <div className={styles.panelReorderControls}>
             <ActionIconGroup>
-                <ActionIcon
-                    disabled={!canMoveUp}
-                    icon="arrowUp"
-                    iconProps={{ size: 'sm' }}
-                    onClick={handleMoveUp}
-                    size="xs"
-                    tooltip={{
-                        label: t('action.moveUp'),
-                    }}
-                    variant="subtle"
-                />
-                <ActionIcon
-                    disabled={!canMoveDown}
-                    icon="arrowDown"
-                    iconProps={{ size: 'sm' }}
-                    onClick={handleMoveDown}
-                    size="xs"
-                    tooltip={{
-                        label: t('action.moveDown'),
-                    }}
-                    variant="subtle"
-                />
+                {bothShown && (
+                    <>
+                        <ActionIcon
+                            disabled={!movedUp}
+                            icon="arrowUp"
+                            iconProps={{ size: 'sm' }}
+                            onClick={handleMoveUp}
+                            size="xs"
+                            tooltip={{
+                                label: t('action.moveUp'),
+                            }}
+                            variant="subtle"
+                        />
+                        <ActionIcon
+                            disabled={!movedDown}
+                            icon="arrowDown"
+                            iconProps={{ size: 'sm' }}
+                            onClick={handleMoveDown}
+                            size="xs"
+                            tooltip={{
+                                label: t('action.moveDown'),
+                            }}
+                            variant="subtle"
+                        />
+                    </>
+                )}
                 <ActionIcon
                     icon="x"
                     iconProps={{ size: 'sm' }}

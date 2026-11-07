@@ -38,6 +38,8 @@ export const hasMetaFields = (body: null | Record<string, unknown> | undefined):
     !!body &&
     [
         'credits',
+        // Worbus P1: a body may carry Find it links and nothing else.
+        'findIt',
         'found',
         'imageUrl',
         'links',

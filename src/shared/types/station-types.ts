@@ -41,8 +41,14 @@ export interface StationCatalog {
     available: boolean;
     characters: StationCharacter[];
     configured: boolean;
+    /** P5: the hub answers `POST /sonic/station/count`. False from an older hub. */
+    count: boolean;
     default: StationCharacterId;
     engine: null | StationEngine;
+    /** P5: the custom-radio filters the hub obeys; drawn only when listed (none yet). */
+    filters: string[];
+    /** P5: the Artist variety values `start` obeys; empty from an older hub (no control). */
+    varieties: StationVariety[];
 }
 
 /** One row of `GET /sonic/station/characters`. */
@@ -56,6 +62,23 @@ export interface StationCharacter {
 
 /** The three characters, in the old preset order (EchoMatch / SteadyVibes / TransitionMaestro). */
 export type StationCharacterId = 'balanced' | 'close' | 'explore';
+
+/** `POST /sonic/station/count` (P5): how many songs a seed set could draw from. */
+export interface StationCount {
+    anchors: number;
+    character: StationCharacterId;
+    count: number;
+    engine: null | StationEngine;
+    /** A list failed: the number may be low, and is never shown as complete. */
+    partial: boolean;
+    /** Seeds no tier holds. */
+    unknown: string[];
+}
+
+export interface StationCountBody {
+    character: StationCharacterId;
+    seed: StationSeed;
+}
 
 /** What answered: AudioMuse (tier2), Navidrome's similar-songs agent (tier1), or nothing. */
 export type StationEngine = 'tier1' | 'tier2';
@@ -138,6 +161,8 @@ export interface StationStartBody {
     /** Why it starts: a radio the user asked for, or autoplay continuing a queue no station built. */
     origin?: StationOrigin;
     seed: StationSeed;
+    /** Artist variety (P5); sent only when the probe lists it. Absent = medium. */
+    variety?: StationVariety;
 }
 
 /** One served track. `why`/`rank` say which source admitted it; the client only displays. */
@@ -149,3 +174,6 @@ export interface StationTrack {
     title: string;
     why?: string;
 }
+
+/** How often one artist may come back (P5, PROTOCOL §18.1). */
+export type StationVariety = 'high' | 'low' | 'medium';

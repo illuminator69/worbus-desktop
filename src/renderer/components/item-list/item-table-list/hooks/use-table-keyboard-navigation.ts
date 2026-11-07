@@ -4,6 +4,7 @@ import {
     ItemListStateActions,
     ItemListStateItemWithRequiredProperties,
 } from '/@/renderer/components/item-list/helpers/item-list-state';
+import { dataRowIndex } from '/@/renderer/components/item-list/item-table-list/utils/group-row-index';
 
 interface UseTableKeyboardNavigationProps {
     calculateScrollTopForIndex: (index: number) => number;
@@ -15,6 +16,8 @@ interface UseTableKeyboardNavigationProps {
     getItemIndex?: (rowId: string) => number | undefined;
     getRowHeightAtIndex: (index: number) => number;
     getStateItem: (item: any) => ItemListStateItemWithRequiredProperties | null;
+    /** The groups' sizes: each group has a header row above it. */
+    groupCounts: readonly number[];
     hasRequiredStateItemProperties: (
         item: unknown,
     ) => item is ItemListStateItemWithRequiredProperties;
@@ -39,6 +42,7 @@ export const useTableKeyboardNavigation = ({
     getItemIndex,
     getRowHeightAtIndex,
     getStateItem,
+    groupCounts,
     hasRequiredStateItemProperties,
     internalState,
     itemCount,
@@ -85,7 +89,8 @@ export const useTableKeyboardNavigation = ({
             }
 
             // Check if we need to scroll by determining if the item is at the edge of the viewport
-            const gridIndex = enableHeader ? newIndex + 1 : newIndex;
+            const row = dataRowIndex(groupCounts, newIndex);
+            const gridIndex = enableHeader ? row + 1 : row;
 
             const mainContainer = rowRef.current?.childNodes[0] as HTMLDivElement | undefined;
             const pinnedRightContainer = pinnedRightColumnRef.current?.childNodes[0] as
@@ -142,6 +147,7 @@ export const useTableKeyboardNavigation = ({
             extractRowId,
             getRowHeightAtIndex,
             getStateItem,
+            groupCounts,
             hasRequiredStateItemProperties,
             internalState,
             itemCount,

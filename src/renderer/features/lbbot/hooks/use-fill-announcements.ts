@@ -118,7 +118,7 @@ export const useFillAnnouncements = () => {
                     const body = `Downloaded ${name} — needs sorting out in lb-bot.`;
                     // Mantine's `NotificationData` extends `ElementProps<'div', ...>`,
                     // so `onClick` reaches the rendered toast (same `window.open`
-                    // gap-fill-modal.tsx uses for "Open in lb-bot") — the toast CAN
+                    // the gaps box uses for "Open in lb-bot"), so the toast CAN
                     // carry the link after all. The main-process `notify` IPC still
                     // cannot: it only takes {title, body} (`lbbot-notify` in
                     // `src/main/features/core/lbbot/index.ts`) and its click handler

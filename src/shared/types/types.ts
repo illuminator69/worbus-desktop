@@ -164,6 +164,9 @@ export enum PlayerType {
     WEB = 'web',
 }
 
+// A new id: classify it for the table's shrink band (B-267). A number, date, size, count, code or
+// icon column goes in `KEEPS_ITS_FLOOR_IDS` (item-table-list/utils/fit-column-widths.ts); the
+// harness `everyTableColumnIsClassifiedForTheBand` fails until the id is listed.
 export enum TableColumn {
     ACTIONS = 'actions',
     ALBUM = 'album',

@@ -1,0 +1,130 @@
+/*
+ * The cover wash: one layer behind the whole window (the layout's first child). Bottom to top: the
+ * tone gradient, the blurred artwork, the veil that tones the artwork down towards the bottom and
+ * carries the player bar's band. The tone and the veil are each two layers with fixed colours of their
+ * own (`--tone-*`, inline, colour-change.ts): a change fades the front one in over the other with
+ * opacity animations (window-wash.tsx), so nothing is restyled per frame.
+ */
+
+.wash {
+    /* Dark windows set it inline by the cover's lightness (colour-change.ts, artOpacity). */
+    --wash-art-opacity: 0.55;
+
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+}
+
+/* The light veil percentages live in colour-change.ts with the dark and neutral ones. */
+.wash.light {
+    --wash-art-opacity: 0.85;
+}
+
+/* Nothing playing: no artwork, the plain gradient. */
+.wash.neutral {
+    --wash-art-opacity: 0;
+}
+
+.tone,
+.veil {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+}
+
+.tone {
+    z-index: 0;
+    background: linear-gradient(
+        180deg,
+        var(--tone-top) 0,
+        var(--tone-mid) 52%,
+        var(--tone-bot) 100%
+    );
+}
+
+.veil {
+    z-index: 3;
+    background: linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--tone-top) var(--tone-ov1), transparent) 0,
+        color-mix(in oklch, var(--tone-mid) var(--tone-ov2), transparent) 46%,
+        var(--tone-bot) 100%
+    );
+}
+
+/* The player bar's colour, drawn here so it fades with the backdrop (the bar itself is transparent). */
+.veil::after {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: var(--player-bar-height);
+    content: '';
+    background: var(--tone-bar);
+}
+
+/* The front layer of each pair is on top; the other is what it fades in over. */
+.tone[data-front] {
+    z-index: 1;
+    opacity: 1;
+}
+
+.veil[data-front] {
+    z-index: 4;
+    opacity: 1;
+}
+
+.art {
+    position: absolute;
+    inset: -60px -60px auto;
+    z-index: 2;
+    height: 560px;
+    opacity: var(--wash-art-opacity);
+    filter: blur(40px);
+}
+
+/* Two layers, always rendered: a new cover fades in on the top one over the old one. */
+.layer {
+    position: absolute;
+    inset: 0;
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: cover;
+    opacity: 0;
+}
+
+.layer.front {
+    z-index: 1;
+    opacity: 1;
+}
+
+/* Light pages lift the artwork with white, inside the blur, as the board does. 60%, not the board's 55%:
+   over dark artwork the light page's accent and state colours measured under 4.5:1 at 55%
+   (cover-roles.harness.ts, lightWashOverBlackArtKeepsTextPassing). */
+.art::after {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    content: '';
+    background: rgb(255 255 255 / 60%);
+    opacity: 0;
+}
+
+.light .art::after {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .art,
+    .art::after,
+    .layer.front {
+        transition: opacity 280ms ease;
+    }
+
+    /* The old cover stays under the new one until it has fully faded in. */
+    .layer {
+        transition: opacity 0s linear 280ms;
+    }
+}

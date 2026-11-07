@@ -1,7 +1,7 @@
 import styles from './meta-about.module.css';
 
+import { ClampFold } from '/@/renderer/features/motion/clamp-fold';
 import { Group } from '/@/shared/components/group/group';
-import { Spoiler } from '/@/shared/components/spoiler/spoiler';
 import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
 import { LbBotMeta } from '/@/shared/types/lbbot-types';
@@ -19,13 +19,12 @@ import { LbBotMeta } from '/@/shared/types/lbbot-types';
  * **The attribution is not optional.** Wikipedia text is CC BY-SA; showing it
  * without crediting the article is a licence violation, and the link is also
  * simply a better "Read more" than the one Last.fm supplies. So it renders
- * outside the spoiler, where collapsing cannot hide it.
+ * outside the fold, where folding cannot hide it.
  */
 
 interface MetaAboutProps {
-    /** Collapsed height. Generous by default: this component exists because the
-     *  56px default made a real bio look like a stub. */
-    maxHeight?: number;
+    /** Lines shown while folded (R13: the About line count every page shares, `ABOUT_LINES`). */
+    lines?: number;
     meta: LbBotMeta;
     /**
      * Render the external-links row. The artist page turns this off because it
@@ -36,7 +35,7 @@ interface MetaAboutProps {
     showLinks?: boolean;
 }
 
-export const MetaAbout = ({ maxHeight = 180, meta, showLinks = true }: MetaAboutProps) => {
+export const MetaAbout = ({ lines, meta, showLinks = true }: MetaAboutProps) => {
     const paragraphs = meta.paragraphs.length > 0 ? meta.paragraphs : [meta.summary];
     const hasText = paragraphs.some(Boolean);
 
@@ -53,13 +52,13 @@ export const MetaAbout = ({ maxHeight = 180, meta, showLinks = true }: MetaAbout
                 <Text isMuted>{meta.wikidataDescription}</Text>
             )}
             {hasText && (
-                <Spoiler maxHeight={maxHeight}>
+                <ClampFold lines={lines} name="meta-about">
                     <Stack className={styles.paragraphs} gap="sm">
                         {paragraphs.filter(Boolean).map((paragraph, index) => (
                             <Text key={index}>{paragraph}</Text>
                         ))}
                     </Stack>
-                </Spoiler>
+                </ClampFold>
             )}
             {hasText && meta.source && (
                 <Text className={styles.attribution} isMuted size="sm">

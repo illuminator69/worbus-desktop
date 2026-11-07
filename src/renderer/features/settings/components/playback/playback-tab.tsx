@@ -6,6 +6,7 @@ import { AudioSettings } from '/@/renderer/features/settings/components/playback
 import { AutoDJSettings } from '/@/renderer/features/settings/components/playback/auto-dj-settings';
 import { EqSettings } from '/@/renderer/features/settings/components/playback/eq-settings';
 import { PlayerFilterSettings } from '/@/renderer/features/settings/components/playback/player-filter-settings';
+import { ScrobbleSettings } from '/@/renderer/features/settings/components/playback/scrobble-settings';
 import { TranscodeSettings } from '/@/renderer/features/settings/components/playback/transcode-settings';
 import { useSettingsStore } from '/@/renderer/store';
 import { Divider } from '/@/shared/components/divider/divider';
@@ -36,6 +37,8 @@ export const PlaybackTab = memo(() => {
 
     return (
         <Stack gap="md">
+            <AutoDJSettings />
+            <Divider />
             <AudioSettings />
             <Suspense fallback={<></>}>{hasFancyAudio && <MpvSettings />}</Suspense>
             <EqSettings />
@@ -44,7 +47,7 @@ export const PlaybackTab = memo(() => {
             <Divider />
             <PlayerFilterSettings />
             <Divider />
-            <AutoDJSettings />
+            <ScrobbleSettings />
         </Stack>
     );
 });

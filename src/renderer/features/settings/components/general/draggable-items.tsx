@@ -13,6 +13,8 @@ export type DraggableItemsProps<K, T> = {
     description: string;
     itemLabels: Array<[K, string]>;
     items: T[];
+    /** Rows whose switch no longer does anything, each with the note shown under it. */
+    lockedItems?: Partial<Record<string, string>>;
     nonReorderableItemIds?: K[];
     setItems: (items: T[]) => void;
     showDescription?: boolean;
@@ -48,6 +50,7 @@ export const DraggableItems = <K extends string, T extends SortableItem<K>>({
     description,
     itemLabels,
     items,
+    lockedItems,
     nonReorderableItemIds,
     setItems,
     showDescription = true,
@@ -158,6 +161,7 @@ export const DraggableItems = <K extends string, T extends SortableItem<K>>({
                             isReorderable={!nonReorderableItemIds?.includes(item.id as K)}
                             item={item}
                             key={item.id}
+                            lockedNote={lockedItems?.[item.id]}
                             value={translatedItemMap[item.id]}
                         />
                     ))}

@@ -4,6 +4,7 @@ import { CSSProperties } from 'react';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Checkbox } from '/@/shared/components/checkbox/checkbox';
 import { Group } from '/@/shared/components/group/group';
+import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
 
 const DragHandle = ({
@@ -31,6 +32,8 @@ export interface DraggableItemProps {
     handleChangeDisabled: (id: string, e: boolean) => void;
     isReorderable?: boolean;
     item: SidebarItem;
+    /** A row whose switch no longer does anything: shown on, disabled, with this note under it. */
+    lockedNote?: string;
     value: string;
 }
 
@@ -43,6 +46,7 @@ export const DraggableItem = ({
     handleChangeDisabled,
     isReorderable = true,
     item,
+    lockedNote,
     value,
 }: DraggableItemProps) => {
     const dragControls = useDragControls();
@@ -50,7 +54,8 @@ export const DraggableItem = ({
     const content = (
         <Group py="md" style={{ boxShadow: '0 1px 3px rgba(0,0,0,.1)' }} wrap="nowrap">
             <Checkbox
-                checked={!item.disabled}
+                checked={lockedNote ? true : !item.disabled}
+                disabled={Boolean(lockedNote)}
                 onChange={(e) => handleChangeDisabled(item.id, e.target.checked)}
                 size="xs"
             />
@@ -58,7 +63,16 @@ export const DraggableItem = ({
                 dragControls={dragControls}
                 styles={{ visibility: isReorderable ? 'visible' : 'hidden' }}
             />
-            <Text>{value}</Text>
+            {lockedNote ? (
+                <Stack gap={0}>
+                    <Text>{value}</Text>
+                    <Text isMuted size="sm">
+                        {lockedNote}
+                    </Text>
+                </Stack>
+            ) : (
+                <Text>{value}</Text>
+            )}
         </Group>
     );
 

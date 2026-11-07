@@ -1,40 +1,55 @@
 .main-content-container {
+    /* The rails' widths, named once: the sidebar's collapsed rail and the queue's (L5-15). */
+    --sidebar-rail-width: 80px;
+    --queue-rail-width: 44px;
+
     position: relative;
     display: grid;
     grid-area: main-content;
     grid-template-areas: 'sidebar . right-sidebar';
     grid-template-rows: 1fr;
     gap: 0;
+
+    /* The cards' window margins; each column track carries its own gap, so an empty track costs nothing. */
+    padding: 0 var(--panel-gap) var(--panel-gap);
     background: var(--theme-colors-background);
 
+    /* The cover wash shows through; the sidebars keep their translucent surface. */
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+    }
+
     /*
-     * Expressive motion: smoothly tween the grid tracks when the left sidebar minimizes or
-     * the side-queue opens/collapses. Gated on data-motion so OFF snaps as before; suppressed
-     * while dragging a resize handle (data-resizing) so live resize stays 1:1 with the cursor.
+     * Tween the grid tracks when the left sidebar minimizes or the side-queue opens/collapses,
+     * by a click or by the window's width folding them (shell-fit.ts) (off under reduced motion); suppressed while dragging a resize handle (data-resizing) so
+     * live resize stays 1:1 with the cursor.
      * Modern Chromium interpolates grid-template track lists across count changes (added /
      * removed tracks animate from a used size of 0), which covers the 2↔3 column queue toggle.
-     * Uses the `:root[data-*] &` nesting pattern so it compiles under the fork's PostCSS setup.
      */
-    :root[data-motion='true'] &:not([data-resizing='true']) {
+    &:not([data-resizing='true']) {
         transition:
             grid-template-columns var(--motion-duration) var(--motion-ease),
             grid-template-rows var(--motion-duration) var(--motion-ease);
+
+        @media (prefers-reduced-motion: reduce) {
+            transition: none;
+        }
     }
 
     /*
      * Smoothly animate OPENING/closing the side-queue. Adding the queue is a 2→3 column
-     * change, which the browser can't interpolate (it snaps). So under motion we keep a real
+     * change, which the browser can't interpolate (it snaps). So we keep a real
      * third (right-sidebar) track that is 0px while the queue is closed; opening then only
      * grows that track 0 → --right-sidebar-width, which DOES interpolate — the panel reveals
      * and the main content slides instead of jumping. Only applies to the horizontal side
      * queue; the base template already declares the 3 grid areas so the empty track is valid.
      */
-    :root[data-motion='true'] &.sidebar-expanded:not(.right-expanded, .vertical-layout) {
-        grid-template-columns: var(--sidebar-width) 1fr 0;
+    &.sidebar-expanded:not(.right-expanded, .vertical-layout) {
+        grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr 0;
     }
 
-    :root[data-motion='true'] &.sidebar-collapsed:not(.right-expanded, .vertical-layout) {
-        grid-template-columns: 80px 1fr 0;
+    &.sidebar-collapsed:not(.right-expanded, .vertical-layout) {
+        grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr 0;
     }
 }
 
@@ -43,19 +58,36 @@
 }
 
 .main-content-container.sidebar-collapsed {
-    grid-template-columns: 80px 1fr;
+    grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr;
 }
 
 .main-content-container.sidebar-expanded {
-    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr;
+}
+
+.main-content-container.sidebar-expanded.queue-rail {
+    grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr calc(var(--queue-rail-width) + var(--panel-gap));
+}
+
+.main-content-container.sidebar-collapsed.queue-rail {
+    grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr calc(var(--queue-rail-width) + var(--panel-gap));
+}
+
+/* The closed panel's track is the rail's width, so opening it eases from the rail to the panel's width. */
+.main-content-container.sidebar-expanded.queue-rail:not(.right-expanded, .vertical-layout) {
+    grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr calc(var(--queue-rail-width) + var(--panel-gap));
+}
+
+.main-content-container.sidebar-collapsed.queue-rail:not(.right-expanded, .vertical-layout) {
+    grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr calc(var(--queue-rail-width) + var(--panel-gap));
 }
 
 .main-content-container.right-expanded {
-    grid-template-columns: var(--sidebar-width) 1fr var(--right-sidebar-width);
+    grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr calc(var(--right-sidebar-width) + var(--panel-gap));
 }
 
 .main-content-container.sidebar-collapsed.right-expanded {
-    grid-template-columns: 80px 1fr var(--right-sidebar-width);
+    grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr calc(var(--right-sidebar-width) + var(--panel-gap));
 }
 
 .main-content-container.vertical-layout {
@@ -63,17 +95,14 @@
         'sidebar .'
         'sidebar right-sidebar';
     grid-template-rows: minmax(0, 1fr) var(--right-sidebar-height);
-    grid-template-columns: var(--sidebar-width) 1fr;
+    grid-template-columns: calc(var(--sidebar-width) + var(--panel-gap)) 1fr;
+    row-gap: var(--panel-gap);
 }
 
 .main-content-container.sidebar-collapsed.vertical-layout {
-    grid-template-columns: 80px 1fr;
+    grid-template-columns: calc(var(--sidebar-rail-width) + var(--panel-gap)) 1fr;
 }
 
-.main-content-container.vertical-layout #sidebar-queue {
-    border-top: 1px solid alpha(var(--theme-colors-border), 0.5);
-    border-left: 0;
-}
 
 .main-content-body {
     display: flex;
@@ -81,6 +110,12 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
+    border-radius: var(--panel-radius, 0);
+
+    /* The page is a card on the wash, the same translucent surface as the sidebar and the queue panel. */
+    :root[data-cover-wash='true'] & {
+        background: var(--theme-colors-background-alternate);
+    }
 }
 
 .main-content-body-scroll {

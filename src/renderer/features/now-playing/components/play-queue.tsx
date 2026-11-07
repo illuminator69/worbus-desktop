@@ -9,11 +9,13 @@ import { useItemListColumnResize } from '/@/renderer/components/item-list/helper
 import {
     ItemTableList,
     TableGroupHeader,
+    TableItemProps,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list';
 import { ItemTableListColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { ItemListHandle } from '/@/renderer/components/item-list/types';
 import { eventEmitter } from '/@/renderer/events/event-emitter';
 import { hubTrackToQueueSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
+import { useQueueRows } from '/@/renderer/features/now-playing/hooks/use-queue-rows';
 import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
 import { searchLibraryItems } from '/@/renderer/features/shared/utils';
 import { useDragDrop } from '/@/renderer/hooks/use-drag-drop';
@@ -41,14 +43,24 @@ import { Folder, LibraryItem, QueueSong, Song } from '/@/shared/types/domain-typ
 import { DragTarget } from '/@/shared/types/drag-and-drop';
 import { ItemListKey, Play } from '/@/shared/types/types';
 
+// The side queue's rows (F4): 48 px songs and 32 px group captions. At module scope so the table
+// sees one function; it sizes captions in the scroll maths too (scrollCellProps carries the map).
+const groupedRowHeight = (index: number, cellProps: TableItemProps) =>
+    cellProps.groupHeaderInfoByRowIndex?.has(index) ? 32 : 48;
+
 type QueueProps = {
     enableScrollShadow?: boolean;
+    /**
+     * The side queue (F4): rows in groups by who put them there, no column header row, and
+     * follow-current from an effect once the groups are in the table.
+     */
+    grouped?: boolean;
     listKey: ItemListKey;
     searchTerm: string | undefined;
 };
 
 export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
-    ({ enableScrollShadow = true, listKey, searchTerm }, ref) => {
+    ({ enableScrollShadow = true, grouped = false, listKey, searchTerm }, ref) => {
         const { table } = useListSettings(listKey) || {};
 
         const isFetching = useIsPlayerFetching();
@@ -91,8 +103,10 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
                 setQueue();
             });
 
+            // Grouped, these indexes would be converted with the grouping before the change:
+            // the side queue follows from the effect below instead.
             const unsubCurrentTrack = subscribeCurrentTrack((e) => {
-                if (followCurrentSong && e.index !== -1) {
+                if (!grouped && followCurrentSong && e.index !== -1) {
                     tableRef.current?.scrollToIndex(e.index, {
                         align: 'center',
                         behavior: 'auto',
@@ -101,7 +115,8 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
             });
 
             const handleAutoDJQueueAdded = () => {
-                if (followCurrentSong) {
+                // A top-up regroups the side queue; it must not move the user.
+                if (!grouped && followCurrentSong) {
                     const state = usePlayerStore.getState();
                     let index = state.player.index;
 
@@ -125,7 +140,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
 
             setQueue();
 
-            if (followCurrentSong) {
+            if (!grouped && followCurrentSong) {
                 const state = usePlayerStore.getState();
                 let index = state.player.index;
 
@@ -148,7 +163,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
                 unsubCurrentTrack();
                 eventEmitter.off('AUTODJ_QUEUE_ADDED', handleAutoDJQueueAdded);
             };
-        }, [getQueue, tableRef, followCurrentSong]);
+        }, [getQueue, tableRef, followCurrentSong, grouped]);
 
         const baseData = isRemoteActive ? remoteData : data;
 
@@ -178,6 +193,26 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
         const currentSong = usePlayerSong();
 
         const currentSongUniqueId = currentSong?._uniqueId;
+        const activeRowId = isRemoteActive ? `remote:${remoteIndex}` : currentSongUniqueId;
+
+        // A filtered subset cannot keep its playing row: no groups while the search has text.
+        const queueRows = useQueueRows(filteredData, activeRowId, grouped && !debouncedSearchTerm);
+
+        // Follow the playing row after its grouping is in the table: on a track change (and on
+        // mount), never on a regroup alone, which must not move the user.
+        const followedRef = useRef<string | undefined>(undefined);
+        useEffect(() => {
+            if (!grouped || !followCurrentSong || !activeRowId) return;
+            if (followedRef.current === activeRowId) return;
+            if (queueRows.playingIndex < 0) return;
+            followedRef.current = activeRowId;
+            tableRef.current?.scrollToIndex(queueRows.playingIndex, {
+                align: 'center',
+                behavior: 'auto',
+            });
+            // Keyed on the playing row and the grouping it was found in.
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [activeRowId, followCurrentSong, grouped, queueRows.signature]);
 
         const { focused, ref: containerFocusRef } = useFocusWithin();
         const player = usePlayer();
@@ -201,10 +236,13 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
         ]);
 
         return (
-            <div className={styles.container} ref={containerFocusRef}>
+            <div
+                className={clsx(styles.container, { [styles.grouped]: grouped })}
+                ref={containerFocusRef}
+            >
                 <LoadingOverlay pos="absolute" visible={isFetching} />
                 <ItemTableList
-                    activeRowId={isRemoteActive ? `remote:${remoteIndex}` : currentSongUniqueId}
+                    activeRowId={activeRowId}
                     autoFitColumns={table.autoFitColumns}
                     autoScrollToActiveRow={followCurrentSong}
                     CellComponent={ItemTableListColumn}
@@ -215,7 +253,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
                     // session in player-context.moveSelectedTo (single-item moves).
                     enableDrag
                     enableExpansion={false}
-                    enableHeader={table.enableHeader}
+                    enableHeader={grouped ? false : table.enableHeader}
                     enableHorizontalBorders={table.enableHorizontalBorders}
                     enableRowHoverHighlight={table.enableRowHoverHighlight}
                     enableScrollShadow={enableScrollShadow}
@@ -223,15 +261,17 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
                     enableSelectionDialog={false}
                     enableVerticalBorders={table.enableVerticalBorders}
                     getRowId="_uniqueId"
-                    groups={groups.length > 0 ? groups : undefined}
+                    groups={grouped ? queueRows.groups : groups.length > 0 ? groups : undefined}
                     initialTop={{
                         to: 0,
                         type: 'offset',
                     }}
                     itemType={LibraryItem.QUEUE_SONG}
+                    markActiveRow={grouped}
                     onColumnReordered={handleColumnReordered}
                     onColumnResized={handleColumnResized}
                     ref={mergedRef}
+                    rowHeight={grouped ? groupedRowHeight : undefined}
                     size={table.size}
                 />
                 {isEmpty && <EmptyQueueDropZone />}

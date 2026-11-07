@@ -1,0 +1,22 @@
+/* Worbus P1: Home's index bar, in the listening page's banner style. The space above it is inside
+   the fold, so it opens and closes with the bar instead of standing there while it is hidden. */
+.slot {
+    padding-top: var(--theme-spacing-xl);
+}
+
+.banner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--theme-spacing-xs);
+    padding: var(--theme-spacing-md);
+    border: 1px solid var(--theme-colors-border);
+    border-radius: var(--theme-radius-md);
+}
+
+.text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13px;
+    color: var(--theme-colors-foreground-muted);
+    white-space: nowrap;
+}

@@ -1,18 +1,18 @@
-# Contributing to Feishin
+# Contributing to Worbus for desktop
 
 Thanks for your interest in contributing!
 
-Check the existing [issues](https://github.com/jeffvli/feishin/issues).
+Worbus for desktop is a fork of Feishin by Jeff Li. Bugs and ideas for every Worbus piece live in one place: [the Worbus issues](https://github.com/illuminator69/worbus/issues).
 
 ## IMPORTANT
 
-For feature contributions that do not have an existing feature request, please open an issue, discussion, or ask [Feishin discord server](https://discord.gg/FVKpcMDy5f) **BEFORE** beginning to implement it to determine whether or not the feature would be acceptable for the app. Simply submitting a large feature with thousands of new or changed lines of code without asking if the feature is desired for the application will run the risk of instant closure.
+For feature contributions that do not have an existing feature request, please open an issue there **BEFORE** beginning to implement it to determine whether or not the feature would be acceptable for the app. Simply submitting a large feature with thousands of new or changed lines of code without asking if the feature is desired for the application will run the risk of instant closure.
 
 Bug fixes are likely to be accepted without discussion.
 
 ## Development environment
 
-Feishin is built and tested with Node.js `v23.11.0` and pnpm `11.5.2`. Newer versions of Node.js are also supported.
+Worbus for desktop is built with pnpm `11.5.2` (pinned by `packageManager` in `package.json`). No Node.js version is pinned: CI uses the runner's own. The `*.harness.ts` tests run `.ts` files directly under `node --test`, which needs a Node.js that strips types by default (22.18 or 23.6 and later).
 
 Useful development commands include:
 
@@ -40,4 +40,4 @@ Please include:
 
 ## Translations
 
-Translations are managed through [Weblate](https://hosted.weblate.org/projects/feishin/). You only need to include translation strings for the `en.json` file. Do not manually update the other language files as these are handled directly by volunteer translators.
+Translations come from upstream's [Weblate project](https://hosted.weblate.org/projects/feishin/) and arrive with its releases. You only need to include translation strings for the `en.json` file.

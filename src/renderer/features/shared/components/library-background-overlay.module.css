@@ -6,6 +6,14 @@
     pointer-events: none;
     user-select: none;
     background-image: var(--theme-overlay-subheader);
+
+    /*
+     * The band's last 64 px fade out: its end is the theme's colour, which under the cover wash is not
+     * what lies below it, so it ended in a hard edge (B-216). A hero's band ends with the hero (R13,
+     * B-237), so the fade is behind the hero's own last 64 px and the first row of content is on the
+     * page; the bar's band runs 64 px under the bar (`tail`).
+     */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
     transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
 }
@@ -40,6 +48,9 @@
     width: 100%;
     pointer-events: none;
     isolation: isolate;
+
+    /* The hero's height (set inline); its last 64 px fade out, as the wash band's do (R13, B-237). */
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 64px), transparent);
     transform: translate3d(0, 0, 0);
     backface-visibility: hidden;
 }

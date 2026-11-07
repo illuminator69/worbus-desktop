@@ -27,6 +27,18 @@
 .wrapper {
     position: relative;
     height: 100%;
+    transition: opacity 160ms ease;
+}
+
+/* A tile held from the previous answer while the new one loads (`isStale`). */
+.stale {
+    opacity: 0.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .wrapper {
+        transition: none;
+    }
 }
 
 /* A poster card, as ItemCard draws one in the Home and album-page carousels and
@@ -82,6 +94,50 @@
     gap: 2px;
     align-items: stretch;
     pointer-events: none;
+}
+
+/* A chip at the cover's top-left corner (Fresh's Owned / Not owned), above the cover's image. */
+.badge-top {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    z-index: 2;
+    max-width: calc(100% - 16px);
+    pointer-events: none;
+}
+
+.owned-badge {
+    display: block;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.3;
+    border-radius: 5px;
+}
+
+/* Owned: the accent container with the cover wash, else the primary fill. */
+.owned-badge.owned {
+    color: var(--theme-colors-primary-contrast);
+    background: var(--theme-colors-primary-filled);
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}
+
+/*
+ * Not owned: a translucent chip that reads on any cover. At 90% opaque the light text stays above 4.5:1
+ * even over a white cover (the board's 74% measured 4.0:1 on a bright one); --wash-bar is itself 94%
+ * opaque, so 96% of it is 90%.
+ */
+.owned-badge.not-owned {
+    color: var(--theme-colors-foreground);
+    background: alpha(var(--theme-colors-background), 0.9);
+
+    :root[data-cover-wash='true'] & {
+        background: color-mix(in srgb, var(--wash-bar) 96%, transparent);
+    }
 }
 
 .image {

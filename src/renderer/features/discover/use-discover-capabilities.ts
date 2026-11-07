@@ -9,6 +9,10 @@ import {
 import { fetchClapAvailable } from '/@/renderer/features/player/auto-dj/audio-muse-source';
 import { useAudioMuseSettings } from '/@/renderer/store/settings.store';
 
+/** The CLAP probe's query key. Settings reads the same cache entry to say what the server offers. */
+export const clapAvailableKey = (audioMuse: { token: string; url: string }) =>
+    ['discover', 'clap-available', audioMuse.token, audioMuse.url] as const;
+
 /**
  * One answer for every Discover row, instead of six.
  *
@@ -35,7 +39,7 @@ export const useDiscoverCapabilities = () => {
         // the user scrolls back to the page.
         gcTime: Infinity,
         queryFn: () => fetchClapAvailable(audioMuse),
-        queryKey: ['discover', 'clap-available', audioMuse.token, audioMuse.url],
+        queryKey: clapAvailableKey(audioMuse),
         refetchOnWindowFocus: false,
         staleTime: 60 * 60 * 1000,
     });

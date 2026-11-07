@@ -214,6 +214,7 @@ export const DiscoverRow = ({
         // user paged the skeletons to.
         return (
             <GridCarousel
+                arrive={false}
                 cards={SKELETON_CARDS}
                 containerQuery={containerQuery}
                 key="skeleton"

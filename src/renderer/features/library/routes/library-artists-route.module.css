@@ -1,0 +1,5 @@
+/* The sort segment in the frame's title row (the board: 300 px, 28 px segments in a 3 px box). */
+.sort {
+    width: 300px;
+    max-width: 100%;
+}

@@ -122,7 +122,7 @@ table {
 */
 
 :has(.fs-window-bar-module-window-bar) .fs-main-content-module-main-content-container {
-    height: calc(100vh - 120px);
+    height: var(--main-row-height, calc(100vh - 120px));
 }
 
 .mantine-Tabs-root {

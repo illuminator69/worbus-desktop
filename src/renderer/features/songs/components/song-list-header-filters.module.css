@@ -1,0 +1,5 @@
+/* The Tracks page's count at the right of the filter row (the board's muted "7,842 songs"). */
+.count {
+    font-size: 12.5px;
+    white-space: nowrap;
+}

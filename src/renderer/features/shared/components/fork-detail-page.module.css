@@ -10,3 +10,31 @@
     gap: var(--theme-spacing-2xl);
     padding: 1rem 2rem 5rem;
 }
+
+/* The plain hero (board ArtistUnowned): padding 28 28 10, a 12 px caps kicker, the name at 64 px. */
+.plain {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding: 28px 2rem 10px;
+}
+
+.kicker {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--theme-colors-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.plain-title {
+    max-width: 100%;
+    margin: 0;
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: clamp(2.25rem, 5cqw, 4rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
+}

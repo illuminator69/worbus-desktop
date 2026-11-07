@@ -1,3 +1,4 @@
+import { t } from 'i18next';
 import { ChangeEvent, memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -6,13 +7,49 @@ import {
     SettingOption,
     SettingsSection,
 } from '/@/renderer/features/settings/components/settings-section';
-import { useGeneralSettings, useSettingsStoreActions } from '/@/renderer/store';
+import {
+    SideQueueLayout,
+    SideQueueType,
+    useGeneralSettings,
+    useSettingsStoreActions,
+} from '/@/renderer/store';
 import { ColorInput } from '/@/shared/components/color-input/color-input';
 import { NumberInput } from '/@/shared/components/number-input/number-input';
+import { SegmentedControl } from '/@/shared/components/segmented-control/segmented-control';
 import { Select } from '/@/shared/components/select/select';
 import { Switch } from '/@/shared/components/switch/switch';
 import { TextInput } from '/@/shared/components/text-input/text-input';
 import { useDebouncedCallback } from '/@/shared/hooks/use-debounced-callback';
+
+const SIDE_QUEUE_OPTIONS = [
+    {
+        label: t('setting.sidePlayQueueStyle', {
+            context: 'optionAttached',
+        }),
+        value: 'sideQueue',
+    },
+    {
+        label: t('setting.sidePlayQueueStyle', {
+            context: 'optionDetached',
+        }),
+        value: 'sideDrawerQueue',
+    },
+];
+
+const SIDE_QUEUE_LAYOUT_OPTIONS = [
+    {
+        label: t('setting.sidePlayQueueLayout', {
+            context: 'optionHorizontal',
+        }),
+        value: 'horizontal',
+    },
+    {
+        label: t('setting.sidePlayQueueLayout', {
+            context: 'optionVertical',
+        }),
+        value: 'vertical',
+    },
+];
 
 type FolderView = 'navigation' | 'single' | 'tree';
 type PlaylistMode = 'compact' | 'expanded';
@@ -42,14 +79,6 @@ export const SidebarSettings = memo(() => {
         setSettings({
             general: {
                 sidebarPlaylistSorting: e.target.checked,
-            },
-        });
-    };
-
-    const handleSetSidebarCollapsedNavigation = (e: ChangeEvent<HTMLInputElement>) => {
-        setSettings({
-            general: {
-                sidebarCollapsedNavigation: e.target.checked,
             },
         });
     };
@@ -297,17 +326,87 @@ export const SidebarSettings = memo(() => {
             isHidden: !foldersEnabled || !isTreeView,
             title: t('setting.sidebarPlaylistFolderTreeLineColor', { postProcess: 'sentenceCase' }),
         },
+    ];
+
+    return (
+        <SettingsSection
+            extra={<SidebarReorder />}
+            extraKeywords={['sidebar configuration', 'sidebar items', 'library items', 'reorder']}
+            options={options}
+            title={t('page.setting.sidebar')}
+        />
+    );
+});
+
+export const SideQueueSettings = memo(() => {
+    const { t } = useTranslation();
+    const settings = useGeneralSettings();
+    const { setSettings } = useSettingsStoreActions();
+
+    const options: SettingOption[] = [
+        {
+            control: (
+                <Select
+                    data={SIDE_QUEUE_OPTIONS}
+                    defaultValue={settings.sideQueueType}
+                    onChange={(e) => {
+                        setSettings({
+                            general: {
+                                ...settings,
+                                sideQueueType: e as SideQueueType,
+                            },
+                        });
+                    }}
+                />
+            ),
+            description: t('setting.sidePlayQueueStyle', {
+                context: 'description',
+            }),
+            isHidden: false,
+            title: t('setting.sidePlayQueueStyle'),
+        },
+        {
+            control: (
+                <SegmentedControl
+                    aria-label={t('setting.sidePlayQueueLayout')}
+                    data={SIDE_QUEUE_LAYOUT_OPTIONS}
+                    defaultValue={settings.sideQueueLayout}
+                    onChange={(e) =>
+                        setSettings({
+                            general: {
+                                ...settings,
+                                sideQueueLayout: e as SideQueueLayout,
+                            },
+                        })
+                    }
+                />
+            ),
+            description: t('setting.sidePlayQueueLayout', {
+                context: 'description',
+            }),
+            isHidden: settings.sideQueueType !== 'sideQueue',
+            title: t('setting.sidePlayQueueLayout'),
+        },
         {
             control: (
                 <Switch
-                    checked={settings.sidebarCollapsedNavigation}
-                    onChange={handleSetSidebarCollapsedNavigation}
+                    aria-label="Follow current song"
+                    defaultChecked={settings.followCurrentSong}
+                    onChange={(e) =>
+                        setSettings({
+                            general: {
+                                ...settings,
+                                followCurrentSong: e.currentTarget.checked,
+                            },
+                        })
+                    }
                 />
             ),
-            description: t('setting.sidebarCollapsedNavigation', {
+            description: t('setting.followCurrentSong', {
                 context: 'description',
             }),
-            title: t('setting.sidebarCollapsedNavigation'),
+            isHidden: false,
+            title: t('setting.followCurrentSong'),
         },
         {
             control: (
@@ -387,11 +486,5 @@ export const SidebarSettings = memo(() => {
         },
     ];
 
-    return (
-        <SettingsSection
-            extra={<SidebarReorder />}
-            options={options}
-            title={t('page.setting.sidebar')}
-        />
-    );
+    return <SettingsSection options={options} title={t('page.setting.sideQueue')} />;
 });

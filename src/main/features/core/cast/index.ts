@@ -18,7 +18,23 @@ import { ipcMain } from 'electron';
 import net from 'net';
 import { WebSocket } from 'ws';
 
-import { getHubConfig, getHubDeviceId, getHubDevices, hubEvents, isHubConnected } from '../hub';
+import {
+    getHubActiveAddress,
+    getHubConfig,
+    getHubDeviceId,
+    getHubDevices,
+    hubAuth,
+    hubEvents,
+    isHubConnected,
+} from '../hub';
+import { castHelloFrame } from './cast-hello';
+import {
+    adoptable,
+    CastStatusLike,
+    OwnCast,
+    streamIdentity,
+    takeoverStep,
+} from './foreign-session';
 import { logSafeStreamId } from './log-id';
 import { CastKind, castKind, receiverLevel } from './receiver-info';
 
@@ -29,7 +45,7 @@ import { levelReportStep, NO_LEVEL_REPORT } from '/@/shared/utils/level-report';
  *
  * Every Chromecast discovered via mDNS is registered with the hub as a
  * first-class receiver device — so it appears in EVERY client's device picker
- * (Feishin and Navic alike), and transfer-with-resume just works. The hub
+ * (Worbus for desktop and Worbus for Android alike), and transfer-with-resume just works. The hub
  * needs no changes: a virtual receiver is simply another connection.
  *
  * Audio: published track metadata carries `streamUrl` (+ `mime`), so the
@@ -62,16 +78,20 @@ const HEARTBEAT_MS = 10000;
 // each supersedes the other; reconnecting on the normal backoff makes that an
 // endless register/evict war, and because `open` resets the backoff it never
 // even slows down. PROTOCOL §12.2's circuit breaker: the superseded bridge stays
-// down long enough for the winner to keep the speaker. Navic already does this.
+// down long enough for the winner to keep the speaker. Worbus for Android already does this.
 const SUPERSEDED_CODE = 4003;
 const STAND_DOWN_MS = 5 * 60 * 1000;
+// The hub refused this bridge's credential: 4001 a bad shared token, 4005 a device secret it no
+// longer holds (Worbus P2). The same credential gets the same answer, so the bridge waits for the
+// credential to change (the `settings` event rebuilds every bridge) instead of retrying (Q-086).
+const REFUSED_CODES = new Set([4001, 4005]);
 // PROTOCOL §12.2 step 3: two clients starting at the same moment both see an empty
 // registry and both claim. A random pause before claiming, then a re-check, settles
 // that without exchanging a single frame.
 const CLAIM_JITTER_MS = 3000;
 // An empty registry is ambiguous: nobody is bridging this speaker, OR the main hub
 // client hasn't delivered `welcome` yet. Claiming during that window is how the desktop
-// would steal a speaker Navic was already serving on every single launch. Wait for the
+// would steal a speaker Worbus for Android was already serving on every single launch. Wait for the
 // registry, but not forever — a hub that never connects must not disable casting.
 const REGISTRY_WAIT_MS = 10_000;
 // How long a hub connection must survive before it counts as "working" and the
@@ -161,6 +181,9 @@ class CastDeviceBridge {
 
     private destroyed = false;
 
+    /** Worbus P2: media sessions released as another user's, never adopted (foreign-session.ts). */
+    private readonly foreignMediaSessions = new Set<number>();
+
     private heartbeatTimer: NodeJS.Timeout | null = null;
 
     private hubAlive = false;
@@ -185,6 +208,12 @@ class CastDeviceBridge {
      */
     private loadInFlight: null | Promise<boolean> = null;
 
+    /** Worbus P2: the receiver app session this bridge launched or joined. */
+    private ownAppSessionId: null | string = null;
+
+    /** Worbus P2: the media session this bridge's own LOAD (or a proven adoption) produced. */
+    private ownMediaSessionId: null | number = null;
+
     private playing = false;
 
     private probeFailures = 0;
@@ -203,7 +232,6 @@ class CastDeviceBridge {
     private reconnectingCast = false;
 
     private reconnectTimer: NodeJS.Timeout | null = null;
-
     private releasing = false;
 
     // Saved-queue identity of the session we adopted, so re-claiming it refreshes that
@@ -237,18 +265,32 @@ class CastDeviceBridge {
     /** Wall-clock ms the hub last told this speaker a level on its current connection. */
     private volumeToldAt: null | number = null;
 
+    /** P3 (M2): the last connect found no live hub address and is waiting out a backoff for one. */
+    private waitingForAddress = false;
+
     private ws: null | WebSocket = null;
 
     constructor(
         private readonly deviceId: string,
         private readonly friendlyName: string,
         private host: string,
-        private readonly hubUrl: string,
-        private readonly token: string,
         /** What the speaker is, from its mDNS record; undefined when the record does not say. */
         private readonly kind: CastKind | undefined,
     ) {
         this.scheduleClaim();
+    }
+
+    /**
+     * P3 (M2): the main socket has an address now. A bridge that was waiting for one goes back
+     * through arbitration at once instead of at the end of its backoff (which the waits grew).
+     */
+    addressReady(): void {
+        if (this.destroyed || !this.waitingForAddress || !this.reconnectTimer) return;
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+        this.waitingForAddress = false;
+        this.backoffMs = INITIAL_BACKOFF_MS;
+        this.scheduleClaim(0);
     }
 
     destroy(): void {
@@ -396,11 +438,9 @@ class CastDeviceBridge {
                             // Matching is on the Subsonic track id, not the whole URL — see
                             // streamIdentity().
                             const playingId = streamIdentity(contentId);
-                            const matches =
-                                !!playingId &&
-                                this.tracks.some(
-                                    (tk) => streamIdentity(tk.streamUrl) === playingId,
-                                );
+                            // Worbus P2: and never a session this bridge released as another
+                            // user's - one library, so their track can be in this queue too.
+                            const matches = adoptable(status, this.ownCast());
                             if (!matches) {
                                 log.info(
                                     `[cast-bridge] ${this.friendlyName}: running session is not ` +
@@ -418,7 +458,7 @@ class CastDeviceBridge {
                             // speaker playback was moved away from keeps its receiver session,
                             // paused on the old track — which matched, so the next launch claimed
                             // it and pulled the session back onto the speaker (seen 2026-09-30:
-                            // Navic, reinstalled, re-adopted a DOGTOOTH paused 12 minutes earlier).
+                            // Worbus for Android, reinstalled, re-adopted a DOGTOOTH paused 12 minutes earlier).
                             // Re-joining a session the hub still names as ours is not a claim and
                             // is unaffected.
                             const live =
@@ -439,6 +479,11 @@ class CastDeviceBridge {
                             }
                             this.castClient = client;
                             this.castPlayer = player;
+                            this.ownAppSessionId = running.sessionId ?? null;
+                            this.ownMediaSessionId =
+                                typeof status?.mediaSessionId === 'number'
+                                    ? status.mediaSessionId
+                                    : null;
                             this.watchReceiver(client);
                             (
                                 player as unknown as {
@@ -650,6 +695,35 @@ class CastDeviceBridge {
     }
 
     /**
+     * Worbus P2: judge a status against what this bridge owns (foreign-session.ts). Taken while
+     * playing, the speaker is reported released; taken while not, the player is only let go.
+     * Either way that session is never adopted. Returns whether the status was someone else's.
+     */
+    private checkTakeover(status: CastStatusLike | null | undefined): boolean {
+        if (!this.castPlayer && !this.castClient) return false;
+        const step = takeoverStep(status, this.ownCast(), {
+            loading: this.loadInFlight !== null,
+            playing: this.playing,
+        });
+        if (step === 'none') return false;
+        if (
+            typeof status?.mediaSessionId === 'number' &&
+            status.mediaSessionId !== this.ownMediaSessionId
+        ) {
+            this.foreignMediaSessions.add(status.mediaSessionId);
+        }
+        if (step === 'release') {
+            this.releaseTakenSpeaker();
+        } else {
+            log.info(
+                `[cast-bridge] ${this.friendlyName}: another session is on the speaker - letting go of it`,
+            );
+            this.teardownCast();
+        }
+        return true;
+    }
+
+    /**
      * Re-take the active slot after adopting an orphaned session. A `report` from a device
      * the hub doesn't consider active is dropped on the floor, so the bridge has to speak
      * the one frame that promotes an idle slot: `setQueue`. It republishes the session's
@@ -684,7 +758,7 @@ class CastDeviceBridge {
      * socket *is* the device being claimed, so by the time it could read `devices` the
      * claim has already happened and the hub has already evicted somebody. That
      * chicken-and-egg is why the desktop bridge used to register unconditionally while
-     * Navic implemented the full rule — the two then took turns every second.
+     * Worbus for Android implemented the full rule — the two then took turns every second.
      */
     private claimedElsewhere(): boolean {
         const row = getHubDevices().find((d) => d.id === this.hubDeviceId);
@@ -785,9 +859,28 @@ class CastDeviceBridge {
 
     private connectHub(): void {
         if (this.destroyed) return;
+        // Worbus P3 (design §6.3): the main socket's address, read at each dial - the one address
+        // whose `/hub/info` named this server. Without a live main socket there is none: wait
+        // (M2: the main socket opening cuts the wait, `addressReady`). Read first: the bearer (an
+        // older server's token) is judged at the active address.
+        const hubUrl = getHubActiveAddress();
+        if (!hubUrl) {
+            log.info(`[cast-bridge] ${this.friendlyName}: no live hub address yet - waiting`);
+            this.waitingForAddress = true;
+            this.scheduleReconnect();
+            return;
+        }
+        this.waitingForAddress = false;
+        if (!hubAuth.bearer()) {
+            // Worbus P2: nothing to say hello with (signed out, never signed in, the token retired).
+            // A hello without a credential is only refused with 4005; the `settings` event
+            // rebuilds every bridge when a credential arrives.
+            log.info(`[cast-bridge] ${this.friendlyName}: no hub credential - not connecting`);
+            return;
+        }
         let ws: WebSocket;
         try {
-            ws = new WebSocket(this.hubUrl);
+            ws = new WebSocket(hubUrl);
         } catch {
             this.scheduleReconnect();
             return;
@@ -816,34 +909,17 @@ class CastDeviceBridge {
             }, BACKOFF_RESET_AFTER_MS);
             this.hubAlive = true;
             this.startHeartbeat();
-            this.send({
-                device: {
-                    // `loadAck` opts this receiver into the transfer acknowledgement
-                    // (§7.1): a cast load that fails is otherwise invisible for ~20 s,
-                    // during which every client shows a playing bar over silence.
-                    // `idleVolume`: a `do:setVolume` is applied also while this speaker
-                    // is not playing, over a connection made for it (setIdleVolume), so
-                    // its row gets a volume slider in every picker. Not a group: a
-                    // group's receiver listens on a port of its own, which this bridge
-                    // does not read from the record, and the level would be set on the
-                    // group's leader instead.
+            // Worbus P2: the bridging device's own credential, and `bridgedBy` its hub id - the
+            // one the sign-in answered with - so the hub puts this speaker in this user's space.
+            this.send(
+                castHelloFrame({
                     bridgedBy: getHubDeviceId(),
-                    caps:
-                        this.kind === 'group'
-                            ? ['receiver', 'loadAck']
-                            : ['receiver', 'loadAck', 'idleVolume'],
-                    id: `cast-${this.deviceId}`,
-                    // `kind` is what tells a cast row from the others in a picker, and a
-                    // speaker from a TV: the name is the speaker's own, with no marker in
-                    // it. Left out when the record did not say (JSON drops undefined), and
-                    // the row then gets the generic icon.
+                    castId: this.deviceId,
+                    credential: hubAuth.helloCredential(),
                     kind: this.kind,
                     name: this.friendlyName,
-                    platform: 'chromecast',
-                },
-                t: 'hello',
-                token: this.token,
-            });
+                }),
+            );
             this.startReachability();
         });
         ws.on('pong', () => {
@@ -891,6 +967,15 @@ class CastDeviceBridge {
                 this.scheduleReconnect(STAND_DOWN_MS);
                 return;
             }
+            if (REFUSED_CODES.has(code)) {
+                log.warn(
+                    `[cast-bridge] ${this.friendlyName}: the hub refused this device's credential ` +
+                        `(${code}) - waiting for it to change`,
+                );
+                this.ws = null;
+                this.stopHeartbeat();
+                return;
+            }
             log.warn(`[cast-bridge] ${this.friendlyName}: hub connection closed (${code})`);
             this.scheduleReconnect();
         });
@@ -915,7 +1000,7 @@ class CastDeviceBridge {
     }
 
     private async handleDo(msg: any): Promise<void> {
-        // Logged unconditionally, as Navic's bridge already does: when a transfer misbehaves the
+        // Logged unconditionally, as Worbus for Android's bridge already does: when a transfer misbehaves the
         // first thing worth knowing is what the hub actually asked for and how many times. Two
         // `load`s 150 ms apart and one `load` that took two attempts look identical without this.
         log.info(`[cast-bridge] ${this.friendlyName}: do ${msg.cmd}`);
@@ -1109,6 +1194,7 @@ class CastDeviceBridge {
                         log.info(
                             `[cast-bridge] ${this.friendlyName}: joined the running media receiver`,
                         );
+                        this.noteOwnApp(running.sessionId);
                         resolve(player);
                     });
                     return;
@@ -1130,6 +1216,10 @@ class CastDeviceBridge {
                         return;
                     }
                     log.info(`[cast-bridge] ${this.friendlyName}: media receiver launched`);
+                    this.noteOwnApp(
+                        (player as unknown as { session?: { sessionId?: string } }).session
+                            ?.sessionId,
+                    );
                     resolve(player);
                 });
             });
@@ -1207,6 +1297,10 @@ class CastDeviceBridge {
                                 `[cast-bridge] ${this.friendlyName}: load ok → ` +
                                     `${status?.playerState ?? 'no status'}`,
                             );
+                            // Worbus P2: the media session this LOAD started is this bridge's.
+                            if (typeof status?.mediaSessionId === 'number') {
+                                this.ownMediaSessionId = status.mediaSessionId;
+                            }
                             resolve();
                         }
                     },
@@ -1265,7 +1359,7 @@ class CastDeviceBridge {
      * ~1.2 s to the refusal was identical to the ~1.2 s of a successful launch: the device was not
      * racing anything, it was answering.
      *
-     * Navic's bridge has always done this (`CastChannel.launchOrJoin`); Feishin only ever joined on
+     * Worbus for Android's bridge has always done this (`CastChannel.launchOrJoin`); Worbus for desktop only ever joined on
      * the separate adoption path, and this load path went straight to LAUNCH.
      *
      * Joining a session that isn't ours is fine here: this runs for an explicit `do:load`, and the
@@ -1300,7 +1394,7 @@ class CastDeviceBridge {
 
     /**
      * If the hub says THIS cast device is the active receiver but we hold no
-     * cast session (e.g. Feishin was restarted while the Chromecast kept
+     * cast session (e.g. Worbus for desktop was restarted while the Chromecast kept
      * playing on its own), try to re-join the running session instead of
      * leaving the device orphaned. Bootstraps the queue/index from the hub
      * session so auto-advance, release/stop and live reporting all work again.
@@ -1315,8 +1409,8 @@ class CastDeviceBridge {
             return;
         }
         const stillOurs = session.activeDeviceId === this.hubDeviceId;
-        // No live receiver at all. This is the ordinary shape of "Feishin restarted while
-        // the speaker kept playing": the bridge lives IN Feishin's main process, so its
+        // No live receiver at all. This is the ordinary shape of "Worbus for desktop restarted while
+        // the speaker kept playing": the bridge lives IN Worbus for desktop's main process, so its
         // socket died with the app, and the hub relinquishes the active slot whenever the
         // active device drops. Gating adoption on the hub still naming us active therefore
         // never fired in the one case it was written for — the session was left orphaned
@@ -1346,7 +1440,7 @@ class CastDeviceBridge {
     }
 
     /**
-     * B-047 diagnostics: Feishin didn't pick a cast back up after a restart, and the one
+     * B-047 diagnostics: Worbus for desktop didn't pick a cast back up after a restart, and the one
      * branch that says nothing is a skip here. Logged once per distinct reason (this runs
      * on every `session` frame), with what the hub said.
      */
@@ -1361,6 +1455,14 @@ class CastDeviceBridge {
         );
     }
 
+    // ---------------------------------------------------------------- cast
+
+    /** A new receiver app session of this bridge's own: any media session id is yet to come. */
+    private noteOwnApp(sessionId: string | undefined): void {
+        this.ownAppSessionId = sessionId ?? null;
+        this.ownMediaSessionId = null;
+    }
+
     /**
      * The speaker said its volume: a RECEIVER_STATUS broadcast (somebody turned it at the
      * device, or from another app), or the answer to a request of ours.
@@ -1371,8 +1473,6 @@ class CastDeviceBridge {
         this.receiverVolume = level;
         this.reportVolume();
     }
-
-    // ---------------------------------------------------------------- cast
 
     /**
      * The device closed our connection (idle timeout, receiver app replaced by another
@@ -1390,6 +1490,8 @@ class CastDeviceBridge {
 
     private onCastStatus(status: import('castv2-client').CastMediaStatus): void {
         if (this.releasing) return;
+        // Worbus P2: another user's session on this speaker is not ours to report or drive.
+        if (this.checkTakeover(status)) return;
         log.info(
             `[cast-bridge] ${this.friendlyName}: status ${status.playerState ?? '?'}` +
                 `${status.idleReason ? `/${status.idleReason}` : ''}` +
@@ -1424,6 +1526,17 @@ class CastDeviceBridge {
                 this.report({ ended: true });
             }
         }
+    }
+
+    private ownCast(): OwnCast {
+        return {
+            appSessionId: this.ownAppSessionId,
+            foreignMediaSessions: this.foreignMediaSessions,
+            mediaSessionId: this.ownMediaSessionId,
+            queueIds: this.tracks
+                .map((track) => streamIdentity(track.streamUrl))
+                .filter((id): id is string => !!id),
+        };
     }
 
     private async probeReachability(): Promise<void> {
@@ -1497,6 +1610,26 @@ class CastDeviceBridge {
                 done(null);
             }
         });
+    }
+
+    /**
+     * Someone else cast to this speaker while this bridge was playing (the last caster wins).
+     * Report it released, as a `do:release` would: a paused report, then `released` with the last
+     * position this bridge itself heard, so the hub clears the active slot and its user's session
+     * pauses where they were. Never pause or stop - that is the other user's music now.
+     */
+    private releaseTakenSpeaker(): void {
+        log.info(
+            `[cast-bridge] ${this.friendlyName}: the speaker was taken by another session - ` +
+                'reporting it released',
+        );
+        this.releasing = true;
+        this.stopTicker();
+        this.playing = false;
+        this.report();
+        this.send({ index: this.index, positionMs: this.lastPositionMs, t: 'released' });
+        this.teardownCast();
+        this.releasing = false;
     }
 
     private report(extra?: Record<string, unknown>): void {
@@ -1743,6 +1876,7 @@ class CastDeviceBridge {
                 this.castPlayer.getStatus((_err, status) => {
                     this.statusInFlight = false;
                     if (this.releasing) return;
+                    if (this.checkTakeover(status)) return;
                     // Ignore transient 0 readings during rebuffering (see onCastStatus).
                     if (typeof status?.currentTime === 'number' && status.currentTime > 0) {
                         this.lastPositionMs = Math.round(status.currentTime * 1000);
@@ -1800,6 +1934,8 @@ class CastDeviceBridge {
         this.castClient = null;
         this.castPlayer = null;
         this.playing = false;
+        this.ownAppSessionId = null;
+        this.ownMediaSessionId = null;
         this.announceAppGone();
     }
 
@@ -1823,7 +1959,10 @@ class CastDeviceBridge {
      */
     private watchReceiver(client: Client): void {
         client.on('status', (status) => {
-            if (this.castClient === client) this.noteReceiverVolume(status?.volume);
+            if (this.castClient !== client) return;
+            // Worbus P2: the app session this bridge holds stopped running - another sender.
+            if (this.checkTakeover(status)) return;
+            this.noteReceiverVolume(status?.volume);
         });
         try {
             client.getStatus((err, status) => {
@@ -1834,27 +1973,6 @@ class CastDeviceBridge {
             /* castv2 throws synchronously on a dead socket; the next broadcast will say */
         }
     }
-}
-
-/**
- * Identity of a track inside a stream URL, for comparing against a Chromecast's
- * `contentId`.
- *
- * Comparing whole URLs looked equivalent and was not: the URL carries a salted auth
- * token and transcoding parameters, so rotating credentials, changing the bitrate
- * setting or publishing from a different client all produce a different string for the
- * same song — and every ownership check that depended on it silently answered "not
- * ours". The Subsonic id is the part that actually identifies the track.
- */
-function streamIdentity(url: null | string | undefined): null | string {
-    if (!url) return null;
-    try {
-        const id = new URL(url).searchParams.get('id');
-        if (id) return id;
-    } catch {
-        /* not a parseable URL — fall through */
-    }
-    return url;
 }
 
 // ------------------------------------------------------------------ manager
@@ -1880,7 +1998,7 @@ const REQUERY_SLOW_MS = 60_000;
 // recreated mDNS discovery on a REUSED Bonjour socket, which then failed to send
 // the initial active query — so discovery fell back to the device's periodic
 // passive announcement (~2 min) instead of finding it in ~1s.
-let lastBridgeConfig: null | { enabled: boolean; token: string; url: string } = null;
+let lastBridgeConfig: null | { credential: number; enabled: boolean; url: string } = null;
 
 /**
  * Ask the network to re-announce itself, now. Called when a bridge can't reach the address
@@ -1912,9 +2030,10 @@ function serviceToDevice(
 }
 
 function startBridging(): void {
-    const config = getHubConfig();
-    if (!config.enabled || !config.url) {
-        log.info('[cast-bridge] not starting (hub disabled or no url)');
+    // P3 (review C2, M2): `enabled` only - the hub address `getHubConfig()` gives is the live socket's, empty
+    // before the first open; each bridge waits for that address itself before it dials.
+    if (!getHubConfig().enabled) {
+        log.info('[cast-bridge] not starting (hub disabled)');
         return;
     }
     if (browser) return;
@@ -1943,14 +2062,7 @@ function startBridging(): void {
         }
         bridges.set(
             device.id,
-            new CastDeviceBridge(
-                device.id,
-                device.name,
-                device.host,
-                config.url,
-                config.token,
-                device.kind,
-            ),
+            new CastDeviceBridge(device.id, device.name, device.host, device.kind),
         );
     });
     browser.on('down', (service) => {
@@ -2012,12 +2124,20 @@ hubEvents.on('devices', () => {
     bridges.forEach((bridge) => bridge.reevaluate());
 });
 
-hubEvents.on('settings', (settings: { enabled: boolean; token: string; url: string }) => {
+// P3 (M2): the main socket opened on an address - bridges waiting for one dial now.
+hubEvents.on('server', (server: { activeAddress: null | string }) => {
+    if (!server.activeAddress) return;
+    bridges.forEach((bridge) => bridge.addressReady());
+});
+
+// `credential` moves on every sign-in, sign-out, server sign-out and token change (hub/index.ts):
+// each bridge says hello with the credential and `bridgedBy` it had, so it is rebuilt.
+hubEvents.on('settings', (settings: { credential: number; enabled: boolean; url: string }) => {
     const changed =
         !lastBridgeConfig ||
         lastBridgeConfig.enabled !== settings.enabled ||
         lastBridgeConfig.url !== settings.url ||
-        lastBridgeConfig.token !== settings.token;
+        lastBridgeConfig.credential !== settings.credential;
     lastBridgeConfig = settings;
     if (!changed) {
         log.info('[cast-bridge] hub settings unchanged — keeping current discovery');

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 import { forwardRef, ReactNode } from 'react';
-import { useMatch } from 'react-router';
+import { useLocation, useMatch } from 'react-router';
 
 import styles from './collapsed-sidebar-item.module.css';
 
@@ -14,12 +14,27 @@ interface CollapsedSidebarItemProps {
     icon: ReactNode;
     label: string;
     route?: string;
+    /** Every path that marks the item selected (the Library row's chip pages); wins over `route`. */
+    selectedRoutes?: string[];
 }
 
 const _CollapsedSidebarItem = forwardRef<HTMLDivElement, CollapsedSidebarItemProps>(
-    ({ activeIcon, disabled, icon, label, route, ...props }: CollapsedSidebarItemProps, ref) => {
+    (
+        {
+            activeIcon,
+            disabled,
+            icon,
+            label,
+            route,
+            selectedRoutes,
+            ...props
+        }: CollapsedSidebarItemProps,
+        ref,
+    ) => {
         const match = useMatch(route || '/null');
-        const isMatch = Boolean(match);
+        const { pathname } = useLocation();
+        const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+        const isMatch = selectedRoutes ? selectedRoutes.includes(path) : Boolean(match);
 
         return (
             <Flex

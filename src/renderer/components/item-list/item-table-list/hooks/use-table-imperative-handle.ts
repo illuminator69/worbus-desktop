@@ -1,11 +1,14 @@
 import { useEffect, useImperativeHandle, useMemo } from 'react';
 
 import { ItemListStateActions } from '/@/renderer/components/item-list/helpers/item-list-state';
+import { dataRowIndex } from '/@/renderer/components/item-list/item-table-list/utils/group-row-index';
 import { ItemListHandle } from '/@/renderer/components/item-list/types';
 
 interface UseTableImperativeHandleProps {
     autoScrollToActiveRow: boolean;
     enableHeader: boolean;
+    /** The groups' sizes: each group has a header row above it. */
+    groupCounts: readonly number[];
     handleRef: React.RefObject<ItemListHandle | null>;
     internalState: ItemListStateActions;
     ref?: React.Ref<ItemListHandle>;
@@ -22,6 +25,7 @@ interface UseTableImperativeHandleProps {
 export const useTableImperativeHandle = ({
     autoScrollToActiveRow,
     enableHeader,
+    groupCounts,
     handleRef,
     internalState,
     ref,
@@ -32,7 +36,8 @@ export const useTableImperativeHandle = ({
         () => ({
             internalState,
             scrollToIndex: (index: number, options?: { align?: 'bottom' | 'center' | 'top' }) => {
-                scrollToTableIndex(enableHeader ? index + 1 : index, {
+                const row = dataRowIndex(groupCounts, index);
+                scrollToTableIndex(enableHeader ? row + 1 : row, {
                     ...options,
                     followActiveRow: autoScrollToActiveRow,
                 });
@@ -44,6 +49,7 @@ export const useTableImperativeHandle = ({
         [
             autoScrollToActiveRow,
             enableHeader,
+            groupCounts,
             internalState,
             scrollToTableIndex,
             scrollToTableOffset,

@@ -89,11 +89,11 @@ export const LoggerSettings = memo(() => {
                           ...(currentServer.remoteUrl
                               ? {
                                     isLocalRemoteUrl: isLocalUrl(currentServer.remoteUrl),
-                                    remoteUrl: '[Redacted]',
+                                    remoteUrl: '[removed]',
                                 }
                               : {}),
                           type: currentServer.type,
-                          url: '[Redacted]',
+                          url: '[removed]',
                           version: currentServer.version,
                       }
                     : null,

@@ -1,7 +1,6 @@
 // Component adapted from https://github.com/bvaughn/react-window/issues/826
 
 import clsx from 'clsx';
-import { motion } from 'motion/react';
 import React, {
     type JSXElementConstructor,
     memo,
@@ -58,6 +57,7 @@ import {
     type ItemTableListConfig,
     ItemTableListConfigProvider,
     ItemTableListStoreProvider,
+    type SortedColumns,
     useItemTableListColumnResizeLiveState,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
 import {
@@ -68,12 +68,14 @@ import {
     createTableScrollShadowStore,
     type TableScrollShadowStore,
 } from '/@/renderer/components/item-list/item-table-list/table-scroll-shadow-store';
+import { ownWidthForResize } from '/@/renderer/components/item-list/item-table-list/utils/fit-column-widths';
 import {
     ItemControls,
     ItemListHandle,
     ItemTableListColumnConfig,
 } from '/@/renderer/components/item-list/types';
 import { PlayerContext, usePlayer } from '/@/renderer/features/player/context/player-context';
+import { WashUnderlay } from '/@/renderer/features/shared/components/wash-underlay';
 import {
     useAlbumGroupImageSize,
     useAlbumGroupItems,
@@ -81,7 +83,6 @@ import {
     useAlbumGroupVerticalLayout,
     usePlayerStore,
 } from '/@/renderer/store';
-import { animationProps } from '/@/shared/components/animations/animation-props';
 import { useFocusWithin } from '/@/shared/hooks/use-focus-within';
 import { useMergedRef } from '/@/shared/hooks/use-merged-ref';
 import { LibraryItem } from '/@/shared/types/domain-types';
@@ -235,21 +236,10 @@ const VirtualizedTableGrid = ({
         [columnWidth, pinnedLeftColumnCount],
     );
 
-    const groupHeaderInfoByRowIndex = useMemo(() => {
-        if (!groups || groups.length === 0) return undefined;
-
-        const map = new Map<number, { groupIndex: number; startDataIndex: number }>();
-        const headerOffset = enableHeader ? 1 : 0;
-        let cumulativeDataIndex = 0;
-
-        for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
-            const groupHeaderIndex = headerOffset + cumulativeDataIndex + groupIndex;
-            map.set(groupHeaderIndex, { groupIndex, startDataIndex: cumulativeDataIndex });
-            cumulativeDataIndex += groups[groupIndex].itemCount;
-        }
-
-        return map;
-    }, [groups, enableHeader]);
+    const groupHeaderInfoByRowIndex = useMemo(
+        () => buildGroupHeaderInfo(groups, enableHeader),
+        [groups, enableHeader],
+    );
 
     const rowHeightMemoized = useCallback(
         (index: number, cellProps: TableItemProps) => {
@@ -405,6 +395,7 @@ const VirtualizedTableGrid = ({
             hasAlbumGroupColumn: parsedColumns.some((col) => col.id === TableColumn.ALBUM_GROUP),
             internalState: tableConfig.internalState,
             itemType: tableConfig.itemType,
+            markActiveRow: tableConfig.markActiveRow,
             pinnedLeftColumnCount,
             pinnedLeftColumnWidths,
             pinnedRightColumnCount,
@@ -413,6 +404,7 @@ const VirtualizedTableGrid = ({
             playlistId: tableConfig.playlistId,
             setAlbumGroupContentHeight,
             size: tableConfig.size,
+            sortedColumns: tableConfig.sortedColumns,
             startRowIndex: tableConfig.startRowIndex,
             tableId: tableConfig.tableId,
         }),
@@ -742,6 +734,26 @@ const MemoizedVirtualizedTableGrid = memo(VirtualizedTableGrid, (prevProps, next
 
 MemoizedVirtualizedTableGrid.displayName = 'MemoizedVirtualizedTableGrid';
 
+/** The group header rows by row index (the column header, when enabled, is row 0). */
+const buildGroupHeaderInfo = (
+    groups: TableGroupHeader[] | undefined,
+    enableHeader: boolean | undefined,
+): Map<number, { groupIndex: number; startDataIndex: number }> | undefined => {
+    if (!groups || groups.length === 0) return undefined;
+
+    const map = new Map<number, { groupIndex: number; startDataIndex: number }>();
+    const headerOffset = enableHeader ? 1 : 0;
+    let cumulativeDataIndex = 0;
+
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+        const groupHeaderIndex = headerOffset + cumulativeDataIndex + groupIndex;
+        map.set(groupHeaderIndex, { groupIndex, startDataIndex: cumulativeDataIndex });
+        cumulativeDataIndex += groups[groupIndex].itemCount;
+    }
+
+    return map;
+};
+
 export interface TableGroupHeader {
     itemCount: number;
     render: (props: {
@@ -784,6 +796,7 @@ export interface TableItemProps {
     hasAlbumGroupColumn?: boolean;
     internalState: ItemListStateActions;
     itemType: ItemTableListProps['itemType'];
+    markActiveRow?: boolean;
     onRowClick?: (item: any, event: React.MouseEvent<HTMLDivElement>) => void;
     pinnedLeftColumnCount?: number;
     pinnedLeftColumnWidths?: number[];
@@ -793,6 +806,7 @@ export interface TableItemProps {
     playlistId?: string;
     setAlbumGroupContentHeight?: (groupKey: string, height: number) => void;
     size?: ItemTableListProps['size'];
+    sortedColumns?: SortedColumns;
     startRowIndex?: number;
     tableId: string;
 }
@@ -808,7 +822,6 @@ interface ItemTableListProps {
     enableAlternateRowColors?: boolean;
     enableDrag?: boolean;
     enableDragScroll?: boolean;
-    enableEntranceAnimation?: boolean;
     enableExpansion?: boolean;
     enableHeader?: boolean;
     enableHorizontalBorders?: boolean;
@@ -832,6 +845,8 @@ interface ItemTableListProps {
     };
     itemCount?: number;
     itemType: LibraryItem;
+    /** Paint the active row's cells as one container (`data-queue-active`): the side queue (F4). */
+    markActiveRow?: boolean;
     onColumnReordered?: (
         columnIdFrom: TableColumn,
         columnIdTo: TableColumn,
@@ -844,6 +859,8 @@ interface ItemTableListProps {
     ref?: Ref<ItemListHandle>;
     rowHeight?: ((index: number, cellProps: TableItemProps) => number) | number;
     size?: 'compact' | 'default' | 'large';
+    /** The columns that carry the list's sort, marked in the header (not click-to-sort). */
+    sortedColumns?: SortedColumns;
     startRowIndex?: number;
 }
 
@@ -904,6 +921,7 @@ const ItemTableListStickyUI = memo(
         const { shouldShowStickyHeader, stickyTop } = useStickyTableHeader({
             containerRef,
             enabled: enableHeader && enableStickyHeader,
+            headerHeight,
             headerRef: pinnedRowRef,
             mainGridRef: rowRef,
             pinnedLeftColumnRef,
@@ -915,6 +933,7 @@ const ItemTableListStickyUI = memo(
             containerRef,
             shouldShowStickyHeader,
             stickyHeaderRef,
+            top: stickyTop,
         });
 
         const {
@@ -938,6 +957,7 @@ const ItemTableListStickyUI = memo(
             containerRef,
             shouldRenderStickyGroupRow,
             stickyGroupRowRef,
+            top: stickyGroupTop,
         });
 
         const StickyHeader = useMemo(() => {
@@ -956,13 +976,8 @@ const ItemTableListStickyUI = memo(
                 .reduce((sum, width) => sum + width, 0);
 
             return (
-                <div
-                    className={styles.stickyHeader}
-                    ref={stickyHeaderRef}
-                    style={{
-                        top: `${stickyTop}px`,
-                    }}
-                >
+                <div className={styles.stickyHeader} ref={stickyHeaderRef}>
+                    <WashUnderlay />
                     <div className={styles.stickyHeaderRow}>
                         {pinnedLeftColumnCount > 0 && (
                             <div
@@ -1092,7 +1107,6 @@ const ItemTableListStickyUI = memo(
         }, [
             shouldShowStickyHeader,
             enableHeader,
-            stickyTop,
             calculatedColumnWidths,
             pinnedLeftColumnCount,
             pinnedRightColumnCount,
@@ -1150,16 +1164,9 @@ const ItemTableListStickyUI = memo(
                 .reduce((sum, width) => sum + width, 0);
 
             const totalTableWidth = calculatedColumnWidths.reduce((sum, width) => sum + width, 0);
-            const actualStickyTop = stickyGroupTop;
-
             return (
-                <div
-                    className={styles.stickyGroupRow}
-                    ref={stickyGroupRowRef}
-                    style={{
-                        top: `${actualStickyTop}px`,
-                    }}
-                >
+                <div className={styles.stickyGroupRow} ref={stickyGroupRowRef}>
+                    <WashUnderlay />
                     <div className={styles.stickyGroupRowContent}>
                         {pinnedLeftColumnCount > 0 && (
                             <div
@@ -1223,7 +1230,6 @@ const ItemTableListStickyUI = memo(
             pinnedRightColumnCount,
             totalColumnCount,
             groupRowHeight,
-            stickyGroupTop,
         ]);
 
         return (
@@ -1248,7 +1254,6 @@ const BaseItemTableList = ({
     enableAlternateRowColors = false,
     enableDrag = true,
     enableDragScroll = true,
-    enableEntranceAnimation = true,
     enableExpansion = true,
     enableHeader = true,
     enableHorizontalBorders = false,
@@ -1267,6 +1272,7 @@ const BaseItemTableList = ({
     initialTop,
     itemCount,
     itemType,
+    markActiveRow = false,
     onColumnReordered,
     onColumnResized,
     onRangeChanged,
@@ -1275,6 +1281,7 @@ const BaseItemTableList = ({
     ref,
     rowHeight,
     size = 'default',
+    sortedColumns,
     startRowIndex,
 }: ItemTableListProps) => {
     const { playlistId: routePlaylistId } = useParams() as { playlistId?: string };
@@ -1496,6 +1503,13 @@ const BaseItemTableList = ({
         ],
     );
 
+    const scrollGroupHeaderInfo = useMemo(
+        () => buildGroupHeaderInfo(groups, enableHeader),
+        [groups, enableHeader],
+    );
+    // Callers pass data indexes; the handle and the keyboard convert them to row indexes once.
+    const groupCounts = useMemo(() => groups?.map((group) => group.itemCount) ?? [], [groups]);
+
     const scrollCellProps = useMemo<TableItemProps>(
         () => ({
             albumGroupContentHeights,
@@ -1526,6 +1540,10 @@ const BaseItemTableList = ({
 
                 return dataWithGroups[rowIndex];
             },
+            // The scroll maths sizes rows with these props: a rowHeight function that sizes group
+            // headers differently must see them here as it does in the grid.
+            groupHeaderInfoByRowIndex: scrollGroupHeaderInfo,
+            groups,
             hasAlbumGroupColumn,
             internalState: {} as ItemListStateActions,
             itemType,
@@ -1549,10 +1567,12 @@ const BaseItemTableList = ({
             estimatedAlbumGroupContentHeight,
             getItem,
             getRowHeight,
+            groups,
             hasAlbumGroupColumn,
             itemType,
             parsedColumns,
             playerContext,
+            scrollGroupHeaderInfo,
             shouldUseAccessor,
             size,
             tableId,
@@ -1671,6 +1691,7 @@ const BaseItemTableList = ({
         getItemIndex,
         getRowHeightAtIndex,
         getStateItem,
+        groupCounts,
         hasRequiredStateItemProperties,
         internalState,
         itemCount: baseItemCount,
@@ -1690,6 +1711,7 @@ const BaseItemTableList = ({
     useTableImperativeHandle({
         autoScrollToActiveRow,
         enableHeader,
+        groupCounts,
         handleRef,
         internalState,
         ref,
@@ -1697,9 +1719,36 @@ const BaseItemTableList = ({
         scrollToTableOffset,
     });
 
+    // A drag ends where the user let go (R15 review I1): under autoFit a column's saved width is a
+    // proportion, so the dragged px are turned into the own width that fits back to them. A click
+    // on the handle, which ends where it started, saves nothing.
+    const onColumnResizedAt = useMemo(() => {
+        if (!onColumnResized) return undefined;
+        return (columnId: TableColumn, width: number) => {
+            const index = parsedColumns.findIndex((column) => column.id === columnId);
+            if (index < 0) {
+                onColumnResized(columnId, width);
+                return;
+            }
+            if (Math.round(width) === calculatedColumnWidths[index]) return;
+            onColumnResized(
+                columnId,
+                autoFitColumns
+                    ? ownWidthForResize(parsedColumns, totalContainerWidth, index, width)
+                    : width,
+            );
+        };
+    }, [
+        autoFitColumns,
+        calculatedColumnWidths,
+        onColumnResized,
+        parsedColumns,
+        totalContainerWidth,
+    ]);
+
     const controls = useDefaultItemListControls({
         onColumnReordered,
-        onColumnResized,
+        onColumnResized: onColumnResizedAt,
         overrides: overrideControls,
     });
 
@@ -1766,6 +1815,13 @@ const BaseItemTableList = ({
     );
 
     const onShowPlayingSong = useCallback(() => {
+        // The active row by its own id first: a song queued twice, or a session another device
+        // plays, has no single row for the local player's song id.
+        const activeIndex = activeRowId ? internalState.findItemIndex(activeRowId) : -1;
+        if (activeIndex >= 0) {
+            handleRef.current?.scrollToIndex(activeIndex, { align: 'center', behavior: 'auto' });
+            return;
+        }
         const targetId = usePlayerStore.getState().getCurrentSong()?.id;
         if (!targetId) return;
         const index =
@@ -1773,7 +1829,7 @@ const BaseItemTableList = ({
             data.findIndex((item) => (item as null | { id?: string })?.id === targetId);
         if (index === undefined || index < 0) return;
         handleRef.current?.scrollToIndex(index, { align: 'center', behavior: 'auto' });
-    }, [data, getItemIndex]);
+    }, [activeRowId, data, getItemIndex, internalState]);
 
     useListHotkeys({
         controls,
@@ -1803,9 +1859,11 @@ const BaseItemTableList = ({
             groups,
             internalState,
             itemType,
+            markActiveRow,
             playerContext,
             playlistId: routePlaylistId,
             size,
+            sortedColumns,
             startRowIndex,
             tableId,
         }),
@@ -1827,9 +1885,11 @@ const BaseItemTableList = ({
             groups,
             internalState,
             itemType,
+            markActiveRow,
             playerContext,
             routePlaylistId,
             size,
+            sortedColumns,
             startRowIndex,
             tableId,
         ],
@@ -1854,8 +1914,8 @@ const BaseItemTableList = ({
         };
     }, [CellComponent, columnCellComponents]);
 
-    const tableMotion = (
-        <motion.div
+    const tableBody = (
+        <div
             className={styles.itemTableListContainer}
             onKeyDown={handleKeyDown}
             onMouseDown={(e) => {
@@ -1867,8 +1927,6 @@ const BaseItemTableList = ({
             }}
             ref={mergedContainerRef}
             tabIndex={0}
-            {...animationProps.fadeIn}
-            transition={{ duration: enableEntranceAnimation ? 0.3 : 0, ease: 'anticipate' }}
         >
             <ItemTableListStickyUI
                 calculatedColumnWidths={displayColumnWidths}
@@ -1919,7 +1977,7 @@ const BaseItemTableList = ({
                 totalColumnCount={totalColumnCount}
                 totalRowCount={totalRowCount}
             />
-        </motion.div>
+        </div>
     );
 
     return (
@@ -1927,10 +1985,10 @@ const BaseItemTableList = ({
             <ItemTableListConfigProvider value={tableConfigValue}>
                 {onColumnResized ? (
                     <ItemTableListColumnResizeLiveProvider value={columnResizeLiveValue}>
-                        {tableMotion}
+                        {tableBody}
                     </ItemTableListColumnResizeLiveProvider>
                 ) : (
-                    tableMotion
+                    tableBody
                 )}
             </ItemTableListConfigProvider>
         </ItemTableListStoreProvider>

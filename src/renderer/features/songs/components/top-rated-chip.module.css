@@ -1,0 +1,40 @@
+/* The Top rated chip (the Library board's Tracks toolbar): a 30 px chip, the accent container when on. */
+.chip {
+    display: inline-flex;
+    flex: none;
+    gap: 6px;
+    align-items: center;
+    height: 30px;
+    padding: 0 12px;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.chip[aria-pressed='true'] {
+    color: var(--theme-colors-primary-contrast);
+    background: var(--theme-colors-primary-filled);
+
+    /* The star fills while on (the icon's fill inherits this). */
+    fill: currentcolor;
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}

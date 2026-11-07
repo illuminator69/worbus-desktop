@@ -23,8 +23,17 @@ import {
 } from '/@/renderer/components/item-list/item-table-list/default-columns';
 import { audiomotionanalyzerPresets } from '/@/renderer/features/visualizer/components/audiomotionanalyzer/presets';
 import { AppRoute } from '/@/renderer/router/routes';
+import { type ArtistItemRow, migrateArtistItems } from '/@/renderer/store/artist-items-migration';
 import { migrateAutoplayToStations } from '/@/renderer/store/autoplay-migration';
 import { getEnvSettingsOverrides } from '/@/renderer/store/env-settings-overrides';
+import { omitExportSecrets } from '/@/renderer/store/export-secrets';
+import { migrateBuiltInFont } from '/@/renderer/store/font-migration';
+import {
+    homeFeatureShouldTurnOff,
+    migrateHomeItems,
+    NEW_DEFAULT_HOME_ORDER,
+} from '/@/renderer/store/home-items-migration';
+import { migrateSongColumns } from '/@/renderer/store/song-columns-migration';
 import { mergeOverridingColumns } from '/@/renderer/store/utils';
 import { FontValueSchema } from '/@/renderer/types/fonts';
 import { randomString } from '/@/renderer/utils';
@@ -70,13 +79,17 @@ const deepMergeIntoState = <T extends Record<string, any>>(
 };
 
 const HomeItemSchema = z.enum([
+    'fresh',
     'genres',
+    'mixes',
     'mostPlayed',
     'playlists',
     'random',
     'recentlyAdded',
     'recentlyPlayed',
     'recentlyReleased',
+    'rediscovery',
+    'similarArtists',
 ]);
 
 const AlbumGroupItemSchema = z.enum([
@@ -112,7 +125,6 @@ const PlayerItemSchema = z.enum([
 const ArtistItemSchema = z.enum([
     'biography',
     'compilations',
-    'favoriteSongs',
     'recentAlbums',
     'similarArtists',
     'topSongs',
@@ -532,9 +544,10 @@ export const GeneralSettingsSchema = z.object({
     collections: z.array(CollectionSchema),
     combinedLyricsAndVisualizer: z.boolean(),
     confirmQueueChanges: z.boolean(),
+    coverColours: z.boolean(),
+    coverColoursMode: z.enum(['dark', 'light']),
     disabledContextMenu: z.record(z.string(), z.boolean()),
     enableGridMultiSelect: z.boolean(),
-    expressiveMotion: z.boolean(),
     externalLinks: z.boolean(),
     followCurrentSong: z.boolean(),
     followSystemTheme: z.boolean(),
@@ -569,6 +582,8 @@ export const GeneralSettingsSchema = z.object({
     playlistTarget: PlaylistTargetSchema,
     primaryShade: z.number().min(0).max(9),
     qobuz: z.boolean(),
+    queueLyricsHeight: z.number().nullable(),
+    queueLyricsOpen: z.boolean(),
     resume: z.boolean(),
     shareExpiration: ShareExpirationSchema,
     showFavorites: z.boolean(),
@@ -755,7 +770,8 @@ const HubSettingsSchema = z
         enabled: z.boolean().default(false),
         // Device ids the user has manually hidden from the device picker (persisted).
         hiddenDeviceIds: z.array(z.string()).default([]),
-        name: z.string().default('Feishin'),
+        // Worbus P5: '' = no name saved; the device goes by the computer's name (design §6.7).
+        name: z.string().default(''),
         // When set, published stream/cover URLs get their origin rewritten to
         // this base — so cast devices get URLs they can reach even when this
         // machine talks to the server over a VPN (e.g. Tailscale).
@@ -766,7 +782,7 @@ const HubSettingsSchema = z
     .default({
         enabled: false,
         hiddenDeviceIds: [],
-        name: 'Feishin',
+        name: '',
         publicServerUrl: '',
         token: '',
         url: 'ws://localhost:4790',
@@ -930,7 +946,6 @@ export enum AlbumGroupItem {
 
 export enum ArtistItem {
     BIOGRAPHY = 'biography',
-    FAVORITE_SONGS = 'favoriteSongs',
     RECENT_ALBUMS = 'recentAlbums',
     SIMILAR_ARTISTS = 'similarArtists',
     TOP_SONGS = 'topSongs',
@@ -1027,13 +1042,17 @@ export enum GenreTarget {
 }
 
 export enum HomeItem {
+    FRESH = 'fresh',
     GENRES = 'genres',
+    MIXES = 'mixes',
     MOST_PLAYED = 'mostPlayed',
     PLAYLISTS = 'playlists',
     RANDOM = 'random',
     RECENTLY_ADDED = 'recentlyAdded',
     RECENTLY_PLAYED = 'recentlyPlayed',
     RECENTLY_RELEASED = 'recentlyReleased',
+    REDISCOVERY = 'rediscovery',
+    SIMILAR_ARTISTS = 'similarArtists',
 }
 
 export enum PlayerbarSliderType {
@@ -1296,19 +1315,10 @@ export const sidebarItems: SidebarItemType[] = [
     },
 ];
 
-const defaultHomeItemOrder: HomeItem[] = [
-    HomeItem.GENRES,
-    HomeItem.RANDOM,
-    HomeItem.RECENTLY_ADDED,
-    HomeItem.RECENTLY_RELEASED,
-    HomeItem.RECENTLY_PLAYED,
-    HomeItem.MOST_PLAYED,
-    HomeItem.PLAYLISTS,
-];
-
-const homeItems = defaultHomeItemOrder.map((id) => ({
+// F5: the redesign's order (home-items-migration.ts moves the old default here).
+const homeItems = NEW_DEFAULT_HOME_ORDER.map((id) => ({
     disabled: false,
-    id,
+    id: id as HomeItem,
 }));
 
 const artistItems = Object.values(ArtistItem).map((item) => ({
@@ -1371,7 +1381,8 @@ const initialState: SettingsState = {
         enabled: false,
     },
     discord: {
-        clientId: '1165957668758900787',
+        // Worbus P5 (design §6.9): '' = Worbus's own Discord application.
+        clientId: '',
         displayType: DiscordDisplayType.FEISHIN,
         enabled: false,
         linkType: DiscordLinkType.NONE,
@@ -1381,7 +1392,7 @@ const initialState: SettingsState = {
         showStateIcon: true,
     },
     font: {
-        builtIn: 'Inter',
+        builtIn: 'Figtree',
         custom: null,
         system: null,
         type: FontType.BUILT_IN,
@@ -1408,15 +1419,16 @@ const initialState: SettingsState = {
         collections: [],
         combinedLyricsAndVisualizer: false,
         confirmQueueChanges: true,
+        coverColours: true,
+        coverColoursMode: 'dark',
         disabledContextMenu: {},
         enableGridMultiSelect: false,
-        expressiveMotion: false,
         externalLinks: true,
         followCurrentSong: true,
         followSystemTheme: false,
         fullscreenAutoOpenTimeout: 0,
         genreTarget: GenreTarget.TRACK,
-        homeFeature: true,
+        homeFeature: false,
         homeFeatureStyle: HomeFeatureStyle.SINGLE,
         homeItems,
         imagePlaceholderPriority: 'thumbhash',
@@ -1453,6 +1465,10 @@ const initialState: SettingsState = {
         playlistTarget: PlaylistTarget.TRACK,
         primaryShade: 6,
         qobuz: true,
+        // R8: the height the user dragged the lyrics area to (B-226); null is the default.
+        queueLyricsHeight: null,
+        // R6: the queue panel's lyrics/visualiser area starts as its 40 px strip (B-207).
+        queueLyricsOpen: false,
         resume: true,
         shareExpiration: {
             amount: 1,
@@ -1545,7 +1561,7 @@ const initialState: SettingsState = {
     hub: {
         enabled: false,
         hiddenDeviceIds: [],
-        name: 'Feishin',
+        name: '',
         publicServerUrl: '',
         token: '',
         url: 'ws://localhost:4790',
@@ -2059,11 +2075,16 @@ const initialState: SettingsState = {
             pagination: ListPaginationType.PAGINATED,
             table: {
                 autoFitColumns: true,
+                // F6: Rating and Bitrate are on in the Tracks table (not in SONG_TABLE_COLUMNS, which
+                // other song lists share).
                 columns: SONG_TABLE_COLUMNS.map((column) => ({
                     align: column.align,
                     autoSize: column.autoSize,
                     id: column.value,
-                    isEnabled: column.isEnabled,
+                    isEnabled:
+                        column.isEnabled ||
+                        column.value === TableColumn.BIT_RATE ||
+                        column.value === TableColumn.USER_RATING,
                     pinned: column.pinned,
                     width: column.width,
                 })),
@@ -2205,7 +2226,7 @@ const initialState: SettingsState = {
         enabled: false,
         password: randomString(8),
         port: 4333,
-        username: 'feishin',
+        username: 'worbus',
     },
     station: {
         character: 'balanced',
@@ -2778,19 +2799,8 @@ export const useSettingsStore = createWithEqualityFn<SettingsSlice>()(
                     });
                 }
 
-                if (version <= 23) {
-                    // Add FAVORITE_SONGS to album artist page configuration
-                    const hasFavoriteSongs = state.general.artistItems?.some(
-                        (item) => item.id === ArtistItem.FAVORITE_SONGS,
-                    );
-
-                    if (!hasFavoriteSongs) {
-                        state.general.artistItems.push({
-                            disabled: false,
-                            id: ArtistItem.FAVORITE_SONGS,
-                        });
-                    }
-                }
+                // (version <= 23 added the artist page's Favourite songs row; version 42 removes it,
+                // so that step is gone.)
 
                 if (version <= 26) {
                     // Add ALBUM_GROUP column to the song table config
@@ -3022,10 +3032,57 @@ export const useSettingsStore = createWithEqualityFn<SettingsSlice>()(
                     );
                 }
 
+                // F3: Figtree replaces Inter as the built-in font, for people still on Inter.
+                if (version < 37 && state.font) {
+                    state.font = migrateBuiltInFont(state.font) as typeof state.font;
+                }
+
+                // F5: Home's rows take the redesign's order and its four new rows, and the
+                // feature carousel goes off for the old default pair (home-items-migration.ts).
+                if (version < 38 && state.general) {
+                    state.general.homeItems = migrateHomeItems(
+                        state.general.homeItems?.map((row) => ({ ...row, id: String(row.id) })),
+                    ) as typeof state.general.homeItems;
+                    if (homeFeatureShouldTurnOff(state.general)) {
+                        state.general.homeFeature = false;
+                    }
+                }
+
+                // F6: the Tracks table shows Rating and Bitrate (song-columns-migration.ts): switched on
+                // where they exist, appended where they do not; only the song list's table.
+                if (version < 39 && state.lists?.[ItemListKey.SONG]?.table?.columns) {
+                    state.lists[ItemListKey.SONG].table.columns = migrateSongColumns(
+                        state.lists[ItemListKey.SONG].table.columns,
+                    )!;
+                }
+
+                // R6: the queue panel's lyrics/visualiser area is a strip that opens (B-207); it
+                // starts folded, so the queue keeps its rows. Settings import runs this too.
+                if (version < 40 && state.general && state.general.queueLyricsOpen === undefined) {
+                    state.general.queueLyricsOpen = false;
+                }
+
+                // R8: the height the user drags the queue's lyrics area to (B-226); null until they do.
+                if (
+                    version < 41 &&
+                    state.general &&
+                    state.general.queueLyricsHeight === undefined
+                ) {
+                    state.general.queueLyricsHeight = null;
+                }
+
+                // R13 (B-246): the artist page's Favourite songs section and its switch are gone; its
+                // row leaves a stored order (artist-items-migration.ts). Settings import runs this too.
+                if (version < 42 && state.general) {
+                    state.general.artistItems = migrateArtistItems(
+                        state.general.artistItems as ArtistItemRow[] | undefined,
+                    ) as typeof state.general.artistItems;
+                }
+
                 return persistedState;
             },
             name: 'store_settings',
-            version: 36,
+            version: 42,
         },
     ),
 );
@@ -3039,8 +3096,11 @@ export const useTableSettings = (type: ItemListKey) =>
 
 export const useGeneralSettings = () => useSettingsStore((state) => state.general, shallow);
 
-export const useExpressiveMotion = () =>
-    useSettingsStore((state) => state.general.expressiveMotion, shallow);
+export const useCoverColours = () => useSettingsStore((state) => state.general.coverColours);
+
+/** Light or dark while Cover colours is on (unless `Use system theme` decides): never the cover's. */
+export const useCoverColoursMode = () =>
+    useSettingsStore((state) => state.general.coverColoursMode);
 
 export const usePlaybackType = () => useSettingsStore((state) => state.playback.type, shallow);
 
@@ -3101,14 +3161,23 @@ export const useTagEditorSettings = () => useSettingsStore((state) => state.tagE
 
 const getSettingsStoreVersion = () => useSettingsStore.persist.getOptions().version!;
 
+// The export is a file people send around, so it never carries the secrets in
+// EXPORT_SECRET_PATHS (hub token, AudioMuse token, remote password, Last.fm and translation keys).
+// The import modal fills the same paths back from the current state.
+export {
+    EXPORT_SECRET_PATHS,
+    keepCurrentSecrets,
+    omitExportSecrets,
+} from '/@/renderer/store/export-secrets';
+
 export const useSettingsForExport = (): SettingsState & { version: number } =>
     useSettingsStore((state) => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars -- actions needs to be omitted from the export as it contains store functions
         const { actions, ...otherSettings } = state;
         return {
-            ...otherSettings,
+            ...omitExportSecrets(otherSettings),
             version: getSettingsStoreVersion(),
-        };
+        } as SettingsState & { version: number };
     });
 
 export const migrateSettings = (settings: SettingsState, settingsVersion: number): SettingsState =>
@@ -3313,6 +3382,12 @@ export const useCombinedLyricsAndVisualizer = () =>
 
 export const useShowLyricsInSidebar = () =>
     useSettingsStore((state) => state.general.showLyricsInSidebar, shallow);
+
+export const useQueueLyricsHeight = () =>
+    useSettingsStore((state) => state.general.queueLyricsHeight, shallow);
+
+export const useQueueLyricsOpen = () =>
+    useSettingsStore((state) => state.general.queueLyricsOpen, shallow);
 
 export const useShowQueueInSidebar = () =>
     useSettingsStore((state) => state.general.showQueueInSidebar, shallow);

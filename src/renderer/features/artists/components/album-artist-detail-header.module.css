@@ -1,8 +1,6 @@
-.metadata-group {
-    justify-content: center;
-    width: 100%;
-
-    @container (min-width: $mantine-breakpoint-sm) {
-        justify-content: flex-start;
-    }
+/* The board's `.meta` under the hero title: songs, releases, genres. */
+.meta {
+    margin-top: 8px;
+    font-size: 13.5px;
+    color: var(--theme-colors-foreground-muted);
 }

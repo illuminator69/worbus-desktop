@@ -1,34 +1,25 @@
-import { useIsFetching } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { MouseEvent, RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { RefObject, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import styles from './play-queue-list-controls.module.css';
 
-import { queryKeys } from '/@/renderer/api/query-keys';
-import { SONG_TABLE_COLUMNS } from '/@/renderer/components/item-list/item-table-list/default-columns';
 import { ItemListHandle } from '/@/renderer/components/item-list/types';
-import { usePlayer } from '/@/renderer/features/player/context/player-context';
-import { useRestoreQueue, useSaveQueue } from '/@/renderer/features/player/hooks/use-queue-restore';
-import { QueueStationChips } from '/@/renderer/features/player/station/queue-station-chips';
-import { openCreatePrefilledPlaylistModal } from '/@/renderer/features/playlists/components/create-playlist-form';
 import {
-    ListConfigMenu,
-    SONG_DISPLAY_TYPES,
-} from '/@/renderer/features/shared/components/list-config-menu';
-import { MoreButton } from '/@/renderer/features/shared/components/more-button';
+    QueueActionsMenu,
+    QueueMenuSection,
+    queueTableConfig,
+    useQueueActions,
+} from '/@/renderer/features/now-playing/components/queue-actions-menu';
+import { QueueStationChips } from '/@/renderer/features/player/station/queue-station-chips';
+import { ListConfigMenu } from '/@/renderer/features/shared/components/list-config-menu';
 import { SearchInput } from '/@/renderer/features/shared/components/search-input';
-import { useCurrentServer, usePlayerStoreBase } from '/@/renderer/store';
-import { hasFeature } from '/@/shared/api/utils';
+import { usePlayerStoreBase } from '/@/renderer/store';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Box } from '/@/shared/components/box/box';
 import { Divider } from '/@/shared/components/divider/divider';
-import { DropdownMenu } from '/@/shared/components/dropdown-menu/dropdown-menu';
 import { Group } from '/@/shared/components/group/group';
-import { Icon } from '/@/shared/components/icon/icon';
-import { toast } from '/@/shared/components/toast/toast';
-import { ServerFeature } from '/@/shared/types/features-types';
-import { ItemListKey, ListDisplayType } from '/@/shared/types/types';
+import { ItemListKey } from '/@/shared/types/types';
 
 const TIER_1_MAX = 480;
 const TIER_2_MAX = 380;
@@ -57,9 +48,6 @@ export const PlayQueueListControls = ({
     type,
 }: PlayQueueListOptionsProps) => {
     const { t } = useTranslation();
-    const server = useCurrentServer();
-    const player = usePlayer();
-    const supportsQueue = hasFeature(server, ServerFeature.SERVER_PLAY_QUEUE);
     const toolbarRef = useRef<HTMLDivElement>(null);
     const [overflowTier, setOverflowTier] = useState<OverflowTier>(0);
 
@@ -86,44 +74,19 @@ export const PlayQueueListControls = ({
         return () => observer.disconnect();
     }, []);
 
-    const isFetching = useIsFetching({ queryKey: queryKeys.player.fetch({ type: 'queue' }) });
-    const { isPending: isSavingQueue, mutate: saveQueue } = useSaveQueue();
-    const handleRestoreQueue = useRestoreQueue();
-
-    const handleSaveQueue = useCallback(() => {
-        saveQueue(undefined, {
-            onSuccess: () => {
-                toast.success({
-                    message: t('form.saveQueue.success'),
-                });
-            },
-        });
-    }, [saveQueue, t]);
-
-    const handleClearQueue = () => {
-        player.clearQueue();
-    };
-
-    const handleJumpToCurrent = () => {
+    const actions = useQueueActions(() => {
         const index = usePlayerStoreBase.getState().player.index;
         if (index !== -1) {
             tableRef.current?.scrollToIndex(index);
         }
-    };
+    });
+    const supportsQueue = actions.supportsQueue;
 
-    const handleShuffleQueue = () => {
-        player.shuffleAll();
-    };
-
-    const handleCreatePlaylistFromQueue = (e?: MouseEvent<HTMLButtonElement>) => {
-        const queueSongs = player.getQueue();
-        openCreatePrefilledPlaylistModal(server, queueSongs, e);
-    };
-
-    const isRestoreBusy = isSavingQueue || Boolean(isFetching);
-    const showTier1Menu = supportsQueue && overflowTier >= 1;
-    const showTier2Menu = overflowTier >= 2;
-    const showTier3Menu = overflowTier >= 3;
+    const menuSections: QueueMenuSection[] = [
+        ...(supportsQueue && overflowTier >= 1 ? (['saveRestore'] as const) : []),
+        ...(overflowTier >= 3 ? (['shuffle', 'clear'] as const) : []),
+        ...(overflowTier >= 2 ? (['goToCurrent', 'createPlaylist'] as const) : []),
+    ];
 
     return (
         // The header's rule runs under the chips, so they read as part of the header. Nothing in
@@ -155,22 +118,22 @@ export const PlayQueueListControls = ({
                     {supportsQueue && (
                         <span className={styles.overflowTier1}>
                             <ActionIcon
-                                disabled={Boolean(isFetching)}
+                                disabled={actions.isFetching}
                                 icon="upload"
                                 iconProps={{ size: 'lg' }}
-                                loading={isSavingQueue}
-                                onClick={() => handleSaveQueue()}
+                                loading={actions.isSavingQueue}
+                                onClick={() => actions.saveQueue()}
                                 tooltip={{
                                     label: t('player.saveQueueToServer'),
                                 }}
                                 variant="subtle"
                             />
                             <ActionIcon
-                                disabled={isRestoreBusy}
+                                disabled={actions.isRestoreBusy}
                                 icon="download"
                                 iconProps={{ size: 'lg' }}
-                                loading={Boolean(isFetching)}
-                                onClick={handleRestoreQueue}
+                                loading={actions.isFetching}
+                                onClick={actions.restoreQueue}
                                 tooltip={{
                                     label: t('player.restoreQueueFromServer'),
                                 }}
@@ -182,14 +145,14 @@ export const PlayQueueListControls = ({
                         <ActionIcon
                             icon="mediaShuffle"
                             iconProps={{ size: 'lg' }}
-                            onClick={handleShuffleQueue}
+                            onClick={actions.shuffleQueue}
                             tooltip={{ label: t('player.shuffle') }}
                             variant="subtle"
                         />
                         <ActionIcon
                             icon="delete"
                             iconProps={{ size: 'lg' }}
-                            onClick={handleClearQueue}
+                            onClick={actions.clearQueue}
                             tooltip={{ label: t('action.clearQueue') }}
                             variant="subtle"
                         />
@@ -198,76 +161,24 @@ export const PlayQueueListControls = ({
                         <ActionIcon
                             icon="goToItem"
                             iconProps={{ size: 'lg' }}
-                            onClick={handleJumpToCurrent}
+                            onClick={actions.goToCurrent}
                             tooltip={{ label: t('action.goToCurrent') }}
                             variant="subtle"
                         />
                         <ActionIcon
                             icon="playlistAdd"
                             iconProps={{ size: 'lg' }}
-                            onClick={handleCreatePlaylistFromQueue}
+                            onClick={actions.createPlaylist}
                             tooltip={{ label: t('action.createPlaylistFromQueue') }}
                             variant="subtle"
                         />
                     </span>
                     <span className={styles.moreTrigger}>
-                        <DropdownMenu position="bottom-start">
-                            <DropdownMenu.Target>
-                                <MoreButton />
-                            </DropdownMenu.Target>
-                            <DropdownMenu.Dropdown>
-                                {showTier1Menu && (
-                                    <>
-                                        <DropdownMenu.Item
-                                            disabled={Boolean(isFetching) || isSavingQueue}
-                                            leftSection={<Icon icon="upload" />}
-                                            onClick={() => handleSaveQueue()}
-                                        >
-                                            {t('player.saveQueueToServer')}
-                                        </DropdownMenu.Item>
-                                        <DropdownMenu.Item
-                                            disabled={isRestoreBusy}
-                                            leftSection={<Icon icon="download" />}
-                                            onClick={handleRestoreQueue}
-                                        >
-                                            {t('player.restoreQueueFromServer')}
-                                        </DropdownMenu.Item>
-                                    </>
-                                )}
-                                {showTier3Menu && (
-                                    <>
-                                        <DropdownMenu.Item
-                                            leftSection={<Icon icon="mediaShuffle" />}
-                                            onClick={handleShuffleQueue}
-                                        >
-                                            {t('player.shuffle')}
-                                        </DropdownMenu.Item>
-                                        <DropdownMenu.Item
-                                            leftSection={<Icon icon="delete" />}
-                                            onClick={handleClearQueue}
-                                        >
-                                            {t('action.clearQueue')}
-                                        </DropdownMenu.Item>
-                                    </>
-                                )}
-                                {showTier2Menu && (
-                                    <>
-                                        <DropdownMenu.Item
-                                            leftSection={<Icon icon="goToItem" />}
-                                            onClick={handleJumpToCurrent}
-                                        >
-                                            {t('action.goToCurrent')}
-                                        </DropdownMenu.Item>
-                                        <DropdownMenu.Item
-                                            leftSection={<Icon icon="playlistAdd" />}
-                                            onClick={() => handleCreatePlaylistFromQueue()}
-                                        >
-                                            {t('action.createPlaylistFromQueue')}
-                                        </DropdownMenu.Item>
-                                    </>
-                                )}
-                            </DropdownMenu.Dropdown>
-                        </DropdownMenu>
+                        <QueueActionsMenu
+                            actions={actions}
+                            listKey={type}
+                            sections={menuSections}
+                        />
                     </span>
                 </Group>
                 <Divider h="60%" orientation="vertical" style={{ alignSelf: 'center' }} />
@@ -281,20 +192,7 @@ export const PlayQueueListControls = ({
                 </Box>
                 <Divider h="60%" orientation="vertical" style={{ alignSelf: 'center' }} />
                 <Box style={{ flexShrink: 0 }}>
-                    <ListConfigMenu
-                        displayTypes={[
-                            { hidden: true, value: ListDisplayType.GRID },
-                            ...SONG_DISPLAY_TYPES,
-                        ]}
-                        listKey={type}
-                        optionsConfig={{
-                            table: {
-                                itemsPerPage: { hidden: true },
-                                pagination: { hidden: true },
-                            },
-                        }}
-                        tableColumnsData={SONG_TABLE_COLUMNS}
-                    />
+                    <ListConfigMenu {...queueTableConfig(type)} />
                 </Box>
             </Group>
             {/* navi-connect (I-041): autoplay as chips, under the queue's header. */}

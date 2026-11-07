@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
+import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
     echoDisconnected,
@@ -12,6 +13,24 @@ import {
     failedLoadExit,
     NO_ECHO,
 } from '/@/renderer/features/hub/utils/do-echo';
+import { hubFailureMessage } from '/@/renderer/features/hub/utils/hub-failure';
+import { currentNavidromeUrls } from '/@/renderer/features/hub/utils/hub-finder-actions';
+import {
+    accountChange,
+    accountKey,
+    accountMismatch,
+    createAccountFollower,
+} from '/@/renderer/features/hub/utils/hub-roles';
+import {
+    clearLbQueries,
+    currentServerUsername,
+    reconcileSignIn,
+    refreshAuthState,
+    signInWithCurrentServer,
+    signOutOfServer,
+    silentSignIn,
+    upgradeFromToken,
+} from '/@/renderer/features/hub/utils/hub-signin-actions';
 import {
     adoptClaimDelay,
     GuardWindow,
@@ -33,6 +52,7 @@ import {
     sendAct,
 } from '/@/renderer/features/hub/utils/remote-queue';
 import { placeholderSong, resolveHubTracks } from '/@/renderer/features/hub/utils/resolve-songs';
+import { serverKeyMove } from '/@/renderer/features/hub/utils/server-key';
 import {
     sleepGuardStep,
     sleepTimerFromFrame,
@@ -47,14 +67,18 @@ import {
     markLbBotUnreachable,
     refreshLbBotOverrides,
     useLbBotLibraryRefresh,
+    useLbBotRefusals,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import {
     clearIndexMirrorForHubChange,
+    indexMirrorCursor,
     onIndexFrame,
     onLbBotAvailable,
     requestIndexSync,
     useLbBotIndexSync,
 } from '/@/renderer/features/lbbot/index-mirror/index-mirror';
+import { useActiveFillsStore } from '/@/renderer/features/lbbot/stores/active-fills.store';
+import { lbBotModeActions } from '/@/renderer/features/lbbot/stores/lbbot-mode.store';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
 import { withdrawStartupSeek } from '/@/renderer/features/player/hooks/use-queue-restore';
 import { parseStationCursor } from '/@/renderer/features/player/station/station-logic';
@@ -78,6 +102,7 @@ import {
     SavedQueue,
     SavedQueueKind,
     setTimestamp,
+    useAuthStore,
     useCurrentServerId,
     useHubSettings,
     useHubStore,
@@ -86,13 +111,22 @@ import {
     usePlayerStore,
     usePlayerStoreBase,
     useSavedQueuesStore,
+    useSettingsStore,
     useTimestampStoreBase,
 } from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { LibraryItem, QueueSong, Song } from '/@/shared/types/domain-types';
 import { PlayerRepeat, PlayerShuffle, PlayerStatus } from '/@/shared/types/types';
+import { HubSignInResult, parseHubUser } from '/@/shared/utils/hub-signin';
+import {
+    isProgressOnlyFrame,
+    parseProgress,
+    stateAfterWelcome,
+    tooOldFromLb,
+} from '/@/shared/utils/lbbot-mode';
 import { levelReportStep, NO_LEVEL_REPORT, toLevel } from '/@/shared/utils/level-report';
+import { serverVersionOf } from '/@/shared/utils/version-line';
 
 /**
  * B-053: adopting an orphaned session seeks to the hub's cursor - at launch usually our own
@@ -208,27 +242,36 @@ const savedQueueToHubRecord = (q: SavedQueue): Record<string, unknown> => ({
 
 const hub = isElectron() ? window.api.hub : null;
 
+/**
+ * Worbus P2: following a change of Navidrome account (design §6.5), one change at a time (review
+ * M7). A logout signs this device out of the Worbus Server and drops what the old account left
+ * here (the lb-bot mirror, the fill ledger, the saved-queue cache, which the next welcome would
+ * push into the new account's space); a switch does the same, then signs in with the new account.
+ */
+/** Each (hub user, account) mismatch is followed once a session: a hub that names its users
+ *  differently from the login must not sign out and in at every welcome. */
+const reconciledMismatches = new Set<string>();
+
+const followAccountChange = createAccountFollower({
+    clearFills: () => useActiveFillsStore.getState().actions.clear(),
+    clearLbQueries,
+    clearMirror: () => clearIndexMirrorForHubChange(true),
+    clearSavedQueues: () => useSavedQueuesStore.getState().actions.clearAll(),
+    hubOn: () => {
+        const { hub: config } = useSettingsStore.getState();
+        return config.enabled && config.url.trim() !== '';
+    },
+    signIn: () => signInWithCurrentServer(),
+    signOut: () => signOutOfServer({ reconnect: false }),
+});
+
+/** At `welcome`: the last sign-in's answer, unless it was a refusal (the link works now). */
+const keptSignInResult = (result: HubSignInResult | null): HubSignInResult | null =>
+    result?.kind === 'signedIn' || result?.kind === 'oldServer' ? result : null;
+
 /** The session's shuffled play order (PROTOCOL §4.2), or null for queue order. */
 const sessionOrder = (order: unknown): null | number[] =>
     Array.isArray(order) && order.every((n) => typeof n === 'number') ? (order as number[]) : null;
-
-/**
- * What to tell the user about a hub-side failure: an `error` frame, or the `ack` of an act of
- * ours that the hub refused (`ok:false` - against a hub that acknowledges acts the refusal comes
- * there, to the sender only, instead of as a broadcast).
- */
-const hubFailureMessage = (msg: any): string =>
-    msg.code === 'target_offline'
-        ? 'That device is offline.'
-        : msg.code === 'target_unreachable'
-          ? (msg.message ?? "That device isn't responding.")
-          : msg.code === 'load_failed'
-            ? (msg.message ?? 'That device could not start playback.')
-            : msg.code === 'not_supported'
-              ? (msg.message ?? "That device can't do that while it isn't playing.")
-              : msg.code === 'auth'
-                ? 'The hub rejected the token - check your navi-connect settings.'
-                : (msg.message ?? (msg.code ? `Hub error (${msg.code})` : 'Hub error'));
 
 /**
  * What a report says about the player, read from the stores at the moment it is sent.
@@ -376,7 +419,7 @@ export const useHub = () => {
         myId.current !== null && activeId.current !== null && activeId.current !== myId.current;
 
     // When the hub tells us another device is the active receiver while our
-    // local player is (auto)playing — e.g. Feishin restored its queue and
+    // local player is (auto)playing — e.g. Worbus for desktop restored its queue and
     // started playing on launch before the `welcome` arrived — silence the
     // local audio. Otherwise it runs away invisibly: the bar shows the remote
     // session and there's no local pause control reachable.
@@ -672,7 +715,7 @@ export const useHub = () => {
 
     // Publish our local queue to the hub when it changes. This is how the hub
     // learns what's playing (and claims us as the active device) when the user
-    // starts playback in Feishin directly. Gated so we never hijack playback
+    // starts playback in Worbus for desktop directly. Gated so we never hijack playback
     // from another active device — only publish when we're active or nothing is.
     const publishQueue = useCallback(() => {
         if (!hub) return;
@@ -691,7 +734,7 @@ export const useHub = () => {
         const state = usePlayerStore.getState();
         const items = state.getQueue().items;
         const sig = items.map((item) => item.id).join(',');
-        // Unclaimed-session escape (mirrors Navic's publishQueueIfOurs): nobody is the
+        // Unclaimed-session escape (mirrors Worbus for Android's publishQueueIfOurs): nobody is the
         // active receiver and WE are playing, so this client IS the live receiver — but
         // the signature dedupe would suppress the publish forever (adopting the hub's
         // queue pins the signature to it). Without a publish the hub never promotes us,
@@ -725,7 +768,7 @@ export const useHub = () => {
         lastQueueSig.current = sig;
         if (!items.length) {
             // Clearing the queue has to reach the hub, or the session keeps serving the
-            // queue we just threw away — open Navic afterwards and the whole list is back.
+            // queue we just threw away — open Worbus for Android afterwards and the whole list is back.
             // Only once we've actually published something, though: the queue is empty for
             // a moment at startup before the persisted one hydrates, and publishing THAT
             // would wipe a session another device is happily playing.
@@ -1305,7 +1348,7 @@ export const useHub = () => {
                 // Loaded PAUSED outright, as the branch below does. mediaPlayByIndex STARTS the
                 // engine, asynchronously, so the pause after it could land first and the track
                 // played for a moment: the blip when another device dropped out of the session
-                // (seen 2026-09-30 — a `timeupdate` then a `pause` scrobble as Navic reinstalled).
+                // (seen 2026-09-30 — a `timeupdate` then a `pause` scrobble as Worbus for Android reinstalled).
                 if (targetIndex !== state2.player.index) {
                     setQueue(state2.getQueue().items, targetIndex, targetSec, false);
                 }
@@ -1403,6 +1446,8 @@ export const useHub = () => {
     // The lb-bot index mirror: loaded from IndexedDB at startup, plus its
     // 15-minute backstop pull. The welcome/index triggers are below.
     useLbBotIndexSync();
+    // Worbus P1: lb-bot's refusals (downloads off, this hub refused), from any route.
+    useLbBotRefusals();
     const libraryRefresh = useRef(refreshLibrary);
     libraryRefresh.current = refreshLibrary;
 
@@ -1415,16 +1460,46 @@ export const useHub = () => {
 
     // Push config to the main-process transport on mount + whenever it changes.
     useEffect(() => {
-        hub?.setSettings(settings.enabled, settings.url, settings.token, settings.name).catch(
-            () => undefined,
-        );
+        // F2: the Server tab's "connecting" starts here, and an earlier refusal is the old
+        // token's: the transport tries again with whatever was just pushed.
+        useHubStore.getState().actions.setStore({ attemptAt: Date.now(), authRefused: false });
+        hub?.setSettings(settings.enabled, settings.url, settings.token, settings.name)
+            // Worbus P2: then the sign-in that is due, with Connect on only (M4). A secret kept in
+            // memory only is gone after a restart, and one that could not be decrypted is dropped:
+            // main says a sign-in is owed, and the silent one is made (R7). A device still on a
+            // typed token makes its upgrade sign-in (R23). Until a sign-in answers, a device with
+            // no credential does not connect.
+            .catch(() => undefined)
+            // Also after a failed push: the auth state must become known (re-review N1).
+            .finally(() => {
+                void reconcileSignIn();
+            });
     }, [settings.enabled, settings.name, settings.token, settings.url]);
+
+    // Worbus P2 (design §6.5, the owner's 2026-11-02 answer): the hub identity IS the Navidrome
+    // account. Every way the account changes lands here: the server list, adding, deleting or
+    // editing a server (a new user or address under the same id: review I1), and the logout.
+    useEffect(() => {
+        if (!hub) return undefined;
+        return useAuthStore.subscribe((state, prev) => {
+            const change = accountChange(
+                accountKey(prev.currentServer),
+                accountKey(state.currentServer),
+            );
+            if (change === 'none') return;
+            void followAccountChange(change);
+        });
+    }, []);
 
     // The network came back: have the transport look now rather than wait out a backoff that
     // may be parked at 30 s. (Waking from sleep is the main process's own hook.)
     useEffect(() => {
         if (!hub) return undefined;
-        const onOnline = () => hub.kick();
+        const onOnline = () => {
+            hub.kick();
+            // R31: a device waiting on a sign-in (unreachable, busy, Navidrome down) tries again.
+            void reconcileSignIn();
+        };
         window.addEventListener('online', onOnline);
         return () => window.removeEventListener('online', onOnline);
     }, []);
@@ -1434,17 +1509,85 @@ export const useHub = () => {
     // describes anything this app talks to — forget it rather than let it stand
     // for the rest of the session (R17). A token or name change reconnects to
     // the same hub, whose next welcome restates it, so those keep it.
-    const lbStatusHub = useRef(settings.url);
+    //
+    // Worbus P3 (design §6.5): "pointed somewhere else" is another SERVER - its key (`id:<id>`,
+    // else the typed address as before). The same id at another address is no move; the first
+    // welcome carrying the id re-keys what was kept under the address (copied, never wiped).
+    const serverKey = useServerKey();
+    const lbStatusHub = useRef(serverKey);
     useEffect(() => {
-        const moved = lbStatusHub.current !== settings.url;
-        lbStatusHub.current = settings.url;
-        if (!settings.enabled || moved) clearLbBotStatus();
+        const previous = lbStatusHub.current;
+        const move = serverKeyMove(lbStatusHub.current, serverKey);
+        const moved = move === 'moved';
+        lbStatusHub.current = serverKey;
+        if (move === 'rekey') {
+            lbBotModeActions().rekey(previous, serverKey);
+            // The mirror's own check: a meta under the address is adopted, not cleared.
+            clearIndexMirrorForHubChange();
+        }
+        if (!settings.enabled || moved) {
+            clearLbBotStatus();
+            // Worbus P1: the progress, the refusal and this session's downloads mode were the
+            // old hub's too. The mode falls back to the one remembered for the new URL.
+            useHubStore
+                .getState()
+                .actions.setStore({ lbProgress: null, lbRefused: false, lbTooOld: false });
+            lbBotModeActions().forgetSession();
+        }
         // B-014: a MOVE only, unlike lbStatus above — switching the hub off is
         // not a different hub identity (R21 already hides the mirror then
         // without deleting it), but pointing at a different one is, and the
         // old hub's mirror otherwise keeps rendering under the new one.
-        if (moved) clearIndexMirrorForHubChange();
-    }, [settings.enabled, settings.url]);
+        if (moved) {
+            clearIndexMirrorForHubChange();
+            // R29 (walk B3): a sign-in verdict - an older server above all - was about the old
+            // address. Dropped, so the token field goes and the upgrade sign-in runs here.
+            useHubStore.getState().actions.setStore({ signInResult: null });
+        }
+    }, [settings.enabled, serverKey]);
+
+    // Worbus P3: main's server record and the live socket's address, at start and on each change.
+    useEffect(() => {
+        if (!hub) return undefined;
+        const { setStore } = useHubStore.getState().actions;
+        void hub
+            .serverState()
+            .then((server) => setStore({ server }))
+            .catch(() => undefined);
+        const offServer = hub.onServer((server) => {
+            const before = useHubStore.getState().server?.record.serverId ?? null;
+            setStore({ server });
+            // Review C1: the record forgot its server or names another one - main forgot the
+            // secret issued by the previous one. What this device holds is read again, and that
+            // server's user flags are not this one's.
+            if (before !== null && server.record.serverId !== before) {
+                setStore({ user: null });
+                void refreshAuthState().catch(() => undefined);
+            }
+        });
+        // P3: the finder's state, and the Navidrome hosts it may look beside - at start and on
+        // every account change (main keeps no other copy of the server list).
+        void hub
+            .finderState()
+            .then((finder) => setStore({ finder }))
+            .catch(() => undefined);
+        const offFinder = hub.onFinderState((finder) => setStore({ finder }));
+        hub.setNavidromeUrls(currentNavidromeUrls());
+        const offAccount = useAuthStore.subscribe((state, prev) => {
+            if (
+                state.currentServer?.url === prev.currentServer?.url &&
+                state.currentServer?.remoteUrl === prev.currentServer?.remoteUrl
+            ) {
+                return;
+            }
+            hub.setNavidromeUrls(currentNavidromeUrls());
+        });
+        return () => {
+            offServer();
+            offFinder();
+            offAccount();
+        };
+    }, []);
 
     // Wire the inbound hub stream.
     useEffect(() => {
@@ -1452,14 +1595,41 @@ export const useHub = () => {
         const { setStore } = useHubStore.getState().actions;
         const dispose = hub.onMessage((msg: any) => {
             if (msg.t === 'welcome') {
+                // Worbus P2: who this socket acts for; absent from an older hub (null).
+                const welcomeUser = parseHubUser(msg.user);
                 // I-031: the one reset point of the command echo, on both sides.
                 doEcho.current = echoWelcome(doEcho.current);
+                // Worbus P2: the credential works; the next signed-out earns one silent try again.
+                silentSignIn.welcome();
+                // R35: a welcome naming a user is a hub of this round, whatever this session found
+                // here before (upgraded in place): the older-hub verdict ends.
+                if (welcomeUser && useHubStore.getState().signInResult?.kind === 'oldServer') {
+                    setStore({ signInResult: null });
+                }
+                // R23 (a): connected on a typed token - sign in with the account now, so the token
+                // is retired once the secret is held.
+                if (!useHubStore.getState().authSignedIn) void upgradeFromToken();
+                // Review M7: signed in as someone other than the current server's account (a
+                // crash mid-switch, a change that was missed): follow it as a switch, once.
+                const mismatchKey = `${welcomeUser?.name}\n${currentServerUsername()}`;
+                if (
+                    accountMismatch(
+                        welcomeUser,
+                        currentServerUsername(),
+                        useHubStore.getState().authSignedIn,
+                    ) &&
+                    !reconciledMismatches.has(mismatchKey)
+                ) {
+                    reconciledMismatches.add(mismatchKey);
+                    void followAccountChange('switch');
+                }
                 myId.current = msg.deviceId ?? null;
                 noteActive(msg.session?.activeDeviceId ?? null);
                 setStore({
                     activeDeviceId: activeId.current,
                     // I-031: a pin waits for an ack on the connection its act was sent on.
                     actPins: NO_PINS,
+                    authRefused: false,
                     connected: true,
                     devices: msg.devices ?? [],
                     // Absent from an older hub: no `actAck`, so nothing is pinned.
@@ -1476,6 +1646,11 @@ export const useHub = () => {
                     remoteRepeat: msg.session?.repeat ?? 'none',
                     remoteShuffle: msg.session?.shuffle ?? false,
                     savedQueueId: msg.session?.savedQueueId ?? null,
+                    // Worbus P4: absent from a server before project 4 (no line on the Server tab).
+                    serverVersion: serverVersionOf(msg.server),
+                    signedOut: false,
+                    // A refusal from an earlier sign-in is history once a connection works.
+                    signInResult: keptSignInResult(useHubStore.getState().signInResult),
                     // I-034: absent from a hub that holds no timer.
                     sleepTimer: sleepTimerFromFrame(
                         msg.session?.sleepTimer,
@@ -1483,6 +1658,7 @@ export const useHub = () => {
                         useHubStore.getState().sleepTimer,
                         Date.now(),
                     ),
+                    user: welcomeUser,
                 });
                 // I-033: the hub's row for this device holds the level it was last told, or
                 // one it kept from before a restart. Say the real one, whatever was sent on
@@ -1529,9 +1705,20 @@ export const useHub = () => {
                 // a hint, an up-to-date pull costs ~100 bytes, and a notify
                 // missed while the hub was down would leave the hint stale.
                 adoptLbBotWelcome(msg.lb);
+                // Worbus P1: the welcome restates lb-bot's downloads mode (absent = an older
+                // peer) and its index progress, and ends a refusal (B-263): a hub that
+                // reconnected may have been upgraded to send lb-bot its token.
+                const lbState = stateAfterWelcome(msg.lb);
+                lbBotModeActions().adopt(lbState.mode);
+                setStore({
+                    lbProgress: parseProgress(msg.lbIndex?.progress),
+                    lbRefused: lbState.refused,
+                    // Worbus P2 (review I3): lb-bot without `identity` serves only the primary user.
+                    lbTooOld: tooOldFromLb(msg.lb, welcomeUser),
+                });
                 // A `library` frame sent while this socket was down is lost, so
                 // every cached lb-bot answer that marks ownership (Fresh, the
-                // Deezer rows, similar artists) is re-asked — as Navic does on
+                // Deezer rows, similar artists) is re-asked — as Worbus for Android does on
                 // every welcome (R28). Not a library event: no library refetch.
                 // After the adopt: it reads the new verdict, and with lb-bot down
                 // only marks stale. `lbIndex` lets it skip a reconnect across
@@ -1628,17 +1815,29 @@ export const useHub = () => {
                 // it ends the sync's back-off (R22) — a plain 'index' trigger
                 // is dropped while a retry is pending, and that retry was most
                 // likely earned against the lb-bot that has just come back.
+                lbBotModeActions().applyFrame(msg);
+                // Worbus P2 (review I3): the frame restates `identity`; with it, an
+                // `lbbot_too_old` this user got (lb-bot restarting, R17/R20) is over.
+                setStore({ lbTooOld: tooOldFromLb(msg, useHubStore.getState().user) });
                 if (adoptLbBotFrame(msg)) onLbBotAvailable();
             } else if (msg.t === 'index') {
                 // lb-bot's library index moved. Like `fill`, NOT a library
                 // event: nothing is refetched and no cache is cleared — the
                 // local mirror pulls the delta and re-renders what reads it.
                 if (typeof msg.seq === 'number' && typeof msg.epoch === 'string') {
-                    onIndexFrame(msg.seq, msg.epoch);
-                    // An override set from another device re-keys the index, so
-                    // this frame is how it reaches us (I-019). Trailing and
-                    // throttled: bulk builds send a frame every ~2 s.
-                    refreshLbBotOverrides(3000);
+                    // Worbus P1: the frame carries the index build's countdown (absent = none).
+                    setStore({ lbProgress: parseProgress(msg.progress) });
+                    // A progress-only frame (the head did not move past what the mirror holds)
+                    // updates the bar alone: no mirror pull, no overrides re-read (Worbus for Android
+                    // ruling 9). lb-bot sends one every few seconds during a build.
+                    const frame = { epoch: msg.epoch, seq: msg.seq };
+                    if (!isProgressOnlyFrame(frame, indexMirrorCursor())) {
+                        onIndexFrame(msg.seq, msg.epoch);
+                        // An override set from another device re-keys the index, so
+                        // this frame is how it reaches us (I-019). Trailing and
+                        // throttled: bulk builds send a frame every ~2 s.
+                        refreshLbBotOverrides(3000);
+                    }
                 }
             } else if (msg.t === 'station') {
                 // I-040: a station's cursor, steering, character or exhaustion moved, maybe
@@ -1648,6 +1847,30 @@ export const useHub = () => {
             } else if (msg.t === 'do') {
                 if (msg.cmd === 'setVolume') applyVolume(msg.level);
                 else void runDirective(msg);
+            } else if (msg.t === 'user') {
+                // Worbus P2: the hub re-read this user's flags (a demotion, a promotion) and
+                // pushes them to every socket of theirs: the gates move in place. A frame this
+                // client cannot read changes nothing, rather than reading as "no user" (today's
+                // everything-shown).
+                const user = parseHubUser(msg.user);
+                if (user) setStore({ user });
+            } else if (msg.t === 'signedOut') {
+                // Worbus P2: main saw close 4005 (or `signed_out`), forgot the secret and stood
+                // down. One silent sign-in with the current server's account; failing that, the
+                // Server tab reads "Signed out of the Worbus Server".
+                setStore({ authOwed: true, authSignedIn: false, user: null });
+                void silentSignIn.signedOut();
+            } else if (msg.t === 'oldServer') {
+                // R24: main saw a 4001 answer a hello that carried the secret - a hub without
+                // sign-in (rolled back). The secret is gone; the Server tab says so and shows the
+                // token field for older servers.
+                setStore({
+                    authOwed: false,
+                    authSignedIn: false,
+                    signedOut: false,
+                    signInResult: { kind: 'oldServer' },
+                    user: null,
+                });
             } else if (msg.t === 'disconnected') {
                 // The main process lost the socket. Clear active/connected so
                 // isRemoteSessionActive() releases the player bar and the local
@@ -1696,6 +1919,10 @@ export const useHub = () => {
             } else if (msg.t === 'error') {
                 // Surface hub-side failures (bad token, target offline, …) — they
                 // were silent, so a wrong token just looked like "never connects".
+                if (msg.code === 'auth') setStore({ authRefused: true });
+                // Worbus P2: signed out is a state the Server tab shows, answered by a silent
+                // sign-in (the `signedOut` frame from main), not a failure to toast.
+                if (msg.code === 'signed_out') return;
                 toast.warn({ message: hubFailureMessage(msg) });
             }
         });
@@ -1824,7 +2051,7 @@ export const useHub = () => {
                             // hardPause forces the engine by flipping the store to
                             // PLAYING and back — against a track that loaded paused and
                             // is silent, which every adopt/transfer path now does, that
-                            // flip IS the blip (Navic force-stopped while playing,
+                            // flip IS the blip (Worbus for Android force-stopped while playing,
                             // 2026-09-30). A runaway shows as advancing progress within
                             // ~1 s, which is what audioIsRolling measures.
                             // B-058: ...and that nobody asked for since the load armed it.

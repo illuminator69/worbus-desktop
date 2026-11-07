@@ -1,7 +1,3 @@
-import clsx from 'clsx';
-
-import styles from './text-column.module.css';
-
 import {
     ColumnNullFallback,
     ColumnSkeletonVariable,
@@ -14,17 +10,8 @@ export const TextColumn = (props: ItemTableListInnerColumn) => {
     const row: string | undefined = (rowItem as any)?.[props.columns[props.columnIndex].id];
 
     if (typeof row === 'string' && row) {
-        return (
-            <TableColumnTextContainer
-                className={clsx(styles.textContainer, {
-                    [styles.compact]: props.size === 'compact',
-                    [styles.large]: props.size === 'large',
-                })}
-                {...props}
-            >
-                {row}
-            </TableColumnTextContainer>
-        );
+        // One line ending in an ellipsis, as every text cell (B-267): the shared container's rule.
+        return <TableColumnTextContainer {...props}>{row}</TableColumnTextContainer>;
     }
 
     if (row === null) {

@@ -6,6 +6,7 @@ export type Font = {
 };
 
 export const FONT_OPTIONS: Font[] = [
+    { label: 'Figtree', value: 'Figtree' },
     { label: 'Inter', value: 'Inter' },
     { label: 'Poppins', value: 'Poppins' },
 ];

@@ -1,18 +1,17 @@
 import { Client, SetActivity } from '@xhayper/discord-rpc';
 import { ipcMain } from 'electron';
 
-import log from '/@/main/logger';
+import { connectDiscord } from './application-id';
 
-const FEISHIN_DISCORD_APPLICATION_ID = '1165957668758900787';
+import log from '/@/main/logger';
 
 let client: Client | null = null;
 
 const createClient = async (clientId?: string) => {
-    client = new Client({
-        clientId: clientId || FEISHIN_DISCORD_APPLICATION_ID,
+    client = await connectDiscord(clientId, {
+        create: (id) => new Client({ clientId: id }),
+        log,
     });
-
-    await client.login();
 
     return client;
 };
@@ -47,8 +46,7 @@ const quit = () => {
 
 ipcMain.handle('discord-rpc-initialize', async (_event, clientId?: string) => {
     try {
-        await createClient(clientId);
-        log.info('Discord RPC initialized');
+        if (await createClient(clientId)) log.info('Discord RPC initialized');
     } catch (error) {
         log.error('Discord RPC initialize failed', error);
         throw error;

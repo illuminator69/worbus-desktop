@@ -585,6 +585,9 @@ const toRow = (entry: ActiveFill | ActiveGap, isGap: boolean): LedgerRow => ({
     verifyGaveUp: isGap ? false : ((entry as ActiveFill).verifyGaveUp ?? false),
 });
 
+/** One album fill as the ledger's row: what `describeFill` and the request box read (F7). */
+export const ledgerRowOf = (fill: ActiveFill): LedgerRow => toRow(fill, false);
+
 /**
  * The whole ledger, in flight first then most recent — which is what someone opening
  * the downloads view came to see. Empty whenever lb-bot is unconfigured, because

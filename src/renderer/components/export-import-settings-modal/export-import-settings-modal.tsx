@@ -4,9 +4,12 @@ import { ZodError } from 'zod';
 
 import { DiffVisualiser } from '/@/renderer/components/settings-diff-visualiser/settings-diff-visualiser';
 import {
+    keepCurrentSecrets,
     migrateSettings,
+    omitExportSecrets,
     type SettingsState,
     useSettingsForExport,
+    useSettingsStore,
     useSettingsStoreActions,
     ValidationSettingsStateSchema,
     VersionedSettings,
@@ -32,9 +35,14 @@ export const ExportImportSettingsModal = () => {
 
     const onItemSelected = useCallback((itemContents: string) => {
         const settingsFile = JSON.parse(itemContents) as VersionedSettings;
-        // eslint-disable-next-line @typescript-eslint/no-unused-vars -- Version needs to be omitted from the settings object
-        const { version, ...settings } = settingsFile;
-        const parsedResult = settings as SettingsState;
+        // An export carries no secrets (F1): where the file has none, keep what is set now.
+        const { version, ...settings } = keepCurrentSecrets(
+            settingsFile,
+            useSettingsStore.getState(),
+        );
+        // Apply the migrated copy, the one validateItemSelected checked: an old export must
+        // land with every later migration (Home's four rows, F5) and not as it was written.
+        const parsedResult = migrateSettings(settings as SettingsState, version || 0);
         setSettingsFile(parsedResult);
         setCurrentScreen(SCREENS.DIFF_VISUALS);
     }, []);
@@ -51,7 +59,10 @@ export const ExportImportSettingsModal = () => {
                 };
             }
 
-            const content = JSON.parse(itemContents);
+            const content = keepCurrentSecrets(
+                JSON.parse(itemContents),
+                useSettingsStore.getState(),
+            );
 
             const migratedSettings = migrateSettings(content, content?.version || 0);
             const validationRes = ValidationSettingsStateSchema.safeParse(migratedSettings);
@@ -100,7 +111,7 @@ export const ExportImportSettingsModal = () => {
             {currentScreen === SCREENS.DIFF_VISUALS ? (
                 <Stack>
                     <DiffVisualiser
-                        newSettings={selectedSettingsFile!}
+                        newSettings={omitExportSecrets(selectedSettingsFile!)}
                         originalSettings={settings}
                     />
                     <Text size="sm" ta="center">

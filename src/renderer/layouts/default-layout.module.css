@@ -1,23 +1,51 @@
 .layout {
+    /* The shell's three heights, named once; the stylesheets that size themselves against them read these. */
+    --window-bar-height: 0px;
+    --top-bar-height: 52px;
+    --player-bar-height: 90px;
+
+    /* A page's sticky title row (PageHeader); a pinned table header sits under it. */
+    --page-header-height: 65px;
+
+    /* The sidebar, the page and the queue panel are cards this far apart, with this radius. */
+    --panel-gap: 8px;
+    --panel-radius: 10px;
+
+    /* The main row, and the height of a card in it (the gap stays free under the cards). */
+    --main-row-height: calc(
+        100dvh - var(--window-bar-height) - var(--top-bar-height) - var(--player-bar-height)
+    );
+    --content-height: calc(var(--main-row-height) - var(--panel-gap));
+
     display: grid;
     grid-template-areas:
         'window-bar'
+        'top-bar'
         'main-content'
         'player';
-    grid-template-rows: 0 calc(100vh - 90px) 90px;
-    grid-template-rows: 0 calc(100dvh - 90px) 90px;
+    grid-template-rows:
+        var(--window-bar-height) var(--top-bar-height) var(--main-row-height)
+        var(--player-bar-height);
     grid-template-columns: 1fr;
     gap: 0;
     height: 100%;
     overflow: hidden;
+
+    /* The cover wash (window-wash.tsx) sits behind the grid, inside the layout's own stacking context. */
+    :root[data-cover-wash='true'] & {
+        position: relative;
+        isolation: isolate;
+    }
 }
 
-.windows {
-    grid-template-rows: 30px calc(100vh - 120px) 90px;
-    grid-template-rows: 30px calc(100dvh - 120px) 90px;
-}
-
+.windows,
 .macos {
-    grid-template-rows: 30px calc(100vh - 120px) 90px;
-    grid-template-rows: 30px calc(100dvh - 120px) 90px;
+    --window-bar-height: 30px;
+}
+
+/* Login and action-required: no top bar, no cards. */
+.shell {
+    --top-bar-height: 0px;
+    --panel-gap: 0px;
+    --panel-radius: 0px;
 }

@@ -1,10 +1,16 @@
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import styles from '../routes/lbbot-downloads-route.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
 import {
+    wishlistEmptyLine,
+    wishlistRowLines,
+} from '/@/renderer/features/lbbot/components/wishlist-copy';
+import {
     caaCoverUrl,
+    useLbBotDownloadsShown,
     useLbBotWishlist,
     useWishlistActions,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
@@ -35,11 +41,16 @@ import { LibraryItem } from '/@/shared/types/domain-types';
  * Which is also why there is no "retry now" button here: pressing it would run
  * exactly the search that already failed. The waiting is the mechanism.
  *
- * It is a section of the Downloads page (a chip beside the ledger's), as on
- * Navic; it used to be a page of its own reached from a text link there.
+ * It is a page of its own in the sidebar (Worbus P1, F3), and still a section of
+ * the Downloads page (a chip beside the ledger's) while downloading is on.
+ *
+ * Worbus P1: while downloading is off lb-bot does not search, so a row says the
+ * album is kept for later, with no attempts and no reason (`wishlist-copy.ts`).
  */
 export const WishlistList = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
+    const downloadsShown = useLbBotDownloadsShown();
     const { data, isError, isLoading } = useLbBotWishlist();
     const { remove } = useWishlistActions();
     const entries = data?.entries ?? [];
@@ -63,78 +74,74 @@ export const WishlistList = () => {
 
     // A failed read is not an empty wishlist: say which it is.
     if (isError && !data) {
-        return <Text isMuted>Could not read the wishlist from lb-bot.</Text>;
+        return <Text isMuted>{t('naviConnect.wishlist.readFailed')}</Text>;
     }
 
     if (entries.length === 0) {
-        return (
-            <Text isMuted>
-                Nothing on the wishlist. When a download fails because nobody is sharing an album,
-                you can put it here and lb-bot will keep looking
-                {everyHours ? ` every ${everyHours} hours.` : ' periodically.'}
-            </Text>
-        );
+        const empty = wishlistEmptyLine(downloadsShown, everyHours);
+        return <Text isMuted>{t(empty.key, empty.values)}</Text>;
     }
 
     return (
         <Stack gap="sm">
-            {entries.map((entry) => (
-                <div className={styles.row} key={entry.rgid}>
-                    <ItemImage
-                        className={styles.image}
-                        containerClassName={styles.cover}
-                        itemType={LibraryItem.ALBUM}
-                        src={caaCoverUrl(entry.rgid)}
-                        type="table"
-                    />
-                    <Stack className={styles.body} gap="0.15rem">
-                        <Text isNoSelect lineClamp={1}>
-                            {entry.title || entry.rgid}
-                        </Text>
-                        <Text isMuted size="sm">
-                            {entry.artist}
-                        </Text>
-                        {/* How often it has looked, which is the only evidence
+            {entries.map((entry) => {
+                const lines = wishlistRowLines(downloadsShown, entry);
+                return (
+                    <div className={styles.row} key={entry.rgid}>
+                        <ItemImage
+                            className={styles.image}
+                            containerClassName={styles.cover}
+                            itemType={LibraryItem.ALBUM}
+                            src={caaCoverUrl(entry.rgid)}
+                            type="table"
+                        />
+                        <Stack className={styles.body} gap="0.15rem">
+                            <Text isNoSelect lineClamp={1}>
+                                {entry.title || entry.rgid}
+                            </Text>
+                            <Text isMuted size="sm">
+                                {entry.artist}
+                            </Text>
+                            {/* How often it has looked, which is the only evidence
                             the user has that waiting is doing anything. There is
                             deliberately no "found it" state: a landing DELETES
                             the row and fires /lb/notify, so an album that arrives
                             simply leaves this list. */}
-                        <Text isMuted size="sm">
-                            {entry.attempts > 0
-                                ? `Still looking - ${entry.attempts} ${entry.attempts === 1 ? 'search' : 'searches'} so far`
-                                : 'Waiting for the first re-search'}
-                        </Text>
-                        {/* lb-bot's own sentence about the last attempt,
+                            <Text isMuted size="sm">
+                                {t(lines.status.key, lines.status.values)}
+                            </Text>
+                            {/* lb-bot's own sentence about the last attempt,
                             verbatim - the same rule the downloads ledger follows,
                             and for the same reason: it carries evidence no label
                             can. */}
-                        {entry.lastReason && (
-                            <Text isMuted lineClamp={2} size="sm">
-                                {entry.lastReason}
-                            </Text>
-                        )}
-                    </Stack>
-                    <Group gap="xs" wrap="nowrap">
-                        <Button
-                            onClick={() =>
-                                navigate(
-                                    externalAlbumPathFor({
-                                        artist: entry.artist,
-                                        rgid: entry.rgid,
-                                        title: entry.title,
-                                    }),
-                                )
-                            }
-                            variant="subtle"
-                        >
-                            Open
-                        </Button>
-                        <Button onClick={() => void remove(entry.rgid)} variant="subtle">
-                            Remove
-                        </Button>
-                    </Group>
-                </div>
-            ))}
+                            {lines.reason && (
+                                <Text isMuted lineClamp={2} size="sm">
+                                    {lines.reason}
+                                </Text>
+                            )}
+                        </Stack>
+                        <Group gap="xs" wrap="nowrap">
+                            <Button
+                                onClick={() =>
+                                    navigate(
+                                        externalAlbumPathFor({
+                                            artist: entry.artist,
+                                            rgid: entry.rgid,
+                                            title: entry.title,
+                                        }),
+                                    )
+                                }
+                                variant="subtle"
+                            >
+                                {t('naviConnect.wishlist.open')}
+                            </Button>
+                            <Button onClick={() => void remove(entry.rgid)} variant="subtle">
+                                {t('naviConnect.wishlist.remove')}
+                            </Button>
+                        </Group>
+                    </div>
+                );
+            })}
         </Stack>
     );
 };

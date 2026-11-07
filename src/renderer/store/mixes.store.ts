@@ -55,7 +55,7 @@ export interface Mix {
     lastPlayedAt: number;
     /**
      * The tuning preset for an `adaptive` mix, in the hub's vocabulary
-     * (`EchoMatch` / `SteadyVibes` / `TransitionMaestro`) rather than Feishin's
+     * (`EchoMatch` / `SteadyVibes` / `TransitionMaestro`) rather than Worbus for desktop's
      * own (`echo` / `steady` / `transition`). The two clients already disagree
      * about these ids — that drift is the cautionary tale in the Discover
      * catalogue — so the wire form is fixed here and translated at the engine
@@ -69,16 +69,23 @@ export interface Mix {
      *  (Navidrome's genre id in a recipe from before B-151), and nothing at all for
      *  `fingerprint`, which is seeded from listening history. */
     seedId: string;
+    /**
+     * A custom radio's artists (P5, PROTOCOL §17.1), in pick order; `seedId` is the first, so a
+     * client that predates this plays that artist's radio. Empty on every other recipe.
+     */
+    seedIds: string[];
     /** What to call the seed on screen. Stored rather than resolved, so a mix
      *  reads correctly without a round trip — and still reads correctly after the
      *  seed has been deleted from the library. */
     seedName: string;
     updatedAt: number;
+    /** A custom radio's Artist variety (`low` / `medium` / `high`); empty: the character's own. */
+    variety: string;
 }
 
 /**
  * Which engine regenerates the mix. Matches the hub's stored `kind` string
- * exactly and must stay in step with Navic's — see `navi-connect/CLAUDE.md` §6
+ * exactly and must stay in step with Worbus for Android's — see `navi-connect/CLAUDE.md` §6
  * for why a hand-mirrored table is the only kind of "shared" these two repos
  * have.
  */
@@ -126,7 +133,7 @@ const num = (value: unknown): number => (typeof value === 'number' && isFinite(v
  *
  * An unrecognised `kind` is **carried through unchanged**, not coerced and not
  * dropped. This client ships independently of the other one, so "a mix made on a
- * newer Navic" is a permanent condition: the row is shown, named, renameable and
+ * newer Worbus for Android" is a permanent condition: the row is shown, named, renameable and
  * deletable, and only *playing* it is refused — with a reason. See
  * {@link isKnownMixKind}.
  */
@@ -144,8 +151,18 @@ export const mixFromHub = (record: any): Mix | null => {
         moodCharacter: str(record?.moodCharacter),
         name: str(record?.name) || 'Your Mix',
         seedId: str(record?.seedId),
+        seedIds: Array.isArray(record?.seedIds)
+            ? [
+                  ...new Set<string>(
+                      record.seedIds.filter(
+                          (v: unknown): v is string => typeof v === 'string' && v !== '',
+                      ),
+                  ),
+              ]
+            : [],
         seedName: str(record?.seedName),
         updatedAt: num(record?.updatedAt),
+        variety: str(record?.variety),
     };
 };
 

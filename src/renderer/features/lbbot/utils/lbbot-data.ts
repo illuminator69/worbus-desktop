@@ -218,13 +218,15 @@ export const syncReport = (
 };
 
 /** Whether an About body holds anything to show. `found` is not content: lb-bot
- *  always sends it, and `found: false` with nothing else is an empty answer. */
+ *  always sends it, and `found: false` with nothing else is an empty answer. Worbus
+ *  P1: Find it links are content (a missing album's only section may be them). */
 export const metaHasContent = (
     meta:
         | null
         | undefined
         | {
               credits?: readonly unknown[];
+              findIt?: readonly unknown[];
               links?: readonly unknown[];
               paragraphs?: readonly unknown[];
               relations?: { members?: readonly unknown[]; related?: readonly unknown[] };
@@ -238,6 +240,7 @@ export const metaHasContent = (
         meta.wikidataDescription ||
         meta.paragraphs?.length ||
         meta.links?.length ||
+        meta.findIt?.length ||
         meta.credits?.length ||
         meta.relations?.members?.length ||
         meta.relations?.related?.length

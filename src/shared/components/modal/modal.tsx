@@ -11,8 +11,6 @@ import React, { ReactNode } from 'react';
 
 import styles from './modal.module.css';
 
-import { modalTransitionProps } from '/@/shared/components/animations/motion-tokens';
-import { useExpressiveMotion } from '/@/shared/components/animations/use-expressive-motion';
 import { Button } from '/@/shared/components/button/button';
 import { Flex } from '/@/shared/components/flex/flex';
 import { Group } from '/@/shared/components/group/group';
@@ -36,8 +34,6 @@ export interface ModalProps extends Omit<MantineModalProps, 'onClose'> {
 }
 
 export const Modal = ({ children, classNames, handlers, ...rest }: ModalProps) => {
-    const expressiveMotion = useExpressiveMotion();
-
     return (
         <MantineModal
             {...rest}
@@ -63,7 +59,7 @@ export const Modal = ({ children, classNames, handlers, ...rest }: ModalProps) =
             }}
             radius="md"
             scrollAreaComponent={ScrollArea}
-            transitionProps={modalTransitionProps(expressiveMotion)}
+            transitionProps={{ duration: 300, exitDuration: 300, transition: 'fade' }}
         >
             {children}
         </MantineModal>
@@ -135,8 +131,6 @@ export const ConfirmModal = ({
 export interface ModalsProviderProps extends MantineModalsProviderProps {}
 
 export const ModalsProvider = ({ children, ...rest }: ModalsProviderProps) => {
-    const expressiveMotion = useExpressiveMotion();
-
     return (
         <MantineModalsProvider
             modalProps={{
@@ -160,7 +154,7 @@ export const ModalsProvider = ({ children, ...rest }: ModalsProviderProps) => {
                 },
                 radius: 'xl',
                 scrollAreaComponent: ScrollArea,
-                transitionProps: modalTransitionProps(expressiveMotion),
+                transitionProps: { duration: 300, exitDuration: 300, transition: 'fade' },
             }}
             {...rest}
         >

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AlbumMatchRow, ArtistOverrideRow, MergedRow, ToCheckRow } from '../components/match-rows';
 
+import { RoleGatedRoute } from '/@/renderer/features/hub/components/role-gated-route';
 import {
     useAlbumOverrideControls,
     useLbBotAvailable,
@@ -49,6 +50,7 @@ import { Text } from '/@/shared/components/text/text';
 const LibraryMatchesRoute = () => {
     const { t } = useTranslation();
     const available = useLbBotAvailable();
+    // Worbus P2: an admin's page; the route gate (below) keeps a non-admin off it.
     const overridesSupported = useOverridesSupported();
     const controls = useOverrideControls();
     const older = useOverridesOlder();
@@ -213,7 +215,10 @@ const LibraryMatchesRoute = () => {
 const LibraryMatchesRouteWithBoundary = () => (
     <PageErrorBoundary>
         <Suspense fallback={<Spinner container />}>
-            <LibraryMatchesRoute />
+            {/* Worbus P2 (walk B7): absent for a non-admin, as its sidebar entry is. */}
+            <RoleGatedRoute gate="libraryMatches">
+                <LibraryMatchesRoute />
+            </RoleGatedRoute>
         </Suspense>
     </PageErrorBoundary>
 );

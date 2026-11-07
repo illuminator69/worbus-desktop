@@ -13,7 +13,9 @@ import {
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { useIsActiveRow } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { JoinedArtists } from '/@/renderer/features/albums/components/joined-artists';
+import { useRemoteRowArtists } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { PlayButton } from '/@/renderer/features/shared/components/play-button';
 import {
     LONG_PRESS_PLAY_BEHAVIOR,
@@ -25,6 +27,14 @@ import { Icon } from '/@/shared/components/icon/icon';
 import { Text } from '/@/shared/components/text/text';
 import { Folder, LibraryItem, QueueSong } from '/@/shared/types/domain-types';
 import { Play } from '/@/shared/types/types';
+
+/**
+ * A click on an artist's name opens the artist and nothing else: it must not also select the row
+ * (the cell's click handler) or, as the second click of a pair, play it.
+ */
+const stopLinkClick = (event: React.MouseEvent<HTMLElement>) => {
+    if ((event.target as HTMLElement).closest('a')) event.stopPropagation();
+};
 
 export const DefaultTitleCombinedColumn = (props: ItemTableListInnerColumn) => {
     const rowItem = props.getRowItem?.(props.rowIndex) ?? (props.data as any[])[props.rowIndex];
@@ -158,6 +168,7 @@ export const DefaultTitleCombinedColumn = (props: ItemTableListInnerColumn) => {
                             [styles.large]: props.size === 'large',
                         })}
                         isNoSelect
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                         size="md"
                         truncate
                         {...titleLinkProps}
@@ -165,7 +176,10 @@ export const DefaultTitleCombinedColumn = (props: ItemTableListInnerColumn) => {
                         <ExplicitIndicator explicitStatus={item?.explicitStatus} />
                         {item.name as string}
                     </Text>
-                    <div className={styles.artists}>
+                    <div
+                        className={styles.artists}
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
+                    >
                         <JoinedArtists
                             artistName={item.albumArtist}
                             artists={item.albumArtists}
@@ -200,6 +214,7 @@ export const QueueSongTitleCombinedColumn = (props: ItemTableListInnerColumn) =>
     const playButtonBehavior = usePlayButtonBehavior();
     const [isHovered, setIsHovered] = useState(false);
     const isActive = useIsActiveRow(song?.id, song?._uniqueId);
+    const rowArtists = useRemoteRowArtists(song);
 
     const handlePlay = (playType: Play, event: React.MouseEvent<HTMLButtonElement>) => {
         if (!item) {
@@ -328,6 +343,7 @@ export const QueueSongTitleCombinedColumn = (props: ItemTableListInnerColumn) =>
                             [styles.title]: true,
                         })}
                         isNoSelect
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                         size="md"
                         truncate
                         {...titleLinkProps}
@@ -346,10 +362,14 @@ export const QueueSongTitleCombinedColumn = (props: ItemTableListInnerColumn) =>
                             </span>
                         )}
                     </Text>
-                    <div className={styles.artists}>
+                    <div
+                        className={styles.artists}
+                        onClick={stopLinkClick}
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
+                    >
                         <JoinedArtists
                             artistName={item.artistName}
-                            artists={item.artists}
+                            artists={rowArtists}
                             linkProps={{ fw: 400, isMuted: true }}
                             rootTextProps={{
                                 className: styles.artists,
@@ -392,6 +412,7 @@ export const QueueSongTitleCombinedColumn = (props: ItemTableListInnerColumn) =>
                 <Text
                     className={styles.title}
                     isNoSelect
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                     size="md"
                     truncate
                     {...titleLinkProps}

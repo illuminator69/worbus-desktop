@@ -1,12 +1,12 @@
 import { useInView } from 'motion/react';
 import { RefObject, useEffect, useMemo, useRef } from 'react';
 
-import { useWindowSettings } from '/@/renderer/store/settings.store';
-import { Platform } from '/@/shared/types/types';
+import { useShellPinnedTop } from '/@/renderer/components/item-list/item-table-list/hooks/use-shell-pinned-top';
 
 export const useStickyTableHeader = ({
     containerRef,
     enabled,
+    headerHeight,
     headerRef,
     mainGridRef,
     pinnedLeftColumnRef,
@@ -15,13 +15,13 @@ export const useStickyTableHeader = ({
 }: {
     containerRef: RefObject<HTMLDivElement | null>;
     enabled: boolean;
+    headerHeight: number;
     headerRef: RefObject<HTMLDivElement | null>;
     mainGridRef?: RefObject<HTMLDivElement | null>;
     pinnedLeftColumnRef?: RefObject<HTMLDivElement | null>;
     pinnedRightColumnRef?: RefObject<HTMLDivElement | null>;
     stickyHeaderMainRef?: RefObject<HTMLDivElement | null>;
 }) => {
-    const { windowBarStyle } = useWindowSettings();
     const isScrollingRef = useRef({
         main: false,
         pinnedLeft: false,
@@ -29,10 +29,11 @@ export const useStickyTableHeader = ({
         stickyHeader: false,
     });
 
-    const topMargin =
-        windowBarStyle === Platform.WINDOWS || windowBarStyle === Platform.MACOS
-            ? '-130px'
-            : '-100px';
+    // The header pins at the bottom of the page's sticky title row (L5-01: it used fixed offsets
+    // from before the top bar). The table's own header counts as out of view once its top has
+    // passed that line, so the pinned copy takes over exactly where the real one was.
+    const stickyTop = useShellPinnedTop(containerRef);
+    const topMargin = `${-(stickyTop + headerHeight)}px` as const;
 
     const isTableHeaderInView = useInView(headerRef, {
         margin: `${topMargin} 0px 0px 0px`,
@@ -45,10 +46,6 @@ export const useStickyTableHeader = ({
     const shouldShowStickyHeader = useMemo(() => {
         return enabled && !isTableHeaderInView && isTableInView;
     }, [enabled, isTableHeaderInView, isTableInView]);
-
-    const stickyTop = useMemo(() => {
-        return windowBarStyle === Platform.WINDOWS || windowBarStyle === Platform.MACOS ? 95 : 65;
-    }, [windowBarStyle]);
 
     // Sync scroll between sticky header and main grid/pinned columns
     useEffect(() => {

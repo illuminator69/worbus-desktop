@@ -2,6 +2,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import styles from '/@/renderer/components/item-list/item-table-list/item-table-list-column.module.css';
 import { ItemListItem } from '/@/renderer/components/item-list/types';
 import { useIsMutatingRating } from '/@/renderer/features/shared/mutations/set-rating-mutation';
 import { Rating } from '/@/shared/components/rating/rating';
@@ -14,8 +15,9 @@ export const RatingColumn = (props: ItemTableListInnerColumn) => {
 
     if (typeof row === 'number' || row === null) {
         return (
-            <TableColumnContainer {...props}>
+            <TableColumnContainer {...props} className={styles.ratingCell}>
                 <Rating
+                    busy={isMutatingRating}
                     className={row ? undefined : 'hover-only-flex'}
                     onChange={(rating) => {
                         const item = rowItem as ItemListItem;
@@ -30,7 +32,6 @@ export const RatingColumn = (props: ItemTableListInnerColumn) => {
                             rating,
                         });
                     }}
-                    readOnly={isMutatingRating}
                     size="xs"
                     value={row || 0}
                 />

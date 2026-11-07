@@ -46,6 +46,7 @@ export enum NDSongListSort {
     ALBUM_ARTIST = 'order_album_artist_name',
     ALBUM_SONGS = 'album',
     ARTIST = 'artist',
+    BIT_RATE = 'bitRate',
     BPM = 'bpm',
     CHANNELS = 'channels',
     COMMENT = 'comment',

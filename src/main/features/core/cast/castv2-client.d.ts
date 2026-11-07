@@ -27,7 +27,12 @@ declare module 'castv2-client' {
         on(event: 'error', listener: (err: Error) => void): void;
         // 'status' fires for every RECEIVER_STATUS the device broadcasts to its senders: its
         // volume changed (from anywhere), or an application started or stopped.
-        on(event: 'status', listener: (status?: { volume?: unknown }) => void): void;
+        // `applications` lists the receiver apps running, each with its `sessionId` (Worbus P2:
+        // the bridge's own app session missing from it means another sender took the speaker).
+        on(
+            event: 'status',
+            listener: (status?: { applications?: CastSession[]; volume?: unknown }) => void,
+        ): void;
         // The callback's second argument is `status.volume` of the RECEIVER_STATUS that
         // answered: the volume the receiver is at after the command.
         setVolume(
@@ -40,6 +45,8 @@ declare module 'castv2-client' {
         currentTime?: number;
         idleReason?: string;
         media?: { contentId?: string; duration?: number };
+        // Which media session the status is about; a LOAD from any sender starts a new one.
+        mediaSessionId?: number;
         playerState?: string;
     }
 

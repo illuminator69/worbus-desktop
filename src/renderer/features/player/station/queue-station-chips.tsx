@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import styles from './queue-station-chips.module.css';
 
+import { SidewaysRow } from '/@/renderer/components/sideways-row/sideways-row';
 import {
     ChipId,
     chipLine,
@@ -27,8 +28,9 @@ import { Tooltip } from '/@/shared/components/tooltip/tooltip';
  * Under the row, one line says what built the queue ("Moon Song radio · Balanced", "Auto DJ")
  * and what happens next, cut with an ellipsis and whole in its tooltip (B-146: as a badge in the
  * toolbar a long radio name made the side queue scroll sideways). The row scrolls inside
- * itself, and the line is always there, so it coming and going never moves the queue. It is
- * text only: no coloured dot before it (B-152).
+ * itself (`SidewaysRow`, the wheel included: it sits in the queue's fixed head, B-285), and the
+ * line is always there, so it coming and going never moves the queue. It is text only: no
+ * coloured dot before it (B-152).
  */
 export const QueueStationChips = () => {
     const { t } = useTranslation();
@@ -65,7 +67,7 @@ export const QueueStationChips = () => {
 
     return (
         <div className={styles.root}>
-            <div className={styles.row} role="radiogroup">
+            <SidewaysRow className={styles.row} role="radiogroup" wheel="chrome">
                 {chipsFor(words.mode).map((chip) => {
                     const description = descriptionOf(chip);
                     return (
@@ -88,7 +90,7 @@ export const QueueStationChips = () => {
                         </Button>
                     );
                 })}
-            </div>
+            </SidewaysRow>
             <div className={styles.line}>
                 {line && (
                     <Tooltip label={line} multiline openDelay={300} w={320}>

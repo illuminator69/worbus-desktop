@@ -30,9 +30,12 @@ export const TranscodeSettings = memo(() => {
                     }}
                 />
             ),
-            description: t('setting.transcode', {
-                context: 'description',
-            }),
+            description:
+                t('setting.transcode', {
+                    context: 'description',
+                }) +
+                ' ' +
+                t('setting.transcodeThisComputer'),
             note,
             title: t('setting.transcode'),
         },

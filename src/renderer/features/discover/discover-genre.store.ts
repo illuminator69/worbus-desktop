@@ -5,7 +5,7 @@ import { create } from 'zustand';
  *
  * **One genre for both rows, deliberately.** Charts and Editorial are two views
  * of one source; letting them sit on different genres would put two chart-shaped
- * rows on screen with nothing saying which was which. Navic reached the same
+ * rows on screen with nothing saying which was which. Worbus for Android reached the same
  * conclusion with one chip row above both.
  *
  * Not persisted, unlike `fresh-filters.store`. A genre is a question you have

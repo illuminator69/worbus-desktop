@@ -1,0 +1,26 @@
+/* The search results (F5): every tab's sections, the ones with a match, under "Tab › Section"
+   headings. A tab or the whole list with no section drawn shows nothing but the empty line. */
+
+.results [role='separator'] {
+    display: none;
+}
+
+.tab:not(:has([data-settings-section])) {
+    display: none;
+}
+
+.empty {
+    display: none;
+}
+
+.results:not(:has([data-settings-section])) .empty {
+    display: block;
+}
+
+.result-heading {
+    cursor: pointer;
+}
+
+.result-heading:hover {
+    text-decoration: underline;
+}

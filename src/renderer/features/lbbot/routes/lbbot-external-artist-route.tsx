@@ -1,28 +1,23 @@
-import { Suspense } from 'react';
+import { CSSProperties, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';
 
-import styles from './lbbot-fresh-route.module.css';
-
-import { useArtistAlbumsGrouped } from '/@/renderer/features/artists/hooks/use-artist-albums-grouped';
+import columns from '/@/renderer/features/discography/components/artist-columns.module.css';
+import { Discography } from '/@/renderer/features/discography/components/discography';
+import { SimilarArtistList } from '/@/renderer/features/discography/components/similar-artist-list';
 import { LbBotIndexButton } from '/@/renderer/features/lbbot/components/lbbot-index-button';
 import { MetaAbout } from '/@/renderer/features/lbbot/components/meta-about';
-import { MissingAlbumTile } from '/@/renderer/features/lbbot/components/missing-album-tile';
 import {
     useLbBotArtistMeta,
     useLbBotAvailable,
     useLbBotDiscography,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
-import { ForkCardGrid } from '/@/renderer/features/shared/components/fork-card-grid';
 import { ForkDetailPage } from '/@/renderer/features/shared/components/fork-detail-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
 import { AppRoute } from '/@/renderer/router/routes';
-import { Badge } from '/@/shared/components/badge/badge';
-import { Group } from '/@/shared/components/group/group';
 import { Spinner } from '/@/shared/components/spinner/spinner';
-import { Stack } from '/@/shared/components/stack/stack';
-import { TextTitle } from '/@/shared/components/text-title/text-title';
 import { Text } from '/@/shared/components/text/text';
-import { Album, LibraryItem } from '/@/shared/types/domain-types';
+import { LibraryItem } from '/@/shared/types/domain-types';
 
 /**
  * navi-connect: an artist page for someone the library has nothing by.
@@ -31,18 +26,15 @@ import { Album, LibraryItem } from '/@/shared/types/domain-types';
  * understands — `api_artist_discography` treats an `mb:`-prefixed `nd_id` as
  * external, skips the library match, and classifies everything `missing`.
  *
- * Grouped by release type through the **same** hook the owned artist page uses, so
- * the two groupings cannot drift apart: an unowned artist's Albums section is
- * built by the rule that builds an owned one's.
+ * The discography is the **same** component the owned artist page renders (F7),
+ * over the same model, so the two pages' kinds cannot drift apart.
  */
-
-// Module-level so the grouping memo isn't invalidated by a fresh [] every render.
-const NO_ALBUMS: Album[] = [];
 
 const LbBotExternalArtistRoute = () => {
     const { artistMbid } = useParams() as { artistMbid: string };
     const [search] = useSearchParams();
 
+    const { t } = useTranslation();
     const ndId = `mb:${artistMbid}`;
     const available = useLbBotAvailable();
     // From the local index mirror when lb-bot has indexed this artist — looked up
@@ -66,39 +58,35 @@ const LbBotExternalArtistRoute = () => {
     // Nothing here can flash: there is no competing text to arrive first.
     const meta = useLbBotArtistMeta(artistMbid, artistName).data;
 
-    const { releaseTypeEntries } = useArtistAlbumsGrouped(
-        NO_ALBUMS,
-        ndId,
-        discography.data?.releases ?? [],
-    );
-
-    const indexed = discography.data?.indexed === true;
-    const releaseCount = discography.data?.releases.length ?? 0;
+    const releaseCount = discography.data?.indexed ? discography.data.releases.length : null;
+    const links = [
+        ...(meta?.links ?? []).filter((link) => !/musicbrainz\.org/.test(link.url)),
+        {
+            label: 'MusicBrainz',
+            type: 'musicbrainz',
+            url: `https://musicbrainz.org/artist/${artistMbid}`,
+        },
+    ];
 
     return (
         <ForkDetailPage
             headerChildren={
-                <Stack gap="sm">
-                    <Text isMuted>
-                        Not in your library. This discography comes from MusicBrainz via lb-bot.
+                // Only what the page knows: the count lb-bot's index holds (no type or years are
+                // carried for an artist, so none are drawn).
+                releaseCount !== null ? (
+                    <Text className={columns.heroMeta} isMuted>
+                        {t('naviConnect.artistPage.releasesFromMusicBrainz', {
+                            count: releaseCount,
+                        })}
                     </Text>
-                    <Group gap="sm">
-                        <Badge>Not in your library</Badge>
-                        <LbBotIndexButton
-                            artistMbid={artistMbid}
-                            artistName={artistName}
-                            discography={discography.data}
-                            ndId={ndId}
-                        />
-                    </Group>
-                </Stack>
+                ) : undefined
             }
             itemType={LibraryItem.ALBUM_ARTIST}
+            kicker={t('naviConnect.artistPage.kickerNotOwned')}
+            plain
             route={AppRoute.LIBRARY_ALBUM_ARTISTS}
             title={artistName || 'Artist'}
         >
-            {meta && <MetaAbout meta={meta} />}
-
             {/* Not while the mirror is answering: a discography
                 already on screen is the one thing this sentence
                 would contradict. */}
@@ -111,46 +99,67 @@ const LbBotExternalArtistRoute = () => {
 
             {loading && <Spinner container />}
 
-            {!loading && discography.data && !indexed && (
-                <Text isMuted>
-                    lb-bot hasn&apos;t scanned this artist yet. &quot;Find missing albums&quot;
-                    walks MusicBrainz at one request a second, so a long discography takes a minute.
-                </Text>
-            )}
-
-            {!loading && indexed && releaseCount === 0 && (
-                <Text isMuted>
-                    lb-bot scanned this artist and found no releases. A rescan is idempotent if that
-                    looks wrong.
-                </Text>
-            )}
-
-            {releaseTypeEntries.map((entry) =>
-                entry.missing.length === 0 ? null : (
-                    <Stack gap="md" key={entry.releaseType}>
-                        {/* The artist page's section heading: a title, its count, a rule. */}
-                        <div className={styles.bucket}>
-                            <Group>
-                                <TextTitle fw={700} order={3}>
-                                    {entry.displayName}
-                                </TextTitle>
-                                <Badge>{entry.missing.length}</Badge>
-                            </Group>
-                            <div className={styles.bucketRule} />
+            {/* F7: the owned page's two columns. One column below 960 px: About first, as before. */}
+            <div className={columns.layout} data-main="true">
+                <div className={columns.main}>
+                    {available || discography.data ? (
+                        <div
+                            className={columns.item}
+                            style={{ '--order-narrow': 2 } as CSSProperties}
+                        >
+                            <Discography
+                                artistMbid={artistMbid}
+                                artistName={artistName}
+                                menu={
+                                    <LbBotIndexButton
+                                        artistMbid={artistMbid}
+                                        artistName={artistName}
+                                        discography={discography.data}
+                                        ndId={ndId}
+                                    />
+                                }
+                                ndId={ndId}
+                                owned={null}
+                            />
                         </div>
-                        <ForkCardGrid>
-                            {entry.missing.map((release) => (
-                                <MissingAlbumTile
-                                    artistName={artistName}
-                                    key={release.rgid}
-                                    ndArtistId={ndId}
-                                    release={release}
-                                />
+                    ) : null}
+                </div>
+                <div className={columns.side}>
+                    {meta && (
+                        <section
+                            className={columns.item}
+                            style={{ '--order-narrow': 1 } as CSSProperties}
+                        >
+                            <h2 className={columns.sideLabel}>
+                                {t('naviConnect.artistPage.about')}
+                            </h2>
+                            <MetaAbout meta={meta} showLinks={false} />
+                        </section>
+                    )}
+                    <div className={columns.item} style={{ '--order-narrow': 3 } as CSSProperties}>
+                        <SimilarArtistList mbid={artistMbid} name={artistName} />
+                    </div>
+                    <section
+                        className={columns.item}
+                        style={{ '--order-narrow': 4 } as CSSProperties}
+                    >
+                        <h2 className={columns.sideLabel}>{t('naviConnect.artistPage.links')}</h2>
+                        <div className={columns.links}>
+                            {links.map((link) => (
+                                <a
+                                    className={columns.link}
+                                    href={link.url}
+                                    key={link.url}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                >
+                                    {link.label}
+                                </a>
                             ))}
-                        </ForkCardGrid>
-                    </Stack>
-                ),
-            )}
+                        </div>
+                    </section>
+                </div>
+            </div>
         </ForkDetailPage>
     );
 };

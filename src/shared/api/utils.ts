@@ -176,6 +176,14 @@ export const sortSongList = (songs: Song[], sortBy: SongListSort, sortOrder: Sor
             );
             break;
 
+        case SongListSort.BIT_RATE:
+            results = orderBy(
+                results,
+                ['bitRate', (v) => v.album?.toLowerCase(), 'discNumber', 'trackNumber'],
+                [order, order, order, order],
+            );
+            break;
+
         case SongListSort.BPM:
             results = orderBy(
                 results,

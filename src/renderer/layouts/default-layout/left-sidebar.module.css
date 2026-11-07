@@ -1,6 +1,9 @@
 .container {
     position: relative;
     grid-area: sidebar;
+    min-height: 0;
+    margin-right: var(--panel-gap, 0);
+    overflow: hidden;
     background: var(--theme-colors-background-alternate);
-    border-right: 1px solid alpha(var(--theme-colors-border), 0.5);
+    border-radius: var(--panel-radius, 0);
 }

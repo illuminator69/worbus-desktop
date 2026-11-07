@@ -1,0 +1,116 @@
+/*
+ * An artist page's body (board ArtistOwned `.two`): from a content width of 960 px, the discography
+ * on the left and the page's other sections in a 300 px column on the right, both scrolling with the
+ * page. Narrower, the two columns dissolve (`display: contents`) and every section falls back into one
+ * column in its narrow order, which is the page's order before F7.
+ */
+.layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--theme-spacing-2xl);
+    min-width: 0;
+}
+
+.main,
+.side {
+    display: contents;
+}
+
+.item {
+    order: var(--order-narrow, 0);
+    min-width: 0;
+}
+
+@container (width >= 960px) {
+    .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 300px;
+        gap: 32px;
+        align-items: start;
+    }
+
+    .main,
+    .side {
+        display: flex;
+        flex-direction: column;
+        gap: var(--theme-spacing-2xl);
+        min-width: 0;
+    }
+
+    .item {
+        order: var(--order-wide, var(--order-narrow, 0));
+    }
+
+    /* No discography: the side column takes the width. */
+    .layout[data-main='false'] {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* A side-column section's label (board `.lbl`) and its rows. */
+.side-label {
+    margin: 0 0 6px;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--theme-colors-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.artist-row {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 50px;
+    padding: 0 6px;
+    color: var(--theme-colors-foreground);
+    text-decoration: none;
+    border-radius: 8px;
+
+    &:hover {
+        background: var(--theme-colors-surface);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.artist-cover {
+    width: 36px;
+    height: 36px;
+    overflow: hidden;
+    border-radius: 50%;
+}
+
+.artist-tint {
+    background: linear-gradient(135deg, hsl(var(--tint-a) 32% 40%), hsl(var(--tint-b) 32% 24%));
+}
+
+.artist-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 13.5px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+}
+
+.link {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--theme-colors-primary);
+    text-decoration: none;
+}
+
+.hero-meta {
+    margin-top: 4px;
+    font-size: 13.5px;
+}

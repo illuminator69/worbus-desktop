@@ -1,8 +1,8 @@
 import { useInView } from 'motion/react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { useWindowSettings } from '/@/renderer/store/settings.store';
-import { Platform } from '/@/shared/types/types';
+import { useShellPinnedTop } from '/@/renderer/components/item-list/item-table-list/hooks/use-shell-pinned-top';
+import { pinnedRowTops } from '/@/renderer/components/item-list/item-table-list/utils/shell-pinned-top';
 
 export interface GroupRowInfo {
     groupIndex: number;
@@ -28,26 +28,26 @@ export const useStickyTableGroupRows = ({
     shouldShowStickyHeader?: boolean;
     stickyHeaderTop?: number;
 }) => {
-    const { windowBarStyle } = useWindowSettings();
     const [stickyGroupIndex, setStickyGroupIndex] = useState<null | number>(null);
 
-    const topMargin =
-        windowBarStyle === Platform.WINDOWS || windowBarStyle === Platform.MACOS
-            ? '-130px'
-            : '-100px';
+    // The same line the pinned header uses: the bottom of the page's sticky title row (L5-01).
+    const shellTop = useShellPinnedTop(containerRef);
+    const topMargin = `${-(shellTop + headerHeight)}px` as const;
 
     const isTableInView = useInView(containerRef, {
         margin: `${topMargin} 0px 0px 0px`,
     });
 
-    const stickyTop = useMemo(() => {
-        // If sticky header is showing, position group row below it with 1px offset to avoid conflict
-        // Otherwise, use the base sticky position
-        if (shouldShowStickyHeader && stickyHeaderTop !== undefined) {
-            return stickyHeaderTop + headerHeight + 1;
-        }
-        return windowBarStyle === Platform.WINDOWS || windowBarStyle === Platform.MACOS ? 95 : 65;
-    }, [windowBarStyle, shouldShowStickyHeader, stickyHeaderTop, headerHeight]);
+    // Directly under the pinned header when it shows (past its 1 px border), else under the bar (B-221).
+    const stickyTop = useMemo(
+        () =>
+            pinnedRowTops({
+                headerHeight,
+                headerShown: Boolean(shouldShowStickyHeader && stickyHeaderTop !== undefined),
+                pinLine: stickyHeaderTop ?? shellTop,
+            }).group,
+        [shellTop, shouldShowStickyHeader, stickyHeaderTop, headerHeight],
+    );
 
     // Calculate group row indexes
     const groupRowIndexes = useMemo(() => {

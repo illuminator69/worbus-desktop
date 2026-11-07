@@ -1,4 +1,5 @@
 import { UseSuspenseQueryOptions } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 import { api } from '/@/renderer/api';
 import { useItemListPaginatedLoader } from '/@/renderer/components/item-list/helpers/item-list-paginated-loader';
@@ -11,6 +12,7 @@ import { ItemTableList } from '/@/renderer/components/item-list/item-table-list/
 import { ItemTableListColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { ItemListTableComponentProps } from '/@/renderer/components/item-list/types';
 import { useListContext } from '/@/renderer/context/list-context';
+import { sortedColumnsFor } from '/@/renderer/features/library/library-model';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
 import { usePlayerSong } from '/@/renderer/store';
 import { LibraryItem, SongListQuery, SongListSort, SortOrder } from '/@/shared/types/domain-types';
@@ -71,6 +73,15 @@ export const SongListPaginatedTable = ({
 
     const startRowIndex = currentPage * itemsPerPage;
 
+    // The header marks the column the list is sorted by (F6).
+    const sortedColumns = useMemo(
+        () => ({
+            columns: sortedColumnsFor(String(query.sortBy)),
+            order: query.sortOrder === SortOrder.DESC ? ('desc' as const) : ('asc' as const),
+        }),
+        [query.sortBy, query.sortOrder],
+    );
+
     const currentSong = usePlayerSong();
 
     return (
@@ -103,6 +114,7 @@ export const SongListPaginatedTable = ({
                 onColumnResized={handleColumnResized}
                 onScrollEnd={handleOnScrollEnd}
                 size={size}
+                sortedColumns={sortedColumns}
                 startRowIndex={startRowIndex}
             />
         </ItemListWithPagination>

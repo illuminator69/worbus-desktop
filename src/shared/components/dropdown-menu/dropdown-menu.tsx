@@ -12,8 +12,6 @@ import { ReactNode } from 'react';
 
 import styles from './dropdown-menu.module.css';
 
-import { overlayTransitionProps } from '/@/shared/components/animations/motion-tokens';
-import { useExpressiveMotion } from '/@/shared/components/animations/use-expressive-motion';
 import { createPolymorphicComponent } from '/@/shared/utils/create-polymorphic-component';
 
 export interface MenuItemProps extends MantineMenuItemProps {
@@ -47,8 +45,6 @@ const getTransition = (position?: string) => {
 };
 
 export const DropdownMenu = ({ children, ...props }: MenuProps) => {
-    const expressiveMotion = useExpressiveMotion();
-
     return (
         <MantineMenu
             classNames={{
@@ -56,10 +52,7 @@ export const DropdownMenu = ({ children, ...props }: MenuProps) => {
                 itemSection: styles['menu-item-section'],
             }}
             offset={10}
-            transitionProps={overlayTransitionProps(
-                expressiveMotion,
-                getTransition(props.position),
-            )}
+            transitionProps={{ transition: getTransition(props.position) }}
             withinPortal
             {...props}
         >

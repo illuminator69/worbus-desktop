@@ -3,6 +3,14 @@ import type ReactPlayer from 'react-player';
 
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 
+// navi-connect (B-138): what a media error does is decided in retry-decision.ts.
+import {
+    afterFailedTrack,
+    atItsTurn,
+    retryDecision,
+    retryStillApplies,
+    whenToActOnError,
+} from '/@/renderer/features/player/audio-player/engine/retry-decision';
 import { AudioPlayer, PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { convertToLogVolume } from '/@/renderer/features/player/audio-player/utils/player-utils';
 import { logger } from '/@/renderer/utils/logger';
@@ -39,9 +47,12 @@ interface WebPlayerEngineProps {
     src1: string | undefined;
     src2: string | undefined;
     volume: number;
+    // navi-connect (B-138): the queue's next automatic track is the current one (repeat-one, or a
+    // one-track repeat-all).
+    wouldReplaySameTrack?: () => boolean;
 }
 
-const MAX_NETWORK_RETRIES = 5;
+// navi-connect (B-138): MAX_NETWORK_RETRIES moved to retry-decision.ts.
 const NETWORK_RETRY_DELAY_MS = 2000;
 
 // Store volume is 0-100; clamp the normalized result so HTMLMediaElement.volume
@@ -79,12 +90,24 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
         src1,
         src2,
         volume,
+        wouldReplaySameTrack, // navi-connect (B-138)
     } = props;
 
     const player1Ref = useRef<null | ReactPlayer>(null);
     const player2Ref = useRef<null | ReactPlayer>(null);
     const networkRetryCount1 = useRef(0);
     const networkRetryCount2 = useRef(0);
+    // navi-connect (B-138): failed tracks in a row; the MediaErrors already acted on (an element
+    // keeps its MediaError until it loads another source, so that object IS the failure, and it
+    // cannot outlive its track); which element is current and whether the player plays, read
+    // by event handlers and timers; and the last (element, playing) pair a render saw.
+    const failedInARow = useRef(0);
+    const handledErrors = useRef(new WeakSet<MediaError>());
+    const playerNumRef = useRef(playerNum);
+    playerNumRef.current = playerNum;
+    const isPlayingRef = useRef(playerStatus === PlayerStatus.PLAYING);
+    isPlayingRef.current = playerStatus === PlayerStatus.PLAYING;
+    const lastTurn = useRef('');
     const [ReactPlayerComponent, setReactPlayerComponent] = useState<any>(null);
     const [isLoading, setIsLoading] = useState(true);
 
@@ -194,75 +217,201 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
         }
     };
 
+    // navi-connect (B-138): upstream's handleOnError body, split out so a failure left for later
+    // (it came while preloading, or while not playing) is acted on by the effect below.
+    // What each error code does: see retry-decision.ts.
+    const actOnError = (
+        which: 1 | 2,
+        audio: HTMLAudioElement,
+        code: number | undefined,
+        onEnded: () => void,
+        networkRetryCountRef: React.RefObject<number>,
+    ) => {
+        const label = mediaErrorLabel(code);
+        const position = audio.currentTime;
+        const mediaError = audio.error;
+        const decision = retryDecision(code, networkRetryCountRef.current, position);
+
+        if (decision.action === 'ignore') {
+            return;
+        }
+
+        if (decision.action === 'retry') {
+            networkRetryCountRef.current += 1;
+            logger.warn('Playback error, retrying', {
+                code,
+                label,
+                resumeAt: decision.resumeAt,
+                retryCount: networkRetryCountRef.current,
+            });
+            const failedSrc = audio.src;
+            // The track changed during the wait, or this element is no longer the playing one:
+            // the retry (and its seek) is not for what is playing now.
+            const stillApplies = () =>
+                retryStillApplies({
+                    failedOn: which,
+                    failedSrc,
+                    playingNow: playerNumRef.current,
+                    srcNow: audio.src,
+                });
+            setTimeout(() => {
+                if (!stillApplies()) return;
+                if (!isPlayingRef.current) {
+                    // Paused during the wait: no play nobody asked for. A later play retries.
+                    if (mediaError) handledErrors.current.delete(mediaError);
+                    return;
+                }
+                pauseBothPlayers();
+                if (decision.resumeAt > 0) {
+                    audio.addEventListener(
+                        'loadedmetadata',
+                        () => {
+                            // A listener left by a retry that failed again must not seek
+                            // the next track loaded into this element.
+                            if (
+                                stillApplies() &&
+                                Number.isFinite(audio.duration) &&
+                                decision.resumeAt < audio.duration
+                            ) {
+                                audio.currentTime = decision.resumeAt;
+                            }
+                        },
+                        { once: true },
+                    );
+                }
+                audio.load();
+                audio.play().catch(() => {
+                    logger.error('Playback error, retries exhausted', {
+                        code,
+                        label,
+                        retryCount: networkRetryCountRef.current,
+                    });
+                });
+            }, NETWORK_RETRY_DELAY_MS);
+            return;
+        }
+
+        pauseBothPlayers();
+
+        if (decision.action === 'skip') {
+            failedInARow.current += 1;
+            const replaysSame = wouldReplaySameTrack?.() ?? false;
+            const next = afterFailedTrack(failedInARow.current, replaysSame);
+            if (next === 'skip') {
+                logger.error('Playback error, skipping track', {
+                    code,
+                    failedInARow: failedInARow.current,
+                    label,
+                    position,
+                });
+                onEnded();
+                return;
+            }
+            logger.error('Playback error, pausing instead of skipping', {
+                code,
+                failedInARow: failedInARow.current,
+                label,
+                position,
+                replaysSameTrack: replaysSame,
+            });
+        } else {
+            logger.error('Playback error, pausing', {
+                code,
+                label,
+                retryCount: networkRetryCountRef.current,
+            });
+        }
+
+        if (onErrorPause) {
+            onErrorPause();
+        }
+    };
+
+    // navi-connect (B-138): `which` element. A failure on the element preloading the next track,
+    // or while the player is not playing, is left on the element for the effect below.
     const handleOnError = (
+        which: 1 | 2,
         playerRef: React.RefObject<null | ReactPlayer>,
         onEnded: () => void,
-        onErrorPause: () => void,
         networkRetryCountRef: React.RefObject<number>,
     ) => {
         return ({ target }: ErrorEvent) => {
             const { current: player } = playerRef;
 
-            if (!player || !(target instanceof Audio)) {
+            if (!player || !(target instanceof Audio) || target.src === EMPTY_SOURCE) {
                 return;
             }
 
-            const { error } = target;
-            const code = error?.code;
-            const label = mediaErrorLabel(code);
+            const code = target.error?.code;
+            const when = whenToActOnError({
+                isCurrent: which === playerNumRef.current,
+                isPlaying: isPlayingRef.current,
+            });
 
-            const isNetworkError =
-                code === MediaError.MEDIA_ERR_NETWORK ||
-                code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED;
-
-            if (isNetworkError) {
-                if (networkRetryCountRef.current < MAX_NETWORK_RETRIES) {
-                    networkRetryCountRef.current += 1;
-                    logger.warn('Playback error, retrying', {
-                        code,
-                        label,
-                        retryCount: networkRetryCountRef.current,
-                    });
-                    const audio = target;
-                    setTimeout(() => {
-                        pauseBothPlayers();
-                        audio.load();
-                        audio.play().catch(() => {
-                            logger.error('Playback error, retries exhausted', {
-                                code,
-                                label,
-                                retryCount: networkRetryCountRef.current,
-                            });
-                        });
-                    }, NETWORK_RETRY_DELAY_MS);
-                    return;
-                }
-            }
-
-            if (code !== MediaError.MEDIA_ERR_DECODE && !isNetworkError) {
+            if (when === 'at-its-turn') {
+                logger.warn('Next track failed to load, handled at its turn', {
+                    code,
+                    label: mediaErrorLabel(code),
+                });
                 return;
             }
 
-            pauseBothPlayers();
-            if (code === MediaError.MEDIA_ERR_DECODE) {
-                logger.error('Playback decode error, skipping track', {
+            if (when === 'when-played') {
+                logger.warn('Playback error while not playing, handled at the next play', {
                     code,
-                    label,
-                    retryCount: networkRetryCountRef.current,
+                    label: mediaErrorLabel(code),
                 });
-                onEnded();
-            } else {
-                logger.error('Playback error, pausing', {
-                    code,
-                    label,
-                    retryCount: networkRetryCountRef.current,
-                });
-                if (onErrorPause) {
-                    onErrorPause();
-                }
+                return;
             }
+
+            if (target.error) handledErrors.current.add(target.error);
+            actOnError(which, target, code, onEnded, networkRetryCountRef);
         };
     };
+
+    // navi-connect (B-138): after every render, the playing element: a failure left on it (it
+    // came while preloading or while not playing) is acted on once the player plays, and a
+    // loaded track whose turn just started is played if react-player left it paused. See
+    // atItsTurn in retry-decision.ts.
+    useEffect(() => {
+        const which = playerNum === 2 ? 2 : 1;
+        const isPlaying = playerStatus === PlayerStatus.PLAYING;
+        const turn = `${which}:${isPlaying}`;
+        const turnStarted = lastTurn.current !== turn;
+        lastTurn.current = turn;
+
+        const audio = (which === 1 ? player1Ref : player2Ref).current?.getInternalPlayer();
+        if (!(audio instanceof HTMLAudioElement)) return;
+        const error = audio.error;
+        const action = atItsTurn({
+            errorCode: error?.code,
+            errorHandled: error ? handledErrors.current.has(error) : false,
+            hasSource: Boolean(which === 1 ? src1 : src2) && audio.src !== EMPTY_SOURCE,
+            isPlaying,
+            paused: audio.paused,
+            readyState: audio.readyState,
+            turnStarted,
+        });
+
+        if (action === 'act-on-error' && error) {
+            handledErrors.current.add(error);
+            actOnError(
+                which,
+                audio,
+                error.code,
+                which === 1 ? onEndedPlayer1 : onEndedPlayer2,
+                which === 1 ? networkRetryCount1 : networkRetryCount2,
+            );
+        } else if (action === 'play') {
+            logger.debug('Playing the track whose turn started paused', { which });
+            audio.play().catch(() => {});
+        }
+    });
+
+    // navi-connect (B-138): a track heard playing ends a run of failed tracks.
+    const handleOnPlaying = useCallback(() => {
+        failedInARow.current = 0;
+    }, []);
 
     useEffect(() => {
         networkRetryCount1.current = 0;
@@ -333,13 +482,10 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
                 id="web-player-1"
                 loop={loopPlayer1}
                 muted={isMuted}
+                onBufferEnd={handleOnPlaying} // navi-connect (B-138)
                 onEnded={src1 && !loopPlayer1 ? () => onEndedPlayer1() : undefined}
-                onError={handleOnError(
-                    player1Ref,
-                    () => onEndedPlayer1(),
-                    onErrorPause,
-                    networkRetryCount1,
-                )}
+                // navi-connect (B-138)
+                onError={handleOnError(1, player1Ref, () => onEndedPlayer1(), networkRetryCount1)}
                 onProgress={onProgressPlayer1}
                 onReady={handleOnReadyPlayer1}
                 playbackRate={speed || 1}
@@ -359,13 +505,10 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
                 id="web-player-2"
                 loop={loopPlayer2}
                 muted={isMuted}
+                onBufferEnd={handleOnPlaying} // navi-connect (B-138)
                 onEnded={src2 && !loopPlayer2 ? () => onEndedPlayer2() : undefined}
-                onError={handleOnError(
-                    player2Ref,
-                    () => onEndedPlayer2(),
-                    onErrorPause,
-                    networkRetryCount2,
-                )}
+                // navi-connect (B-138)
+                onError={handleOnError(2, player2Ref, () => onEndedPlayer2(), networkRetryCount2)}
                 onProgress={onProgressPlayer2}
                 onReady={handleOnReadyPlayer2}
                 playbackRate={speed || 1}

@@ -8,7 +8,7 @@
  *
  * **Server-side on purpose.** These are Navidrome native smart playlists
  * (`POST /api/playlist` with `rules` criteria), so Navidrome keeps them current
- * by itself and *every* Subsonic client sees them — this one, Navic, and
+ * by itself and *every* Subsonic client sees them — this one, Worbus for Android, and
  * anything else pointed at the same server. No polling, no client-side
  * computation, no second source of truth.
  *

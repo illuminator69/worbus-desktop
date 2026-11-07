@@ -1,3 +1,8 @@
+/* R16 review M1: the cell is a size container, so the badges can follow its width. */
+.cell {
+    container-type: inline-size;
+}
+
 .group {
     gap: var(--theme-spacing-sm) var(--theme-spacing-xs);
     padding: var(--theme-spacing-xs) 0;
@@ -7,4 +12,33 @@
 .group a {
     cursor: pointer;
     user-select: none;
+}
+
+/* A badge shrinks only to its own padding, so at the 40 px floor two badges were empty pills, the
+   second cut through by the cell, with no ellipsis. Each width step draws only as many badges as
+   can each keep about 20 px of label (a badge of about 38 px plus the 4 px gap: 80, 122 and 164 px
+   of content, measured on the VM); the rest are hidden whole and named by the tooltip. Below 64 px
+   the one badge left has tighter padding, so its label still ends in an ellipsis. */
+@container (width < 164px) {
+    .group > :nth-child(n + 4) {
+        display: none;
+    }
+}
+
+@container (width < 122px) {
+    .group > :nth-child(n + 3) {
+        display: none;
+    }
+}
+
+@container (width < 80px) {
+    .group > :nth-child(n + 2) {
+        display: none;
+    }
+}
+
+@container (width < 64px) {
+    .cell .group > * {
+        padding-inline: 2px;
+    }
 }

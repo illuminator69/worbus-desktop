@@ -14,7 +14,7 @@ import { useHubStore, usePlayerQueue } from '/@/renderer/store';
  * three-state was added for (PROTOCOL §3.2), and the answer is the same one:
  * refuse the transfer, and say why.
  *
- * Only Cast targets are blocked. Another Feishin or Navic fetches the same URL
+ * Only Cast targets are blocked. Another Worbus for desktop or Worbus for Android fetches the same URL
  * from the same network as this client, so a LAN address is fine for them.
  *
  * Both queues are checked because either can be the live one: the local player

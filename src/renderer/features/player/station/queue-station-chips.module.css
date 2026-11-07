@@ -19,12 +19,6 @@
     align-items: center;
     width: 100%;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
-}
-
-.row::-webkit-scrollbar {
-    display: none;
 }
 
 .chip {

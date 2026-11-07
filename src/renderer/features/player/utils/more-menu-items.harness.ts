@@ -14,6 +14,7 @@ const ids = (ctx: { isElectron: boolean; isRadioActive: boolean }) =>
 
 test('thePlainOrder', () => {
     assert.deepEqual(ids({ isElectron: false, isRadioActive: false }), [
+        'playRandom',
         'sleepTimer',
         'equaliser',
         'lyrics',
@@ -25,6 +26,7 @@ test('thePlainOrder', () => {
 
 test('dlnaOnlyInElectron', () => {
     assert.deepEqual(ids({ isElectron: true, isRadioActive: false }), [
+        'playRandom',
         'sleepTimer',
         'equaliser',
         'lyrics',
@@ -55,16 +57,30 @@ test('panelsAndActions', () => {
         equaliser: 'action',
         lyrics: 'action',
         playbackOptions: 'panel',
+        playRandom: 'action',
         sleepTimer: 'panel',
         stop: 'action',
     });
 });
 
-test('radioActiveKeepsTheSameRows', () => {
+test('radioActiveKeepsTheSameRowsButPlayRandom', () => {
     for (const isElectron of [false, true]) {
         assert.deepEqual(
             moreMenuItems({ isElectron, isRadioActive: true }),
-            moreMenuItems({ isElectron, isRadioActive: false }),
+            moreMenuItems({ isElectron, isRadioActive: false }).filter(
+                (item) => item.id !== 'playRandom',
+            ),
         );
+    }
+});
+
+// R14 (B-252): Play random left the transport for this menu, and appears in it once whatever the
+// window or the build (the menu has no width-dependent rows; this pins that it stays so).
+test('playRandomOnceAndFirst', () => {
+    for (const isElectron of [false, true]) {
+        const list = ids({ isElectron, isRadioActive: false });
+        assert.equal(list.filter((id) => id === 'playRandom').length, 1);
+        assert.equal(list[0], 'playRandom');
+        assert.equal(new Set(list).size, list.length);
     }
 });

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { generatePath, useNavigate } from 'react-router';
 
 import { api } from '/@/renderer/api';
+import { remoteNextIndex } from '/@/renderer/features/hub/utils/remote-next';
 import {
     hubAcksActs,
     isRemoteSessionActive,
@@ -43,10 +44,19 @@ import { PlayerRepeat, PlayerShuffle, PlayerStatus } from '/@/shared/types/types
 // (cached; in-flight deduped across the components that call the hook).
 const remoteDetailCache = new Map<string, Song>();
 const remoteDetailInflight = new Map<string, Promise<null | Song>>();
+// A lookup that failed (an error, or no song) is not asked again for a minute. The side queue
+// resolves each mounted remote row (useRemoteRowArtists), and rows remount while scrolling:
+// without this, a failing server was asked again for every row on every remount.
+const REMOTE_DETAIL_RETRY_MS = 60_000;
+const remoteDetailFailedAt = new Map<string, number>();
 
 const resolveRemoteDetail = (serverId: string, id: string): Promise<null | Song> => {
     const cached = remoteDetailCache.get(id);
     if (cached) return Promise.resolve(cached);
+    const failedAt = remoteDetailFailedAt.get(id);
+    if (failedAt !== undefined && Date.now() - failedAt < REMOTE_DETAIL_RETRY_MS) {
+        return Promise.resolve(null);
+    }
     let inflight = remoteDetailInflight.get(id);
     if (!inflight) {
         inflight = api.controller
@@ -56,6 +66,11 @@ const resolveRemoteDetail = (serverId: string, id: string): Promise<null | Song>
                 return (song as Song) ?? null;
             })
             .catch(() => null)
+            .then((song) => {
+                if (song) remoteDetailFailedAt.delete(id);
+                else remoteDetailFailedAt.set(id, Date.now());
+                return song;
+            })
             .finally(() => remoteDetailInflight.delete(id));
         remoteDetailInflight.set(id, inflight);
     }
@@ -112,6 +127,41 @@ export const hubTrackToQueueSong = (
         userRating: track.rating ?? null,
     }) as unknown as QueueSong;
 
+/**
+ * The artists of a side-queue row, with ids. A row built from a remote session's wire track
+ * (`_uniqueId` `remote:<i>`) carries names only when the publisher sends no ids (Worbus for Android), so its
+ * artists would draw as plain text. The table only mounts the rows near the viewport, so each
+ * mounted row resolves its song once (cached, in flight deduped) and swaps in the real artists.
+ * A local row, or a remote one whose artists already carry ids, never asks.
+ */
+export const useRemoteRowArtists = (song: QueueSong | undefined): QueueSong['artists'] => {
+    const rowId = song?._uniqueId;
+    const songId = song?.id;
+    const serverId = song?._serverId;
+    const named = song?.artists ?? [];
+    const needsIds =
+        !!rowId?.startsWith('remote:') && !!songId && !!serverId && !named.some((a) => !!a.id);
+    const [detail, setDetail] = useState<null | Song>(null);
+
+    useEffect(() => {
+        if (!needsIds || !songId || !serverId) {
+            setDetail(null);
+            return undefined;
+        }
+        let cancelled = false;
+        void resolveRemoteDetail(serverId, songId).then((resolved) => {
+            if (!cancelled) setDetail(resolved);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [needsIds, serverId, songId]);
+
+    if (!needsIds) return named;
+    const resolved = detail?.id === songId ? detail : (remoteDetailCache.get(songId ?? '') ?? null);
+    return resolved?.artists && resolved.artists.length > 0 ? resolved.artists : named;
+};
+
 /** The current song — remote now-playing when remote-active, else local. */
 export const useRemoteAwarePlayerSong = (): QueueSong | undefined => {
     const isRemote = useHubIsRemoteActive();
@@ -144,11 +194,22 @@ export const useRemoteAwarePlayerSong = (): QueueSong | undefined => {
     return hubTrackToQueueSong(remote, serverId ?? '', resolved);
 };
 
-/** The next song — remote session's when remote-active, else local. */
+/**
+ * The next song: the remote session's when remote-active, else local. The remote one walks the
+ * session's play order and honours its repeat (remoteNextIndex), as the local player does.
+ */
 export const useRemoteAwareNextSong = (): QueueSong | undefined => {
     const isRemote = useHubIsRemoteActive();
     const { nextSong } = usePlayerData();
-    const next = useHubStore((state) => state.remoteQueue[state.remoteQueueIndex + 1]);
+    const next = useHubStore((state) => {
+        const nextIndex = remoteNextIndex({
+            index: state.remoteQueueIndex,
+            length: state.remoteQueue.length,
+            order: state.remoteOrder,
+            repeat: state.remoteRepeat,
+        });
+        return nextIndex === null ? undefined : state.remoteQueue[nextIndex];
+    });
     const serverId = useCurrentServerId();
 
     if (!isRemote) return nextSong;

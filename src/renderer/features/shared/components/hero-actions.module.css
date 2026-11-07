@@ -1,0 +1,101 @@
+/*
+ * The board's `.cta` row under a hero header: Play 52 px round on the accent, buttons 36 px tall
+ * (`.btn`, `.btn.out`), rating, favourite and more pushed to the right. `data-mode` (B-284, set
+ * from the row's measured widths): `full`; `icons`, the labelled buttons folded to 36 px squares;
+ * `stacked`, the icon row wrapped with the end group starting its line at the left. The full row
+ * never wraps: it is measured and folded before paint, and folding it then leaves the row's height
+ * alone, which keeps a fold inside the ResizeObserver callback from changing what it observes (the
+ * "ResizeObserver loop" error). A folded row wraps, in layout, when even the icons do not fit.
+ */
+.row {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    margin-top: 16px;
+}
+
+.play {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    padding: 0;
+    color: var(--theme-colors-primary-contrast);
+    cursor: pointer;
+    background: var(--theme-colors-primary-filled);
+    border: none;
+    border-radius: 50%;
+}
+
+.button {
+    display: inline-flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    text-decoration: none;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    &[data-variant='outline'] {
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--theme-colors-border);
+    }
+
+    &[data-variant='accent-outline'] {
+        color: var(--theme-colors-primary);
+        background: transparent;
+        box-shadow: inset 0 0 0 1.5px var(--theme-colors-primary);
+    }
+
+    &:disabled {
+        cursor: default;
+        opacity: 0.45;
+    }
+}
+
+.play,
+.button {
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+}
+
+.end {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}
+
+/* Folded: the icon alone, in a square the row's own height; the label names it (aria-label). */
+.row:not([data-mode='full']) {
+    flex-wrap: wrap;
+}
+
+.row:not([data-mode='full']) .button {
+    width: 36px;
+    padding: 0;
+}
+
+.row:not([data-mode='full']) .label {
+    display: none;
+}
+
+/* Even the icon row does not fit: the end group starts its own line at the left, under Play. */
+.row[data-mode='stacked'] .end {
+    margin-left: 0;
+}

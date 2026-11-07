@@ -1,0 +1,85 @@
+/* The discography's filter bar (board ArtistOwned `.fbar`): 30 px chips with counts, a hairline, the
+   ownership and sort chips, a spacer, the Rescan slot at the right. It wraps rather than scrolls. */
+.bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    min-width: 0;
+}
+
+.search {
+    flex: 0 1 220px;
+    min-width: 0;
+}
+
+.chip {
+    display: inline-flex;
+    flex: 0 1 auto;
+    gap: 6px;
+    align-items: center;
+    max-width: 100%;
+    height: 30px;
+    padding: 0 12px;
+    overflow: hidden;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    white-space: nowrap;
+    cursor: pointer;
+    background: var(--theme-colors-surface);
+    border: none;
+    border-radius: 8px;
+
+    :root[data-cover-wash='true'] & {
+        background: var(--wash-surf2);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: 2px;
+    }
+
+    & small {
+        font-size: 11.5px;
+        font-weight: 700;
+    }
+}
+
+.chip[aria-pressed='true'] {
+    color: var(--theme-colors-primary-contrast);
+    background: var(--theme-colors-primary-filled);
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}
+
+.icon-chip {
+    justify-content: center;
+    width: 30px;
+    padding: 0;
+}
+
+.divider {
+    flex: none;
+    width: 1px;
+    height: 18px;
+    margin: 0 2px;
+    background: var(--theme-colors-border);
+}
+
+.spacer {
+    flex: 1 1 0;
+    min-width: 0;
+}
+
+.end {
+    display: flex;
+    flex: none;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+}

@@ -15,14 +15,12 @@ import {
 import { Group } from '/@/shared/components/group/group';
 import { NumberInput } from '/@/shared/components/number-input/number-input';
 import { SegmentedControl } from '/@/shared/components/segmented-control/segmented-control';
-import { Select } from '/@/shared/components/select/select';
 import { Slider } from '/@/shared/components/slider/slider';
 import { Switch } from '/@/shared/components/switch/switch';
 import { Text } from '/@/shared/components/text/text';
 import { Tooltip } from '/@/shared/components/tooltip/tooltip';
-import { Play } from '/@/shared/types/types';
 
-export const ControlSettings = memo(() => {
+export const PlayerBarSettings = memo(() => {
     const { t } = useTranslation();
     const settings = useGeneralSettings();
     const playerbarSlider = usePlayerbarSlider();
@@ -129,75 +127,8 @@ export const ControlSettings = memo(() => {
             description: t('setting.skipDuration', {
                 context: 'description',
             }),
-            isHidden: false,
+            isHidden: !settings.skipButtons?.enabled,
             title: t('setting.skipDuration'),
-        },
-        {
-            control: (
-                <Select
-                    data={[
-                        {
-                            label: t('setting.playButtonBehavior', {
-                                context: 'optionPlay',
-                            }),
-                            value: Play.NOW,
-                        },
-                        {
-                            label: t('setting.playButtonBehavior', {
-                                context: 'optionAddNext',
-                            }),
-                            value: Play.NEXT,
-                        },
-                        {
-                            label: t('setting.playButtonBehavior', {
-                                context: 'optionAddLast',
-                            }),
-                            value: Play.LAST,
-                        },
-                        {
-                            label: t('setting.playButtonBehavior', {
-                                context: 'optionPlayShuffled',
-                            }),
-                            value: Play.SHUFFLE,
-                        },
-                    ]}
-                    defaultValue={settings.playButtonBehavior}
-                    onChange={(e) =>
-                        setSettings({
-                            general: {
-                                ...settings,
-                                playButtonBehavior: e as Play,
-                            },
-                        })
-                    }
-                />
-            ),
-            description: t('setting.playButtonBehavior', {
-                context: 'description',
-            }),
-            isHidden: false,
-            title: t('setting.playButtonBehavior'),
-        },
-        {
-            control: (
-                <Switch
-                    aria-label="Follow current song"
-                    defaultChecked={settings.followCurrentSong}
-                    onChange={(e) =>
-                        setSettings({
-                            general: {
-                                ...settings,
-                                followCurrentSong: e.currentTarget.checked,
-                            },
-                        })
-                    }
-                />
-            ),
-            description: t('setting.followCurrentSong', {
-                context: 'description',
-            }),
-            isHidden: false,
-            title: t('setting.followCurrentSong'),
         },
         {
             control: (
@@ -219,33 +150,6 @@ export const ControlSettings = memo(() => {
             }),
             isHidden: false,
             title: t('setting.sidebarImageEnabled'),
-        },
-        {
-            control: (
-                <NumberInput
-                    defaultValue={settings.artistRadioCount}
-                    max={200}
-                    min={10}
-                    onBlur={(e) => {
-                        if (!e) return;
-                        const newVal = e.currentTarget.value
-                            ? Math.min(Math.max(Number(e.currentTarget.value), 10), 100)
-                            : settings.artistRadioCount;
-                        setSettings({
-                            general: {
-                                ...settings,
-                                artistRadioCount: newVal,
-                            },
-                        });
-                    }}
-                    width={75}
-                />
-            ),
-            description: t('setting.artistRadioCount', {
-                context: 'description',
-            }),
-            isHidden: false,
-            title: t('setting.artistRadioCount'),
         },
         {
             control: (
@@ -291,6 +195,27 @@ export const ControlSettings = memo(() => {
             }),
             isHidden: false,
             title: t('setting.volumeWidth'),
+        },
+        {
+            control: (
+                <Switch
+                    aria-label={t('setting.playerbarOpenDrawer')}
+                    defaultChecked={settings.playerbarOpenDrawer}
+                    onChange={(e) =>
+                        setSettings({
+                            general: {
+                                ...settings,
+                                playerbarOpenDrawer: e.currentTarget.checked,
+                            },
+                        })
+                    }
+                />
+            ),
+            description: t('setting.playerbarOpenDrawer', {
+                context: 'description',
+            }),
+            isHidden: false,
+            title: t('setting.playerbarOpenDrawer'),
         },
         {
             control: (
@@ -522,27 +447,7 @@ export const ControlSettings = memo(() => {
                   },
               ]
             : []),
-        {
-            control: (
-                <Switch
-                    defaultChecked={settings.microtonalPitchControls}
-                    onChange={(e) =>
-                        setSettings({
-                            general: {
-                                ...settings,
-                                microtonalPitchControls: e.currentTarget.checked,
-                            },
-                        })
-                    }
-                />
-            ),
-            description: t('setting.microtonalPitchControls', {
-                context: 'description',
-            }),
-            isHidden: false,
-            title: t('setting.microtonalPitchControls'),
-        },
     ];
 
-    return <SettingsSection options={controlOptions} title={t('page.setting.controls')} />;
+    return <SettingsSection options={controlOptions} title={t('page.setting.playerBar')} />;
 });

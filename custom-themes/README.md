@@ -1,6 +1,6 @@
-# Custom themes (navi-connect)
+# Custom themes (Worbus)
 
-Runtime custom themes for the Feishin fork, loaded via the v1.15.0 "Custom Themes" feature
+Runtime custom themes for Worbus for desktop, loaded via the v1.15.0 "Custom Themes" feature
 (desktop only — see `docs/CUSTOM_THEMES.md`). These are **not** part of the build; they are
 dropped into the app's Themes folder and picked up live.
 
@@ -17,7 +17,7 @@ onto the Catppuccin palettes. `catppuccin-glassy.css` is written in terms of `--
 so the one file adapts to whichever Catppuccin palette is active (dark Mocha or light Latte).
 
 > **Note:** the Catppuccin palettes are embedded directly in each JSON's `colors` block rather
-> than pulled via `extends`. In this Feishin build, `extends` pointing at a *built-in* theme id
+> than pulled via `extends`. In this build, `extends` pointing at a *built-in* theme id
 > is effectively a no-op — `getAppTheme` only merges the shared **default** (dark) palette with
 > the theme's own `colors`, so a theme with no `colors` renders default-dark regardless of
 > `extends`. The `extends` keys are kept for intent/forward-compat; the `colors` blocks are what

@@ -1,9 +1,14 @@
 import type { LbBotStatus } from '/@/shared/types/lbbot-types';
+import type { HubFinderState, HubServerState } from '/@/shared/utils/hub-addresses';
+import type { HubSignInResult, HubUser } from '/@/shared/utils/hub-signin';
+import type { LbIndexProgress } from '/@/shared/utils/lbbot-mode';
 
+import isElectron from 'is-electron';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 import { ActPins, NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
+import { credentialPending, HubRoles, rolesOf } from '/@/renderer/features/hub/utils/hub-roles';
 import { SessionSleepTimer } from '/@/renderer/features/hub/utils/sleep-timer';
 
 /**
@@ -102,6 +107,34 @@ interface HubState {
      * and when the socket is lost. Always empty against a hub without `actAck`.
      */
     actPins: ActPins;
+    /**
+     * F2: when this client last pushed its hub settings to the transport (on start and on any
+     * change of the switch, address, token or name). "Connecting" is the first few seconds after
+     * it; after that a link that is still down reads as unreachable (server-status.ts).
+     */
+    attemptAt: number;
+    /**
+     * Worbus P2 (re-review N1): main has answered `hub-auth-state` once (or failed to). Until then
+     * a signed-in device looks like one with no credential; roles stay least privilege meanwhile.
+     */
+    authKnown: boolean;
+    /**
+     * Worbus P2: a sign-in is owed and the silent one is under way (main's `needsSignIn` at start,
+     * or the server's 4005). Counts as holding a credential (hub-credential.ts) until it answers.
+     */
+    authOwed: boolean;
+    /**
+     * F2: the hub answered this connection's token with an `auth` error (the same frame that
+     * raises the toast). The transport stands down on it, so nothing else would say why the link
+     * is down: the Server tab reads it for "the server refused the access token". Cleared by
+     * `welcome` and whenever the hub settings are pushed again.
+     */
+    authRefused: boolean;
+    /**
+     * Worbus P2: main holds a device secret for this server (`hub-auth-state`, then each sign-in,
+     * sign-out and server sign-out). The Server tab's Sign in / Sign out rows read it.
+     */
+    authSignedIn: boolean;
     connected: boolean;
     devices: HubDevice[];
     /**
@@ -111,6 +144,20 @@ interface HubState {
      * for an older hub, which sends no such field, and while there is no connection.
      */
     features: string[];
+    /** Worbus P3: main's finder (`hub-finder-state`): looking, what it found, or why nothing. */
+    finder: HubFinderState;
+    /**
+     * Worbus P1: lb-bot's index build countdown, from `welcome.lbIndex.progress` and each
+     * `index` frame's. Null when the last one carried none (an older peer, or the build is
+     * long over). Read only by the Home bar (`useLbBotIndexProgress`). Not persisted.
+     */
+    lbProgress: LbIndexProgress | null;
+    /**
+     * Worbus P1 (B-263): lb-bot answered this connection 401 `signin_required` - it refused
+     * the hub, which sends no bearer (an older hub) or the wrong one. lb-bot is then treated as
+     * unavailable (`useLbBotAvailable`) until the next `welcome` clears it.
+     */
+    lbRefused: boolean;
     /**
      * lb-bot's availability and the hub's proxied routes, as the hub stated them
      * in its last `welcome` (`welcome.lb`). Null until a welcome carries one —
@@ -119,6 +166,13 @@ interface HubState {
      * cached answer was: the next welcome replaces it.
      */
     lbStatus: LbBotStatus | null;
+    /**
+     * Worbus P2: the hub answers this user `lbbot_too_old` (lb-bot is older than signed-in users,
+     * and this user is not the primary one): lb-bot is unavailable to them. Set by the refusal and
+     * by `welcome.lb` / the `lb` frame without `identity`; ended by an `lb` frame with it and by an
+     * answer that got through (lbbot-mode.ts `tooOldAfterRefusal`, `tooOldFromLb`).
+     */
+    lbTooOld: boolean;
     myDeviceId: null | string;
     /** Whether the remote session is currently playing. */
     remoteIsPlaying: boolean;
@@ -139,21 +193,60 @@ interface HubState {
     /** Saved-queue history id of the CURRENT session — the "Now Playing" record. */
     savedQueueId: null | string;
     /**
+     * Worbus P3: main's server record and the live socket's address (`hub-server`), or null until
+     * main has answered. The per-server key (`id:<serverId>`, else `hub.url`) is read from it.
+     */
+    server: HubServerState | null;
+    /**
+     * Worbus P4: `welcome.server.version` (`"0.4.0 (678af87)"`), or null from a server before
+     * project 4. The Server tab shows it while connected; the next welcome replaces it.
+     */
+    serverVersion: null | string;
+    /**
+     * Worbus P2: the Worbus Server signed this device out (close 4005 / `signed_out`) and the one
+     * silent sign-in did not work, or there was no account to make it with. The transport stands
+     * down until a sign-in works; the Server tab says "Signed out of the Worbus Server" with a
+     * Sign in button. Cleared by a sign-in that works and by `welcome`.
+     */
+    signedOut: boolean;
+    /** Worbus P2: a sign-in is in flight (the button's, or the silent one). */
+    signingIn: boolean;
+    /**
+     * Worbus P2: the answer to the last sign-in this session, or null before one. Read by the
+     * Server tab for its sentence, and (`oldServer`) for whether the token field is shown.
+     */
+    signInResult: HubSignInResult | null;
+    /**
      * The session's sleep timer, as the last `session` or `welcome` stated it and on this
      * client's clock (I-034, sleep-timer.ts). Null when the session has none, against a hub
      * that holds none, and once the link is lost - except on the device that was playing,
      * which keeps it until it has paused itself (use-hub's guard).
      */
     sleepTimer: null | SessionSleepTimer;
+    /**
+     * Worbus P2: who this connection acts for, from `welcome.user` and the `user` frame. Null for
+     * an older hub (which sends neither: today's behaviour) and before the first welcome.
+     */
+    user: HubUser | null;
 }
 
 const initialState: HubState = {
     activeDeviceId: null,
     actPins: NO_PINS,
+    attemptAt: 0,
+    // The web build has no main process to ask.
+    authKnown: !isElectron(),
+    authOwed: false,
+    authRefused: false,
+    authSignedIn: false,
     connected: false,
     devices: [],
     features: [],
+    finder: { kind: 'idle', results: [], scope: null },
+    lbProgress: null,
+    lbRefused: false,
     lbStatus: null,
+    lbTooOld: false,
     myDeviceId: null,
     remoteIsPlaying: false,
     remoteOrder: null,
@@ -164,7 +257,13 @@ const initialState: HubState = {
     remoteRepeat: 'none',
     remoteShuffle: false,
     savedQueueId: null,
+    server: null,
+    serverVersion: null,
+    signedOut: false,
+    signingIn: false,
+    signInResult: null,
     sleepTimer: null,
+    user: null,
 };
 
 export const useHubStore = createWithEqualityFn<HubSlice>()((set) => ({
@@ -193,7 +292,37 @@ export const useHubDevices = () => useHubStore((s) => s.devices, shallow);
 export const useHubActiveDeviceId = () => useHubStore((s) => s.activeDeviceId);
 export const useHubMyDeviceId = () => useHubStore((s) => s.myDeviceId);
 export const useHubConnected = () => useHubStore((s) => s.connected);
+
+/**
+ * Whether lb-bot is known to be out of reach right now, outside React: the hub said it is
+ * unavailable, or (Worbus P1, B-263) lb-bot refused this hub with a 401 `signin_required`. A
+ * background read (the index mirror's pull, the override map, the ownership re-ask) is skipped
+ * then, as it would fail the same way. Unknown (no welcome yet, an older hub) is not "down".
+ */
+export const lbBotDownNow = (): boolean => {
+    const { lbRefused, lbStatus, lbTooOld } = useHubStore.getState();
+    return lbStatus?.available === false || lbRefused || lbTooOld;
+};
 export const useHubActions = () => useHubStore((s) => s.actions);
+
+/**
+ * Worbus P2 (review M1): this device holds or is owed a device secret, or the server signed it
+ * out - a hub of this round, which names its user. Until it has, roles are least privilege.
+ */
+export const hubCredentialPending = credentialPending;
+
+/**
+ * Worbus P2: the signed-in user's roles, from `hub.store.user` - the only role source for the hub
+ * and lb-bot surfaces. No user (an older hub) is today's behaviour: admin and primary.
+ */
+export const useHubRoles = (): HubRoles =>
+    useHubStore((s) => rolesOf(s.user, hubCredentialPending(s)), shallow);
+
+/** The same, outside React. */
+export const hubRolesNow = (): HubRoles => {
+    const s = useHubStore.getState();
+    return rolesOf(s.user, hubCredentialPending(s));
+};
 
 /** True when playback is live on ANOTHER device — i.e. show the remote view. */
 export const useHubIsRemoteActive = () =>

@@ -19,6 +19,9 @@
 .queue-only {
     flex: 1;
     min-height: 0;
+
+    /* R6 (B-207): the header folds its lines away when this is short (queue-panel-header.module.css). */
+    container: queue-panel / size;
 }
 
 .queue-only-content {
@@ -128,4 +131,124 @@
     height: 100%;
     content: '';
     -webkit-app-region: no-drag;
+}
+
+/*
+ * R6 (B-207): the queue with the lyrics/visualiser strip under it. A size container, so the open
+ * area can be at most 40 % of the panel's height, and the header can fold its lines in a short window.
+ */
+.panels-with-strip {
+    container: queue-panel / size;
+}
+
+.queue-area {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.lyrics-strip {
+    position: relative;
+    flex: none;
+    border-top: 1px solid var(--theme-colors-border);
+}
+
+/*
+ * R8 (B-226): the strip's top edge drags the open area's height. A 6 px hit area straddling the
+ * border, a grip that shows on hover, focus and while held. Like the old split's divider, a
+ * row-resize cursor over a 1 px line; it moves 1:1 with the pointer, with no easing.
+ */
+.strip-handle {
+    position: absolute;
+    top: -4px;
+    right: 0;
+    left: 0;
+    z-index: 5;
+    height: 6px;
+    touch-action: none;
+    cursor: row-resize;
+
+    /* A double-click (the reset) must not select text here: a selection under the next press
+       starts a native drag, which cancels the pointer after its first move. */
+    user-select: none;
+
+    &::after {
+        position: absolute;
+        top: 1px;
+        left: 50%;
+        width: 36px;
+        height: 4px;
+        content: '';
+        background: var(--theme-colors-foreground-muted);
+        border-radius: 2px;
+        opacity: 0;
+        transform: translateX(-50%);
+    }
+
+    &:hover::after,
+    &:focus-visible::after,
+    &[data-dragging='true']::after {
+        opacity: 0.8;
+    }
+
+    &:focus-visible {
+        outline: none;
+    }
+}
+
+.strip-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    height: 40px;
+    padding: 0 14px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--theme-colors-foreground-muted);
+    cursor: pointer;
+    background: transparent;
+    border: 0;
+
+    &:hover {
+        color: var(--theme-colors-foreground);
+        background: var(--theme-colors-surface);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--theme-colors-primary);
+        outline-offset: -2px;
+    }
+}
+
+.strip-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.strip-chevron {
+    margin-left: auto;
+}
+
+.strip-area {
+    display: flex;
+    flex-direction: column;
+
+    /*
+     * Only the first frame's height: once the panel is measured, clampLyricsHeight
+     * (utils/lyrics-height.ts) decides and the component sets it inline. Until then this keeps
+     * the area under 320 px, 40 % of the panel, and the panel less 280 px (the short header, the
+     * strip's row and three queue rows), so the first frame cannot take the panel.
+     */
+    height: min(320px, 40cqh, calc(100cqh - 280px));
+}
+
+.strip-panel {
+    flex: 1;
+    min-height: 0;
 }

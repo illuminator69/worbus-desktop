@@ -1,0 +1,92 @@
+/*
+ * B-285: a sideways row's frame (`sideways-row.tsx`). The scroller keeps its row's own look (passed
+ * as its class); this adds the edge fades and the two chevron buttons. `data-start` / `data-end` on
+ * the frame say which sides have hidden content.
+ */
+@property --sideways-fade-start {
+    inherits: false;
+    initial-value: 0;
+    syntax: '<length>';
+}
+
+@property --sideways-fade-end {
+    inherits: false;
+    initial-value: 0;
+    syntax: '<length>';
+}
+
+/* A column, so the scroller stretches to the frame and its own margins behave as a flex item's. */
+.frame {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.scroller {
+    overflow-x: auto;
+
+    /* Focus moving to a chip under a button scrolls it clear of the button. */
+    scroll-padding-inline: 32px;
+    scrollbar-width: none;
+    mask-image: linear-gradient(
+        to right,
+        transparent,
+        #000 var(--sideways-fade-start),
+        #000 calc(100% - var(--sideways-fade-end)),
+        transparent
+    );
+    transition:
+        --sideways-fade-start 160ms ease,
+        --sideways-fade-end 160ms ease;
+
+    &::-webkit-scrollbar {
+        display: none;
+    }
+}
+
+.frame[data-start] > .scroller {
+    --sideways-fade-start: 32px;
+}
+
+.frame[data-end] > .scroller {
+    --sideways-fade-end: 32px;
+}
+
+/* Hidden, a button takes no clicks: the chip under it does. Two classes deep to beat the
+   ActionIcon's own root rule (its position and its transition). */
+.frame > .button {
+    position: absolute;
+    top: 50%;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 35%);
+    opacity: 0;
+    translate: 0 -50%;
+    transition:
+        opacity 160ms ease,
+        background-color 0.2s ease-in-out;
+
+    &[data-side='start'] {
+        left: 0;
+    }
+
+    &[data-side='end'] {
+        right: 0;
+    }
+}
+
+/* Under the pointer, or with keyboard focus in the row: a mouse click on a chip leaves focus there
+   too, and must not hold the buttons up over the edge chips. */
+.frame:hover > .button:not([inert]),
+.frame:has(:focus-visible) > .button:not([inert]) {
+    pointer-events: auto;
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .scroller,
+    .button {
+        transition: none;
+    }
+}

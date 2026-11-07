@@ -1,6 +1,6 @@
 # Custom Themes
 
-Custom themes let you add your own light and dark themes to the **desktop** app without rebuilding Feishin. Drop JSON theme files into the Themes folder; Feishin watches that folder and reloads themes when files change.
+Custom themes let you add your own light and dark themes to the **desktop** app without rebuilding Worbus. Drop JSON theme files into the Themes folder; Worbus watches that folder and reloads themes when files change.
 
 Custom themes are **Electron / desktop only**. They are not available in the web or Docker builds.
 
@@ -15,15 +15,17 @@ Custom themes are **Electron / desktop only**. They are not available in the web
 
 You can also click **Reload** in Settings if a change was not picked up automatically.
 
+**Cover colours** (Settings → General → Theme, on by default) colours the whole window from the playing song's cover. While it is on, the colours of every theme, custom ones included, are ignored and the theme, accent and shade pickers are greyed out; a custom theme's linked stylesheets and your own CSS still apply. Turn Cover colours off to use your theme's colours again.
+
 ### Themes folder location
 
 | Platform | Typical path |
 |----------|----------------|
-| Windows | `%APPDATA%\feishin\Themes` |
-| macOS | `~/Library/Application Support/feishin/Themes` |
-| Linux | `~/.config/feishin/Themes` |
+| Windows | `%APPDATA%\Worbus\Themes` |
+| macOS | `~/Library/Application Support/Worbus/Themes` |
+| Linux | `~/.config/Worbus/Themes` |
 
-In development builds the folder name is under `feishin-dev` instead of `feishin`.
+In development builds the folder name is under `Worbus-dev` instead of `Worbus`. Worbus copies the themes from an older Feishin folder (`feishin`) the first time it starts.
 
 Theme files must be **`.json` files in the root of the Themes folder** (not nested in subfolders). Linked stylesheets may live next to them or in subfolders, as long as they stay inside Themes.
 
@@ -74,7 +76,7 @@ Use a unique filename. The id is what appears in settings and what you use when 
 | `mantineOverride` | No | Partial [Mantine theme override](https://mantine.dev/theming/theme-object/). |
 | `stylesheets` | No | Array of CSS file paths **relative to the Themes folder**. Contents are inlined when the theme is active. Paths that escape the Themes folder are ignored. |
 
-Unspecified color and app values fall back to Feishin’s default theme (and then to anything provided by `extends`).
+Unspecified color and app values fall back to Worbus’s default theme (and then to anything provided by `extends`).
 
 ---
 
@@ -98,7 +100,7 @@ Supported `colors` keys:
 | `state-success` | Success state |
 | `state-warning` | Warning state |
 
-Values must be valid CSS colors recognized by Feishin’s color validator (for example `rgb(...)`, `rgba(...)`, `#rrggbb`, `#rgb`). Named CSS colors like `red` are rejected. Invalid entries are ignored and listed under Custom Themes warnings in Settings.
+Values must be valid CSS colors recognized by Worbus’s color validator (for example `rgb(...)`, `rgba(...)`, `#rrggbb`, `#rgb`). Named CSS colors like `red` are rejected. Invalid entries are ignored and listed under Custom Themes warnings in Settings.
 
 ---
 
@@ -143,7 +145,7 @@ Rules:
 - Custom theme fields always win over the theme they extend.
 - Custom → custom chains are flattened when loading (depth limit of 10; cycles are ignored).
 - If `extends` is a built-in id, merging with that built-in’s defaults happens in the renderer.
-- If `extends` is omitted, the theme still merges onto Feishin’s shared default palette.
+- If `extends` is omitted, the theme still merges onto Worbus’s shared default palette.
 
 ### Built-in theme ids
 
@@ -174,7 +176,7 @@ Themes/
 
 Notes:
 
-- Feishin watches **JSON** theme files for automatic reload. After editing only a CSS file, click **Reload** in Settings (or touch/save the `.json` file) so stylesheets are re-read.
+- Worbus watches **JSON** theme files for automatic reload. After editing only a CSS file, click **Reload** in Settings (or touch/save the `.json` file) so stylesheets are re-read.
 - Empty or unreadable stylesheet paths are skipped with a console warning.
 
 ---

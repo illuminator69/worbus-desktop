@@ -31,6 +31,7 @@ import { AlbumArtistsColumn } from '/@/renderer/components/item-list/item-table-
 import { AlbumColumn } from '/@/renderer/components/item-list/item-table-list/columns/album-column';
 import { AlbumGroupColumn } from '/@/renderer/components/item-list/item-table-list/columns/album-group-column';
 import { ArtistsColumn } from '/@/renderer/components/item-list/item-table-list/columns/artists-column';
+import { BitRateColumn } from '/@/renderer/components/item-list/item-table-list/columns/bit-rate-column';
 import { ComposerColumn } from '/@/renderer/components/item-list/item-table-list/columns/composer-column';
 import { CountColumn } from '/@/renderer/components/item-list/item-table-list/columns/count-column';
 import {
@@ -63,7 +64,15 @@ import {
     TableItemProps,
     TableItemSize,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list';
-import { useItemTableListColumnResizeLive } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import {
+    useIsActiveRow,
+    useItemTableListColumnResizeLive,
+} from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import { keepsItsFloor } from '/@/renderer/components/item-list/item-table-list/utils/fit-column-widths';
+import {
+    runsPastItsCell,
+    showFullTextWhenCut,
+} from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { ItemControls, ItemListItem } from '/@/renderer/components/item-list/types';
 import { Flex } from '/@/shared/components/flex/flex';
 import { Icon } from '/@/shared/components/icon/icon';
@@ -74,6 +83,16 @@ import { useMergedRef } from '/@/shared/hooks/use-merged-ref';
 import { LibraryItem } from '/@/shared/types/domain-types';
 import { dndUtils, DragData, DragOperation, DragTarget } from '/@/shared/types/drag-and-drop';
 import { TableColumn } from '/@/shared/types/types';
+
+/** Which rounded ends of the playing row's container a cell carries. */
+const queueActiveEdge = (columnIndex: number, isLastColumn: boolean): string | undefined =>
+    columnIndex === 0 && isLastColumn
+        ? 'both'
+        : columnIndex === 0
+          ? 'first'
+          : isLastColumn
+            ? 'last'
+            : undefined;
 
 export interface ItemTableListColumn extends CellComponentProps<TableItemProps> {
     columnType?: TableColumn;
@@ -240,12 +259,13 @@ const ItemTableListColumnBase = (props: ItemTableListColumn) => {
                 return <TextColumn {...props} {...dragProps} controls={controls} type={type} />;
 
             case TableColumn.BIT_DEPTH:
-            case TableColumn.BIT_RATE:
             case TableColumn.BPM:
             case TableColumn.CHANNELS:
             case TableColumn.DISC_NUMBER:
             case TableColumn.SAMPLE_RATE:
                 return <NumericColumn {...props} {...dragProps} controls={controls} type={type} />;
+            case TableColumn.BIT_RATE:
+                return <BitRateColumn {...props} {...dragProps} controls={controls} type={type} />;
 
             case TableColumn.COMPOSER:
                 return <ComposerColumn {...props} {...dragProps} controls={controls} type={type} />;
@@ -683,7 +703,14 @@ export const TableColumnTextContainer = (
             ? props.internalState.extractRowId(item)
             : undefined;
     const isSelected = useItemSelectionState(props.internalState, itemRowId || undefined);
+    // The side queue's playing row (F4) wears a container painted on each of its cells.
+    const isQueueActive = useIsActiveRow(props.markActiveRow ? itemRowId || undefined : undefined);
     const clampHeight = getAlbumGroupClampHeight(props);
+    // B-271: a number cell (a column that keeps its floor in the shrink band; the row index stays
+    // as R16 M2 left it) renders by the base's rule: its box keeps its min-content width, so a
+    // short number uses the cell's padding and reads whole at a 40 px column, and wraps or clamps
+    // by row size. Text cells keep one line with an ellipsis (B-267).
+    const isNumber = props.type !== TableColumn.ROW_INDEX && keepsItsFloor(props.type);
 
     const isDragging = props.isDragging ?? false;
     const mergedRef = useMergedRef(containerRef, props.dragRef ?? null);
@@ -778,12 +805,11 @@ export const TableColumnTextContainer = (
                 [styles.alternateRowOdd]:
                     props.enableAlternateRowColors && isDataRow && dataIndex % 2 === 1,
                 [styles.center]: props.columns[props.columnIndex].align === 'center',
-                [styles.compact]: props.size === 'compact',
                 [styles.dataRow]: isDataRow,
                 [styles.dragging]: isDataRow && isDragging,
-                [styles.large]: props.size === 'large',
                 [styles.left]: props.columns[props.columnIndex].align === 'start',
                 [styles.noHorizontalPadding]: isNoHorizontalPaddingColumn(props.type),
+                [styles.numberCell]: isNumber,
                 [styles.paddingLg]: props.cellPadding === 'lg',
                 [styles.paddingMd]: props.cellPadding === 'md',
                 [styles.paddingSm]: props.cellPadding === 'sm',
@@ -797,6 +823,10 @@ export const TableColumnTextContainer = (
                 [styles.withHorizontalBorder]: showHorizontalBorder && clampHeight === null,
                 [styles.withVerticalBorder]: showVerticalBorder,
             })}
+            data-queue-active={isQueueActive || undefined}
+            data-queue-edge={
+                isQueueActive ? queueActiveEdge(props.columnIndex, isLastColumn) : undefined
+            }
             data-row-index={isDataRow ? `${props.tableId}-${props.rowIndex}` : undefined}
             onClick={handleClick}
             onContextMenu={handleContextMenu}
@@ -804,12 +834,31 @@ export const TableColumnTextContainer = (
             style={clampHeight !== null ? { height: clampHeight } : props.style}
         >
             <Text
-                className={clsx(styles.content, props.className, {
-                    [styles.compact]: props.size === 'compact',
-                    [styles.large]: props.size === 'large',
+                className={clsx(isNumber ? styles.numberContent : styles.content, props.className, {
+                    [styles.compact]: isNumber && props.size === 'compact',
+                    [styles.large]: isNumber && props.size === 'large',
                 })}
                 isMuted={!NonMutedColumns.includes(props.type)}
                 isNoSelect
+                // A row number is not text cut mid-word, and its play popover sits there (R16 M2).
+                onMouseEnter={
+                    props.type === TableColumn.ROW_INDEX
+                        ? undefined
+                        : (event) => {
+                              const content = event.currentTarget;
+                              const cell = content.parentElement;
+                              // A number past its cell would be clipped by the cell (B-271).
+                              const pastItsCell =
+                                  isNumber &&
+                                  cell !== null &&
+                                  runsPastItsCell(
+                                      content.getBoundingClientRect(),
+                                      cell.getBoundingClientRect().left + cell.clientLeft,
+                                      cell.clientWidth,
+                                  );
+                              showFullTextWhenCut(content, undefined, pastItsCell);
+                          }
+                }
             >
                 {props.children}
             </Text>
@@ -850,6 +899,8 @@ export const TableColumnContainer = (
             ? props.internalState.extractRowId(item)
             : undefined;
     const isSelected = useItemSelectionState(props.internalState, itemRowId || undefined);
+    // The side queue's playing row (F4) wears a container painted on each of its cells.
+    const isQueueActive = useIsActiveRow(props.markActiveRow ? itemRowId || undefined : undefined);
     const clampHeight = getAlbumGroupClampHeight(props);
 
     const isDragging = props.isDragging ?? false;
@@ -945,10 +996,8 @@ export const TableColumnContainer = (
                 [styles.alternateRowOdd]:
                     props.enableAlternateRowColors && isDataRow && dataIndex % 2 === 1,
                 [styles.center]: props.columns[props.columnIndex].align === 'center',
-                [styles.compact]: props.size === 'compact',
                 [styles.dataRow]: isDataRow,
                 [styles.dragging]: isDataRow && isDragging,
-                [styles.large]: props.size === 'large',
                 [styles.left]: props.columns[props.columnIndex].align === 'start',
                 [styles.noHorizontalPadding]: isNoHorizontalPaddingColumn(props.type),
                 [styles.noVerticalPadding]:
@@ -970,6 +1019,10 @@ export const TableColumnContainer = (
                 [styles.withVerticalBorder]: showVerticalBorder,
             })}
             data-exclude-row-drag-border={props.type === TableColumn.ALBUM_GROUP ? true : undefined}
+            data-queue-active={isQueueActive || undefined}
+            data-queue-edge={
+                isQueueActive ? queueActiveEdge(props.columnIndex, isLastColumn) : undefined
+            }
             data-row-index={isDataRow ? `${props.tableId}-${props.rowIndex}` : undefined}
             onClick={handleClick}
             onContextMenu={handleContextMenu}
@@ -1078,6 +1131,8 @@ const ColumnResizeHandle = ({
         event.stopPropagation();
         setIsDragging(true);
         startWidthRef.current = initialWidth;
+        // A click with no drag ends at the width it started from, not at the last drag's width.
+        finalWidthRef.current = initialWidth;
         startXRef.current = event.clientX;
         document.body.style.cursor = 'col-resize';
         document.body.style.userSelect = 'none';
@@ -1211,12 +1266,18 @@ export const TableColumnHeaderContainer = (
         );
     }, [props.type, props.enableColumnReorder, props.controls, props.tableId]);
 
+    // F6: the column the list is sorted by is marked (headers are not click-to-sort).
+    const sorted = props.sortedColumns?.columns.includes(props.type)
+        ? props.sortedColumns.order
+        : undefined;
+
     return (
         <Flex
             className={clsx(styles.container, styles.headerContainer, props.containerClassName, {
                 [styles.headerDraggedOverLeft]: isDraggedOver === 'left',
                 [styles.headerDraggedOverRight]: isDraggedOver === 'right',
                 [styles.headerDragging]: isDragging,
+                [styles.headerSorted]: !!sorted,
                 [styles.noHorizontalPadding]: isNoHorizontalPaddingColumn(props.type),
                 [styles.paddingLg]: props.cellPadding === 'lg',
                 [styles.paddingMd]: props.cellPadding === 'md',
@@ -1224,6 +1285,7 @@ export const TableColumnHeaderContainer = (
                 [styles.paddingXl]: props.cellPadding === 'xl',
                 [styles.paddingXs]: props.cellPadding === 'xs',
             })}
+            data-sorted={sorted}
             ref={containerRef}
             style={props.style}
         >
@@ -1235,7 +1297,11 @@ export const TableColumnHeaderContainer = (
                 })}
                 isNoSelect
             >
-                {columnLabelMap[props.type]}
+                {typeof columnLabelMap[props.type] === 'string' ? (
+                    <span className={styles.headerLabel}>{columnLabelMap[props.type]}</span>
+                ) : (
+                    columnLabelMap[props.type]
+                )}
             </Text>
             {props.enableColumnResize && (
                 <ColumnResizeHandle

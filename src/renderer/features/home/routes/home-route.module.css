@@ -1,0 +1,12 @@
+/* The page title above the first shelf (the header bar's own title still shows on scroll). */
+.title {
+    font-family: var(--theme-title-font-family, var(--theme-content-font-family));
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+
+/* A shelf whose row rendered nothing takes no space, so the Stack's gap is not paid for it. */
+[data-home-shelf]:empty {
+    display: none;
+}

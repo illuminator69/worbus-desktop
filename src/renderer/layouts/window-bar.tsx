@@ -177,7 +177,7 @@ export const WindowBar = () => {
         const privateModeString = privateMode ? t('page.windowBar.privateMode') : '';
 
         if (!windowBarTrackinfo) {
-            return `Feishin${privateMode ? ` ${privateModeString}` : ''}`;
+            return `Worbus${privateMode ? ` ${privateModeString}` : ''}`;
         }
 
         // Show radio information if radio is active
@@ -197,7 +197,7 @@ export const WindowBar = () => {
                 }
             }
 
-            return `${radioStatusString}${radioTitle}${radioMetadata} — Feishin${privateMode ? ` ${privateModeString}` : ''}`;
+            return `${radioStatusString}${radioTitle}${radioMetadata} — Worbus${privateMode ? ` ${privateModeString}` : ''}`;
         }
 
         // Show regular song information
@@ -205,8 +205,8 @@ export const WindowBar = () => {
         const queueString = queueLength ? `(${index + 1} / ${queueLength}) ` : '';
         const title = `${
             queueLength
-                ? `${statusString}${queueString}${currentSong?.name}${currentSong?.artistName ? ` — ${currentSong?.artistName} — Feishin` : ''}`
-                : 'Feishin'
+                ? `${statusString}${queueString}${currentSong?.name}${currentSong?.artistName ? ` — ${currentSong?.artistName} — Worbus` : ''}`
+                : 'Worbus'
         }${privateMode ? ` ${privateModeString}` : ''}`;
         return title;
     }, [

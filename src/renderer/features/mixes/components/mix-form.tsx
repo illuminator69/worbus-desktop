@@ -2,9 +2,11 @@ import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { ReactNode, useMemo, useState } from 'react';
 
 import { genresQueries } from '/@/renderer/features/genres/api/genres-api';
+import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     artistPickerEmpty,
     buildRecipe,
+    CUSTOM_RADIO_MAX_ARTISTS,
     FormKind,
     formKindsFor,
     formKindTakesCharacter,
@@ -16,14 +18,21 @@ import {
     pickerTerm,
     suggestedMixName,
 } from '/@/renderer/features/mixes/mix-recipe';
-import { useStationMode } from '/@/renderer/features/player/station/station-store';
+import { countStation, customRadioSeed } from '/@/renderer/features/player/station/station-client';
+import { takesVariety } from '/@/renderer/features/player/station/station-logic';
+import {
+    useStationCatalog,
+    useStationMode,
+} from '/@/renderer/features/player/station/station-store';
 import { useStationWords } from '/@/renderer/features/player/station/use-station-words';
 import { searchQueries } from '/@/renderer/features/search/api/search-api';
 import { useCurrentServerId, usePlayerSong } from '/@/renderer/store';
+import { useHubRoles } from '/@/renderer/store/hub.store';
 import { useStationSettings } from '/@/renderer/store/settings.store';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
 import { closeAllModals } from '/@/shared/components/modal/modal';
+import { Pill } from '/@/shared/components/pill/pill';
 import { SegmentedControl } from '/@/shared/components/segmented-control/segmented-control';
 import { Select } from '/@/shared/components/select/select';
 import { Stack } from '/@/shared/components/stack/stack';
@@ -31,10 +40,10 @@ import { TextInput } from '/@/shared/components/text-input/text-input';
 import { Text } from '/@/shared/components/text/text';
 import { useDebouncedValue } from '/@/shared/hooks/use-debounced-value';
 import { GenreListSort, SortOrder } from '/@/shared/types/domain-types';
-import { StationCharacterId } from '/@/shared/types/station-types';
+import { StationCharacterId, StationVariety } from '/@/shared/types/station-types';
 
 /**
- * Creating a recipe (B-149, B-151; the same spec as Navic's form).
+ * Creating a recipe (B-149, B-151; the same spec as Worbus for Android's form).
  *
  * Four kinds, in this order: Radio (around the playing song), Your mix (the hub's station from
  * what you play most; only with the station engine, which is what builds it), Genre and Artist.
@@ -45,6 +54,10 @@ import { StationCharacterId } from '/@/shared/types/station-types';
  * an artist mix could ever be seeded with in a library of thousands. The artist picker asks the
  * server (search3) as you type; the genre picker filters the whole genre list, which is loaded
  * once and is small enough to hold.
+ *
+ * Artist takes up to eight artists (P5): with more than one the recipe is a custom radio, as
+ * Worbus for Android's pick-and-tune flow makes it. Artist variety is offered when the hub's probe lists it,
+ * and the count line ("N songs to draw from") when it lists `count`.
  */
 
 /** A new mix's length. Not Auto DJ's item count, which is a top-up size of five. */
@@ -174,7 +187,7 @@ const GenrePicker = ({
             serverId,
         }),
     );
-    // By NAME: a recipe holds the genre's name, which Navic and getRandomSongs both take.
+    // By NAME: a recipe holds the genre's name, which Worbus for Android and getRandomSongs both take.
     const options = useMemo(
         () =>
             matchGenres(term, genres.data?.items ?? []).map((name) => ({
@@ -204,11 +217,78 @@ const GenrePicker = ({
     );
 };
 
+const VARIETIES: { label: string; value: StationVariety }[] = [
+    { label: 'Low', value: 'low' },
+    { label: 'Medium', value: 'medium' },
+    { label: 'High', value: 'high' },
+];
+
+type CountResult =
+    | { count: number; kind: 'counted'; partial: boolean }
+    | { kind: 'failed' | 'noSeed' | 'seedUnknown' };
+
+type CountWords = { blocks: boolean; line: string; muted: boolean };
+
+/**
+ * The count line for an Artist recipe (P5): how many songs the picked artists' radio could draw
+ * from at this character. Asked 250 ms after the artists or the character change; Artist variety
+ * is not part of it. A count of 0 and "AudioMuse knows none of these" block the save, as on Worbus for Android;
+ * a count that is not to be had does not.
+ */
+const useCountWords = (
+    serverId: null | string,
+    artistIds: readonly string[],
+    character: StationCharacterId,
+): CountWords | null => {
+    const catalog = useStationCatalog();
+    const enabled = Boolean(serverId && catalog?.count && artistIds.length > 0);
+    const [debounced] = useDebouncedValue(`${[...artistIds].sort().join(',')}|${character}`, 250);
+    const key = debounced ?? '';
+    const [ids = '', ch] = key.split('|');
+    const query = useQuery({
+        enabled: enabled && ids !== '',
+        queryFn: async (): Promise<CountResult> => {
+            const seeded = await customRadioSeed(serverId!, ids.split(','), '');
+            if (!seeded) return { kind: 'noSeed' };
+            const result = await countStation(seeded.seed, ch as StationCharacterId);
+            if (result.ok && result.data) {
+                return { count: result.data.count, kind: 'counted', partial: result.data.partial };
+            }
+            return { kind: result.code === 'seed_unknown' ? 'seedUnknown' : 'failed' };
+        },
+        queryKey: ['station-count', serverId, key],
+        staleTime: 60_000,
+    });
+    if (!enabled) return null;
+    if (query.isFetching || !query.data) return { blocks: false, line: 'Counting...', muted: true };
+    const data = query.data;
+    if (data.kind === 'counted') {
+        if (data.count === 0) {
+            return { blocks: true, line: '0 songs match. Try a different setting.', muted: false };
+        }
+        const n = data.count.toLocaleString('en-US');
+        return {
+            blocks: false,
+            line: data.partial ? `At least ${n} songs to draw from` : `${n} songs to draw from`,
+            muted: false,
+        };
+    }
+    if (data.kind === 'seedUnknown') {
+        return {
+            blocks: true,
+            line: 'AudioMuse has not analysed these artists yet.',
+            muted: false,
+        };
+    }
+    return { blocks: false, line: 'Count unavailable', muted: true };
+};
+
 export const MixForm = ({ onSubmit }: MixFormProps) => {
     const song = usePlayerSong();
     const serverId = useCurrentServerId();
     // Your mix is the hub's station from what you play most, so it is offered only with it.
-    const offered = formKindsFor(useStationMode() === 'stations');
+    // Worbus P2: and only to the primary user, whose listening it is.
+    const offered = formKindsFor(useStationMode() === 'stations', allows(useHubRoles(), 'yourMix'));
     const words = useStationWords();
     const stationSettings = useStationSettings();
     const [chosenKind, setKind] = useState<FormKind>('radio');
@@ -219,13 +299,24 @@ export const MixForm = ({ onSubmit }: MixFormProps) => {
     );
     // The picked seed for the two library kinds, held separately so switching kinds and back
     // keeps each kind's own choice and never hands one kind's seed to the other.
-    const [pickedArtist, setPickedArtist] = useState<null | { id: string; name: string }>(null);
+    const [pickedArtists, setPickedArtists] = useState<{ id: string; name: string }[]>([]);
+    // Remounts the picker after each pick, so its box is empty for the next artist.
+    const [pickerRound, setPickerRound] = useState(0);
+    const [variety, setVariety] = useState<StationVariety>('medium');
+    const catalog = useStationCatalog();
+    const varietyOffered =
+        useStationMode() === 'stations' && VARIETIES.every((v) => takesVariety(catalog, v.value));
+    const counted = useCountWords(
+        serverId,
+        kind === 'artist' ? pickedArtists.map((a) => a.id) : [],
+        character,
+    );
     const [pickedGenre, setPickedGenre] = useState<null | string>(null);
 
     // The name follows the recipe (the kind, the song, the pick) until the user writes their own:
     // while the box is empty or still holds the last suggestion.
     const suggested = suggestedMixName(kind, {
-        artist: pickedArtist?.name,
+        artists: pickedArtists.map((a) => a.name),
         genre: pickedGenre,
         song: song?.name,
     });
@@ -237,13 +328,14 @@ export const MixForm = ({ onSubmit }: MixFormProps) => {
     }
 
     const recipe = buildRecipe({
-        artist: pickedArtist,
+        artists: pickedArtists,
         character,
         count: NEW_MIX_COUNT,
         genre: pickedGenre,
         kind,
         name,
         song: song ? { albumId: song.albumId, id: song.id, name: song.name } : null,
+        variety: kind === 'artist' && varietyOffered ? variety : undefined,
     });
 
     return (
@@ -277,7 +369,54 @@ export const MixForm = ({ onSubmit }: MixFormProps) => {
                 </Text>
             )}
             {kind === 'artist' && serverId && (
-                <ArtistPicker onPick={setPickedArtist} picked={pickedArtist} serverId={serverId} />
+                <Stack gap={6}>
+                    {pickedArtists.length > 0 && (
+                        <Group gap={6}>
+                            {pickedArtists.map((artist) => (
+                                <Pill
+                                    key={artist.id}
+                                    onRemove={() =>
+                                        setPickedArtists((now) =>
+                                            now.filter((a) => a.id !== artist.id),
+                                        )
+                                    }
+                                    withRemoveButton
+                                >
+                                    {artist.name}
+                                </Pill>
+                            ))}
+                        </Group>
+                    )}
+                    {pickedArtists.length < CUSTOM_RADIO_MAX_ARTISTS ? (
+                        <ArtistPicker
+                            key={pickerRound}
+                            onPick={(artist) => {
+                                if (!artist) return;
+                                setPickedArtists((now) =>
+                                    now.some((a) => a.id === artist.id) ? now : [...now, artist],
+                                );
+                                setPickerRound((n) => n + 1);
+                            }}
+                            picked={null}
+                            serverId={serverId}
+                        />
+                    ) : (
+                        <Text isMuted size="xs">
+                            {`${CUSTOM_RADIO_MAX_ARTISTS} is the most`}
+                        </Text>
+                    )}
+                </Stack>
+            )}
+            {kind === 'artist' && varietyOffered && (
+                <Stack gap={4}>
+                    <Text size="sm">Artist variety</Text>
+                    <SegmentedControl
+                        data={VARIETIES}
+                        onChange={(value) => setVariety(value as StationVariety)}
+                        value={variety}
+                        w="100%"
+                    />
+                </Stack>
             )}
             {kind === 'genre' && serverId && (
                 <GenrePicker onPick={setPickedGenre} picked={pickedGenre} serverId={serverId} />
@@ -296,12 +435,17 @@ export const MixForm = ({ onSubmit }: MixFormProps) => {
                     </Text>
                 </Stack>
             )}
+            {kind === 'artist' && counted && (
+                <Text isMuted={counted.muted} size="sm">
+                    {counted.line}
+                </Text>
+            )}
             <Group justify="flex-end">
                 <Button onClick={() => closeAllModals()} variant="subtle">
                     Cancel
                 </Button>
                 <Button
-                    disabled={!recipe}
+                    disabled={!recipe || Boolean(kind === 'artist' && counted?.blocks)}
                     onClick={() => {
                         if (!recipe) return;
                         onSubmit(recipe);

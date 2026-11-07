@@ -10,7 +10,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
 
 /**
  * One card in a Discover row, shaped like the poster cards the rest of the app
- * uses rather than like Navic's tiles.
+ * uses rather than like Worbus for Android's tiles.
  *
  * It is not `ItemCard`, and the reason is routing rather than looks: `ItemCard`
  * derives its link from `getTitlePath(itemType, data.id)`, so every card it can
@@ -38,6 +38,8 @@ interface DiscoverTileProps {
      * progress), the way a library card carries its rating badge.
      */
     badge?: ReactNode;
+    /** Where the badge sits: the bottom stack (default), or a chip at the cover's top-left corner. */
+    badgePlacement?: 'bottom' | 'top-start';
     /** A third, smaller line under the subtitle (a date and a release type). */
     caption?: string;
     /**
@@ -61,6 +63,11 @@ interface DiscoverTileProps {
     isBusy?: boolean;
     /** Artists are circles here, exactly as they are on the artist carousels. */
     isRound?: boolean;
+    /**
+     * Held from a previous answer while the row's new one loads (react-query's placeholder
+     * data): dimmed, so it does not read as the new answer, as the Fresh page dims its rows.
+     */
+    isStale?: boolean;
     /** Faded and dashed, the same grammar the missing-album tiles use. */
     isUnowned?: boolean;
     itemType: LibraryItem;
@@ -80,12 +87,14 @@ interface DiscoverTileProps {
 export const DiscoverTile = ({
     action,
     badge,
+    badgePlacement = 'bottom',
     caption,
     cover,
     imageId,
     imageUrl,
     isBusy,
     isRound,
+    isStale,
     isUnowned,
     itemType,
     onClick,
@@ -112,7 +121,11 @@ export const DiscoverTile = ({
             {badge ? (
                 <div className={styles.badged}>
                     {image}
-                    <div className={styles.badge}>{badge}</div>
+                    <div
+                        className={badgePlacement === 'top-start' ? styles.badgeTop : styles.badge}
+                    >
+                        {badge}
+                    </div>
                 </div>
             ) : (
                 image
@@ -146,7 +159,11 @@ export const DiscoverTile = ({
         </>
     );
     return (
-        <div className={styles.wrapper} onContextMenu={onContextMenu}>
+        <div
+            aria-busy={isStale || undefined}
+            className={clsx(styles.wrapper, { [styles.stale]: isStale })}
+            onContextMenu={onContextMenu}
+        >
             {onClick && subtitleTo ? (
                 // A box that acts as a button, so the artist link inside it is valid.
                 <div

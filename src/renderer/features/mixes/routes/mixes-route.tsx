@@ -4,12 +4,13 @@ import { useTranslation } from 'react-i18next';
 import styles from './mixes-route.module.css';
 
 import i18n from '/@/i18n/i18n';
+import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import { lbModalSettings } from '/@/renderer/features/lbbot/components/lb-modal-layout';
 import { GeneratedArtwork, MixArtwork } from '/@/renderer/features/mixes/components/mix-artwork';
 import { MixForm } from '/@/renderer/features/mixes/components/mix-form';
 import { MixPreview } from '/@/renderer/features/mixes/components/mix-preview';
 import { useMixActions, usePlayMix } from '/@/renderer/features/mixes/hooks/use-mixes';
-import { mixLine, yourMixLine } from '/@/renderer/features/mixes/mix-recipe';
+import { isPrimaryOnlyMix, mixLine, yourMixLine } from '/@/renderer/features/mixes/mix-recipe';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { playYourMix } from '/@/renderer/features/player/station/station-client';
 import { characterLabel } from '/@/renderer/features/player/station/station-logic';
@@ -26,6 +27,7 @@ import {
     useHubConnected,
     useMixes,
 } from '/@/renderer/store';
+import { useHubRoles } from '/@/renderer/store/hub.store';
 import { useStationSettings } from '/@/renderer/store/settings.store';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Button } from '/@/shared/components/button/button';
@@ -44,7 +46,7 @@ import { StationCharacterId } from '/@/shared/types/station-types';
  * navi-connect: "Mixed for You" — the recipes, not the results.
  *
  * The name avoids both words this stack has already spent. "Station" is
- * Subsonic internet radio in Navic (`Screen.RadioList`) and in Feishin's
+ * Subsonic internet radio in Worbus for Android (`Screen.RadioList`) and in Worbus for desktop's
  * create/edit-station forms; "radio" is the ephemeral similarity mix
  * (`RadioManager.startRadio`, `SavedQueueSource.RADIO`); and Navidrome's own
  * "Instant Mix" is ephemeral too — which is precisely what these are not. In
@@ -252,7 +254,10 @@ const YourMixRow = () => {
 };
 
 const MixesRoute = () => {
-    const mixes = useMixes();
+    // Worbus P2: Your mix and the fingerprint read the primary user's listening, so for anyone
+    // else they are neither offered nor listed.
+    const yourMixAllowed = allows(useHubRoles(), 'yourMix');
+    const mixes = useMixes().filter((mix) => yourMixAllowed || !isPrimaryOnlyMix(mix));
     const connected = useHubConnected();
     const stations = useStationMode() === 'stations';
     const { saveMix } = useMixActions();
@@ -275,7 +280,7 @@ const MixesRoute = () => {
             title={t('naviConnect.mixes.title')}
         >
             <Stack gap="sm">
-                {stations && <YourMixRow />}
+                {stations && yourMixAllowed && <YourMixRow />}
                 {/* Not an error, and not a retry: the recipes live on the
                     hub, so with no hub there is nothing to show and
                     nothing this page could do about it. */}

@@ -155,7 +155,9 @@ export const playerStoreStorage: PersistStorage<unknown> = {
  */
 export const mergeOverridingColumns = <T>(persistedState: unknown, currentState: T) => {
     return mergeWith(currentState, persistedState, (_original, persistent, key) => {
-        if (key === 'columns') {
+        // Arrays merge index by index; these must come back exactly as stored. Home's rows (F5):
+        // a stored list shorter than the 11-row default would otherwise keep the default's tail.
+        if (key === 'columns' || key === 'homeItems') {
             return persistent;
         }
 

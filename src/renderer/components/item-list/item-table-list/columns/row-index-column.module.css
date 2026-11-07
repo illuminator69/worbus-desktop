@@ -1,4 +1,6 @@
-.full-size-content {
+/* R17 review M-4: doubled, so the playable track number's own display wins over the number cell's
+   rule (.number-content, another module) by specificity, not by the bundle's CSS order. */
+.full-size-content.full-size-content {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -42,4 +44,53 @@
     justify-content: center;
     width: 100%;
     height: 100%;
+}
+
+/* The side queue's playing row (F4): three bars, moving while the song plays, still while it is
+   paused and under reduced motion. The bars take the text colour (the accent container's label). */
+.equalizer {
+    display: flex;
+    gap: 2px;
+    align-items: flex-end;
+    height: 12px;
+}
+
+.equalizer > span {
+    width: 3px;
+    height: 100%;
+    background: currentcolor;
+    border-radius: 1px;
+    transform-origin: bottom;
+}
+
+.equalizer > span:nth-child(1) {
+    transform: scaleY(0.55);
+}
+
+.equalizer > span:nth-child(3) {
+    transform: scaleY(0.75);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .equalizer[data-playing='true'] > span {
+        animation: equalizer-bar 0.9s ease-in-out infinite alternate;
+    }
+
+    .equalizer[data-playing='true'] > span:nth-child(2) {
+        animation-delay: -0.3s;
+    }
+
+    .equalizer[data-playing='true'] > span:nth-child(3) {
+        animation-delay: -0.6s;
+    }
+}
+
+@keyframes equalizer-bar {
+    from {
+        transform: scaleY(0.3);
+    }
+
+    to {
+        transform: scaleY(1);
+    }
 }

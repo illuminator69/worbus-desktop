@@ -11,10 +11,21 @@
     }
 
     transition: background 0.5s;
+
+    /* Under the cover wash the bar's colour is a band in the wash's veil (window-wash.module.css), so it
+       cross-fades with the backdrop on the compositor instead of being restyled. */
+    :root[data-cover-wash='true'] & {
+        background: transparent;
+        transition: none;
+    }
 }
 
 .open-drawer {
     &:hover {
         background: darken(var(--theme-colors-background), 20%);
+    }
+
+    :root[data-cover-wash='true'] &:hover {
+        background: var(--wash-surf2);
     }
 }

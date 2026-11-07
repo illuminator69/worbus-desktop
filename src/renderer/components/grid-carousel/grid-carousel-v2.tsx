@@ -1,14 +1,17 @@
 import type { Variants } from 'motion/react';
 import type { ReactNode } from 'react';
 
-import { AnimatePresence, motion } from 'motion/react';
+import clsx from 'clsx';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import styles from './grid-carousel.module.css';
 
 import { DataRow, MemoizedItemCard } from '/@/renderer/components/item-card/item-card';
+import { type ArrivalProps, useArrival } from '/@/renderer/features/motion/use-arrival';
 import { useContainerQuery } from '/@/renderer/hooks';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
+import { KIT_EASE, KIT_MS, KIT_RISE_PX } from '/@/shared/components/animations/motion-tokens';
 import { Group } from '/@/shared/components/group/group';
 import { TextTitle } from '/@/shared/components/text-title/text-title';
 import { LibraryItem } from '/@/shared/types/domain-types';
@@ -31,6 +34,8 @@ interface Card {
 }
 
 interface GridCarouselProps {
+    /** The first tiles rise in once, when the carousel first has cards (default true). */
+    arrive?: boolean;
     cards: Card[];
     containerQuery?: ReturnType<typeof useGridCarouselContainerQuery>;
     enableRefresh?: boolean;
@@ -46,24 +51,51 @@ interface GridCarouselProps {
     title?: ReactNode | string;
 }
 
-const MemoizedCard = memo(({ content }: { content: ReactNode }) => (
-    <div className={styles.card}>{content}</div>
-));
+const MemoizedCard = memo(
+    ({ arrival, content }: { arrival?: ArrivalProps; content: ReactNode }) => (
+        <div
+            className={clsx(styles.card, arrival?.className)}
+            data-arrive={arrival?.['data-arrive']}
+            style={arrival?.style}
+        >
+            {content}
+        </div>
+    ),
+);
 
 MemoizedCard.displayName = 'MemoizedCard';
 
+interface PageCustom {
+    isNext: boolean;
+    reduced: boolean;
+}
+
+// A page change is the kit's rise (8 px over 240 ms on the arrival curve), out and in; reduced motion is instant.
+const pageTransition = (reduced: boolean) => ({
+    duration: reduced ? 0 : KIT_MS / 1000,
+    ease: KIT_EASE,
+});
+
 const pageVariants: Variants = {
-    animate: { opacity: 1, transition: { duration: 0.3, ease: 'easeOut' }, x: 0 },
-    exit: (custom: { isNext: boolean }) => ({
-        opacity: 0,
-        transition: { duration: 0.3, ease: 'easeIn' },
-        x: custom.isNext ? -100 : 100,
+    animate: (custom: PageCustom) => ({
+        opacity: 1,
+        transition: pageTransition(custom.reduced),
+        x: 0,
     }),
-    initial: (custom: { isNext: boolean }) => ({ opacity: 0, x: custom.isNext ? 100 : -100 }),
+    exit: (custom: PageCustom) => ({
+        opacity: 0,
+        transition: pageTransition(custom.reduced),
+        x: custom.isNext ? -KIT_RISE_PX : KIT_RISE_PX,
+    }),
+    initial: (custom: PageCustom) => ({
+        opacity: 0,
+        x: custom.isNext ? KIT_RISE_PX : -KIT_RISE_PX,
+    }),
 };
 
 function BaseGridCarousel(props: GridCarouselProps) {
     const {
+        arrive = true,
         cards,
         containerQuery: providedContainerQuery,
         enableRefresh = false,
@@ -86,6 +118,11 @@ function BaseGridCarousel(props: GridCarouselProps) {
         isNext: false,
         page: 0,
     });
+    const reduced = !!useReducedMotion();
+    const pageCustom = useMemo<PageCustom>(
+        () => ({ isNext: currentPage.isNext, reduced }),
+        [currentPage.isNext, reduced],
+    );
 
     const handlePrevPage = useCallback(() => {
         setCurrentPage((prev) => ({
@@ -155,6 +192,14 @@ function BaseGridCarousel(props: GridCarouselProps) {
         placeholderItemType,
         placeholderRows,
     ]);
+
+    // Computed once per change of the page's cards: after the window closes (a page flip, a later
+    // refetch) every card gets none.
+    const { propsFor } = useArrival(arrive && visibleCards.length > 0);
+    const arrivals = useMemo(
+        () => visibleCards.map((_, index) => propsFor(index)),
+        [visibleCards, propsFor],
+    );
 
     const shouldLoadNextPage = visibleCards.length < cardsToShow * rowCount;
 
@@ -329,11 +374,11 @@ function BaseGridCarousel(props: GridCarouselProps) {
                             </div>
                         )}
                     </motion.div>
-                    <AnimatePresence custom={currentPage} initial={false} mode="wait">
+                    <AnimatePresence custom={pageCustom} initial={false} mode="wait">
                         <motion.div
                             animate="animate"
                             className={styles.grid}
-                            custom={currentPage}
+                            custom={pageCustom}
                             exit="exit"
                             initial="initial"
                             key={currentPage.page}
@@ -346,8 +391,12 @@ function BaseGridCarousel(props: GridCarouselProps) {
                             }
                             variants={pageVariants}
                         >
-                            {visibleCards.map((card) => (
-                                <MemoizedCard content={card.content} key={card.id} />
+                            {visibleCards.map((card, index) => (
+                                <MemoizedCard
+                                    arrival={arrivals[index]}
+                                    content={card.content}
+                                    key={card.id}
+                                />
                             ))}
                         </motion.div>
                     </AnimatePresence>
@@ -415,6 +464,7 @@ const GridCarouselSkeleton = (props: GridCarouselSkeletonProps) => {
 
     return (
         <GridCarousel
+            arrive={false}
             cards={placeholderCards}
             containerQuery={containerQuery}
             enableRefresh={enableRefresh}

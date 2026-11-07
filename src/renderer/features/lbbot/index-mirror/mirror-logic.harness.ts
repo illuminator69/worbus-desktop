@@ -16,9 +16,9 @@ import {
 } from './mirror-logic.ts';
 
 /**
- * Q-003 (Feishin half): `mirror-logic.ts` has no test runner in this repo and
+ * Q-003 (Worbus for desktop half): `mirror-logic.ts` has no test runner in this repo and
  * has never executed — its rules (PLAN-lbbot-index-mirror-2026-09-23 §1a) were
- * reasoned from the doc comments and Navic's Kotlin port, never run. This
+ * reasoned from the doc comments and Worbus for Android's Kotlin port, never run. This
  * harness runs the pure functions directly against hand-built cases derived
  * from those doc comments and from how `index-mirror.ts` calls them.
  *

@@ -1,7 +1,7 @@
 import { SavedQueue, SavedQueueKind } from '/@/renderer/store/saved-queues.store';
 
 // navi-connect: shared display helpers for saved queues, used by both the home "Continue Listening"
-// carousel and the full-screen Saved Queues management view. Navic renders the same records from the
+// carousel and the full-screen Saved Queues management view. Worbus for Android renders the same records from the
 // same rules (see its SavedQueueFormat.kt) — keep the two in step.
 
 export const SAVED_QUEUE_KIND_LABEL: Record<SavedQueueKind, string> = {

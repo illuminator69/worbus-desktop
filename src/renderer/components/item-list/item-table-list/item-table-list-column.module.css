@@ -63,7 +63,30 @@
     align-self: flex-end;
 }
 
+/* B-267: every text cell is one line ending in an ellipsis, by the title column's artist line rule
+   (`.artists` in columns/title-combined-column.module.css). A two-line clamp cut a word wider than
+   the cell through, with no ellipsis, while the header beside it ellipsised. */
 .content {
+    position: relative;
+    z-index: 2;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    --text-text-wrap: nowrap;
+}
+
+.content > * {
+    white-space: nowrap;
+}
+
+/* B-271: a number cell keeps the base's rule (the shared container's before R16). Its box keeps
+   its min-content width, so a short number runs into the cell's padding and reads whole at a
+   40 px column ("0:03", "2026"); with R16's one-line rule it was cut to the 23 px content box
+   ("0:..."). A number with a space wraps, clamped by row size ("320 / kbps" at the default). */
+.number-content {
     position: relative;
     z-index: 2;
     display: -webkit-box;
@@ -74,12 +97,12 @@
     -webkit-box-orient: vertical;
 }
 
-.content.compact {
+.number-content.compact {
     -webkit-line-clamp: 1;
     line-clamp: 1;
 }
 
-.content.large {
+.number-content.large {
     -webkit-line-clamp: 3;
     line-clamp: 3;
 }
@@ -131,6 +154,15 @@
             1px 0 0 0 darken(var(--theme-colors-surface), 5%),
             -1px 0 0 0 darken(var(--theme-colors-surface), 5%);
     }
+}
+
+/*
+ * With the cover wash the highlight is translucent, so the 1px side shadows (which hide sub-pixel seams
+ * between opaque cells) overlap the next cell and draw a brighter line at every cell edge.
+ */
+:root[data-cover-wash='true'] .container.data-row.row-hover-highlight-enabled[data-row-hovered='true'],
+:root[data-cover-wash='true'] .container.data-row.row-selected {
+    box-shadow: none;
 }
 
 .container.data-row.row-selected.with-vertical-border,
@@ -230,6 +262,21 @@
     padding-left: 0;
 }
 
+/*
+ * F6: the column the list is sorted by: a 2 px accent bar, and under the cover wash its label in the
+ * accent (the Library board). A theme's own accent can be too dark for text here (defaultDark's blue
+ * reads 3.6:1 on the header), so without the wash the label keeps the header's colour.
+ * R14 (B-249): the bar is the label's own width and sits under it, icons included (see
+ * `.header-content`).
+ */
+.header-sorted .header-content {
+    box-shadow: inset 0 -2px 0 var(--theme-colors-primary);
+
+    :root[data-cover-wash='true'] & {
+        color: var(--theme-colors-primary);
+    }
+}
+
 .header-dragging {
     cursor: grabbing;
     opacity: 0.5;
@@ -257,27 +304,51 @@
     background-color: var(--theme-colors-primary);
 }
 
+/*
+ * R14 (B-249): as wide as its label and one text line tall whatever it holds. The sorted column's bar
+ * is drawn on this box's bottom edge: it spanned the whole column, and on an icon header (the heart,
+ * the star: a box only the icon's 1em tall) it was drawn across the icon's lower part. Now every
+ * label has a full text line (the zero-width space below) and the icon stays centred on it, as before,
+ * so the bar sits under the icon a little lower than under a word, never across it.
+ */
 .header-content {
     display: flex;
     align-items: center;
+    width: fit-content;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     font-size: var(--theme-font-size-sm);
     white-space: nowrap;
 }
 
+/* B-264: a label wider than its column ends in an ellipsis. Centred in a flex box it overflowed
+   both sides and was clipped through ("BITRATE" read "'RA"). */
+.header-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.header-content::before {
+    content: '\200b';
+}
+
 .header-content.center {
     justify-content: center;
+    margin-inline: auto;
     text-align: center;
 }
 
 .header-content.left {
     justify-content: flex-start;
+    margin-inline-end: auto;
     text-align: left;
 }
 
 .header-content.right {
     justify-content: flex-end;
+    margin-inline-start: auto;
     text-align: right;
 }
 
@@ -391,4 +462,127 @@
 
 .resize-handle:hover {
     opacity: 1;
+}
+
+/*
+ * The side queue's playing row (F4, `markActiveRow`): one container under all of its cells, 4 px in
+ * from each side with radius 8 on the outer cells. With the cover wash it is F2's accent container
+ * pair; without it a primary tint under the foreground colour.
+ */
+.container.data-row[data-queue-active='true'] {
+    /* One label colour for the whole row, as the board draws it (the title's primary on the tint
+       measured 3.27:1 with the wash off). */
+    color: var(--theme-colors-foreground);
+    isolation: isolate;
+
+    &::before {
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        content: '';
+        background: color-mix(in srgb, var(--theme-colors-primary-filled) 16%, transparent);
+
+        :root[data-cover-wash='true'] & {
+            background: var(--wash-accc);
+        }
+    }
+
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+    }
+
+    & * {
+        color: inherit;
+    }
+}
+
+/* The container is opaque with the wash, so the row's own selection and hover colours are drawn
+   into it (it would otherwise hide them: a playing row would look unselected under Delete). */
+:root[data-cover-wash='true']
+    .container.data-row.row-hover-highlight-enabled[data-row-hovered='true'][data-queue-active='true']::before {
+    background: color-mix(in oklch, var(--wash-accc) 82%, var(--wash-mid));
+}
+
+:root[data-cover-wash='true'] .container.data-row.row-selected[data-queue-active='true']::before {
+    background: color-mix(in oklch, var(--wash-accc) 62%, var(--wash-mid));
+}
+
+.container.data-row[data-queue-edge='first']::before,
+.container.data-row[data-queue-edge='both']::before {
+    left: 4px;
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+}
+
+.container.data-row[data-queue-edge='last']::before,
+.container.data-row[data-queue-edge='both']::before {
+    right: 4px;
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+}
+
+/* B-264: the stars stay inside their cell when the column is narrower than they are (a width the
+   user set); they drew over the heart beside them. Clipped across only: a drop line above or below
+   the row still shows. */
+.rating-cell {
+    overflow-x: clip;
+}
+
+/* B-271: a number uses its cell's padding but stops at the cell's own border. With the base's rule
+   a number wider than the cell ("1:02:03", 46 px, at a 40 px column) drew over the next cell's
+   text. Clipped across only, as the rating cell. The cell is a size container and names its side
+   padding, so the number's box can be measured against the cell's padding box (below). */
+.number-cell {
+    --number-cell-padding: 0px;
+
+    container-type: inline-size;
+    overflow-x: clip;
+}
+
+.number-cell.padding-xs {
+    --number-cell-padding: var(--theme-spacing-xs);
+}
+
+.number-cell.padding-sm {
+    --number-cell-padding: var(--theme-spacing-sm);
+}
+
+.number-cell.padding-md {
+    --number-cell-padding: var(--theme-spacing-md);
+}
+
+.number-cell.padding-lg {
+    --number-cell-padding: var(--theme-spacing-lg);
+}
+
+.number-cell.padding-xl {
+    --number-cell-padding: var(--theme-spacing-xl);
+}
+
+.number-cell.no-horizontal-padding {
+    --number-cell-padding: 0px;
+}
+
+/* R17: a number's box is at most the cell's padding box (39 px at a 40 px column). A number wider
+   than that ends in the base rule's ellipsis inside it, the start of the value readable, instead of
+   being clipped mid-glyph at the border, and gets its full text on hover. */
+.number-cell > .number-content {
+    max-width: calc(100% + 2 * var(--number-cell-padding));
+}
+
+/* R17: a start or end aligned number that does not fit on its aligned side moves into the other
+   side's padding by exactly what it lacks, so "10:03" reads whole instead of "0:03". The shift is 0
+   for a number that fits its side, which keeps its alignment. 100cqw is the cell's content box and
+   100% the box's own width, so the only edge is the padding box: no threshold to guess. Centred, a
+   box no wider than the padding box already stays inside it. The table's data cells reach start
+   alignment as `left` (`.container.start` is never set on them), so a number cell names it here. */
+.number-cell.left > .number-content {
+    align-self: flex-start;
+    text-align: left;
+    translate: min(0px, 100cqw + var(--number-cell-padding) - 100%);
+}
+
+.number-cell.right > .number-content {
+    translate: max(0px, 100% - 100cqw - var(--number-cell-padding));
 }

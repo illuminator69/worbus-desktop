@@ -12,6 +12,7 @@ import {
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { useIsActiveRow } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { JoinedArtists } from '/@/renderer/features/albums/components/joined-artists';
 import { ExplicitIndicator } from '/@/shared/components/explicit-indicator/explicit-indicator';
 import { Icon } from '/@/shared/components/icon/icon';
@@ -58,13 +59,17 @@ export const DefaultTitleArtistColumn = (props: ItemTableListInnerColumn) => {
                             [styles.large]: props.size === 'large',
                         })}
                         isNoSelect
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                         size="md"
                         {...titleLinkProps}
                     >
                         <ExplicitIndicator explicitStatus={item?.explicitStatus} />
                         {item.name as string}
                     </Text>
-                    <div className={styles.artists}>
+                    <div
+                        className={styles.artists}
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
+                    >
                         <JoinedArtists
                             artistName={item.albumArtist}
                             artists={item.albumArtists}
@@ -134,6 +139,7 @@ export const QueueSongTitleArtistColumn = (props: ItemTableListInnerColumn) => {
                             [styles.title]: true,
                         })}
                         isNoSelect
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                         size="md"
                         {...titleLinkProps}
                     >
@@ -154,7 +160,10 @@ export const QueueSongTitleArtistColumn = (props: ItemTableListInnerColumn) => {
                             </Text>
                         )}
                     </Text>
-                    <div className={styles.artists}>
+                    <div
+                        className={styles.artists}
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
+                    >
                         <JoinedArtists
                             artistName={item.artistName}
                             artists={item.artists}
@@ -200,6 +209,7 @@ export const QueueSongTitleArtistColumn = (props: ItemTableListInnerColumn) => {
                 <Text
                     className={styles.title}
                     isNoSelect
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                     size="md"
                     {...titleLinkProps}
                     style={textStyles}

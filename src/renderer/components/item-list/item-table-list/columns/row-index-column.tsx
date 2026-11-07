@@ -110,7 +110,19 @@ const PlayableRowIndexColumn = (props: ItemTableListInnerColumn) => {
 
     const indexContent = isActive ? (
         <Flex className={styles.indexContent}>
-            <Icon fill="primary" icon={isPlaying ? 'mediaPlay' : 'mediaPause'} />
+            {props.markActiveRow ? (
+                <span
+                    aria-hidden
+                    className={styles.equalizer}
+                    data-playing={isPlaying || undefined}
+                >
+                    <span />
+                    <span />
+                    <span />
+                </span>
+            ) : (
+                <Icon fill="primary" icon={isPlaying ? 'mediaPlay' : 'mediaPause'} />
+            )}
         </Flex>
     ) : (
         adjustedRowIndex

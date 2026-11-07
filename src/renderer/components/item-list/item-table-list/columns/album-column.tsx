@@ -1,4 +1,3 @@
-import clsx from 'clsx';
 import { useMemo } from 'react';
 import { generatePath, Link } from 'react-router';
 
@@ -10,6 +9,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { AppRoute } from '/@/renderer/router/routes';
 import { Text } from '/@/shared/components/text/text';
 import { Song } from '/@/shared/types/domain-types';
@@ -31,10 +31,8 @@ const AlbumColumn = (props: ItemTableListInnerColumn) => {
             return (
                 <TableColumnContainer {...props}>
                     <div
-                        className={clsx(styles.albumContainer, {
-                            [styles.compact]: props.size === 'compact',
-                            [styles.large]: props.size === 'large',
-                        })}
+                        className={styles.albumContainer}
+                        onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                     >
                         <Text
                             className={styles.albumLink}
@@ -55,12 +53,10 @@ const AlbumColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <Text
-                    className={clsx(styles.albumContainer, {
-                        [styles.compact]: props.size === 'compact',
-                        [styles.large]: props.size === 'large',
-                    })}
+                    className={styles.albumContainer}
                     isMuted
                     isNoSelect
+                    onMouseEnter={(event) => showFullTextWhenCut(event.currentTarget)}
                 >
                     {row}
                 </Text>

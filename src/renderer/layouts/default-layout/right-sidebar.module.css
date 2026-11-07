@@ -10,9 +10,10 @@
     min-width: 0;
     height: 100%;
     min-height: 0;
+    margin-left: var(--panel-gap, 0);
     overflow: hidden;
     background: var(--theme-colors-background-alternate);
-    border-left: 1px solid alpha(var(--theme-colors-border), 0.5);
+    border-radius: var(--panel-radius, 0);
 
     .current-song-cell:not(.current-playlist-song-cell) svg {
         display: none;
@@ -20,10 +21,56 @@
 }
 
 .right-sidebar-container.vertical-layout {
-    border-top: 1px solid alpha(var(--theme-colors-border), 0.5);
-    border-left: 0;
+    margin-left: 0;
 }
 
 .queue-drawer {
     border-radius: var(--theme-radius-lg);
+}
+
+/*
+ * The queue opened while the window is too narrow for it in the grid (B-207): over the page's right
+ * edge, beside the rail, at the panel's own width, so the page keeps its width. Out of the grid
+ * (grid-area auto), its containing block is the shell's padding box.
+ * z-index: above the page's sticky header (190), under the player bar (200).
+ */
+.right-sidebar-container.overlay {
+    position: absolute;
+    top: 0;
+    right: calc(var(--queue-rail-width) + var(--panel-gap));
+    bottom: var(--panel-gap);
+    z-index: 192;
+    grid-area: auto;
+    width: var(--right-sidebar-width);
+    max-width: calc(100% - var(--queue-rail-width) - 2 * var(--panel-gap));
+    height: auto;
+    margin-left: 0;
+    box-shadow: 0 12px 40px rgb(0 0 0 / 45%);
+    animation: overlay-in var(--motion-duration) var(--motion-ease);
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+    }
+
+    /* A floating layer keeps its tint over the opaque page colour, as the hover card does. */
+    :root[data-cover-wash='true'] & {
+        background:
+            linear-gradient(
+                var(--theme-colors-background-alternate),
+                var(--theme-colors-background-alternate)
+            ),
+            var(--theme-colors-background);
+    }
+}
+
+@keyframes overlay-in {
+    from {
+        opacity: 0;
+        transform: translateX(16px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
 }

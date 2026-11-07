@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
 import { parseTableColumns } from '/@/renderer/components/item-list/helpers/parse-table-columns';
+import { fitColumnWidths } from '/@/renderer/components/item-list/item-table-list/utils/fit-column-widths';
 import { ItemTableListColumnConfig } from '/@/renderer/components/item-list/types';
 
 export const useTableColumnModel = ({
@@ -19,56 +20,12 @@ export const useTableColumnModel = ({
     const calculatedColumnWidths = useMemo(() => {
         const baseWidths = parsedColumns.map((c) => c.width);
 
-        // When autoSizeColumns is enabled, treat unpinned widths as proportions and scale to fit container.
-        // Pinned columns keep their base width so they don't get squeezed.
+        // When autoSizeColumns is enabled, treat unpinned widths as proportions and scale to fit
+        // the container, never below a column's minimum (B-264): when the minimums overflow by
+        // one column's minimum or more, the table scrolls sideways; by less, it shrinks to fit
+        // (B-267). Pinned columns keep their base width.
         if (autoFitColumns) {
-            const pinnedWidth = parsedColumns.reduce(
-                (sum, col, idx) => (col.pinned !== null ? sum + baseWidths[idx] : sum),
-                0,
-            );
-            const unpinnedIndices: number[] = [];
-            parsedColumns.forEach((col, idx) => {
-                if (col.pinned === null) {
-                    unpinnedIndices.push(idx);
-                }
-            });
-
-            const unpinnedReferenceWidth = unpinnedIndices.reduce(
-                (sum, idx) => sum + baseWidths[idx],
-                0,
-            );
-            const availableForUnpinned = totalContainerWidth - pinnedWidth;
-
-            if (unpinnedReferenceWidth === 0 || availableForUnpinned <= 0) {
-                return baseWidths.map((width) => Math.round(width));
-            }
-
-            const scaleFactor = availableForUnpinned / unpinnedReferenceWidth;
-            const scaledWidths = baseWidths.map((width, idx) => {
-                if (parsedColumns[idx].pinned !== null) {
-                    return Math.round(width);
-                }
-                return Math.round(width * scaleFactor);
-            });
-
-            // Adjust for rounding errors on unpinned columns only
-            const totalScaled = scaledWidths.reduce((sum, width) => sum + width, 0);
-            const difference = totalContainerWidth - totalScaled;
-
-            if (difference !== 0 && unpinnedIndices.length > 0) {
-                const sortedIndices = unpinnedIndices
-                    .map((idx) => ({ idx, width: scaledWidths[idx] }))
-                    .sort((a, b) => b.width - a.width);
-
-                const adjustmentPerColumn = Math.sign(difference);
-                const adjustmentCount = Math.abs(difference);
-
-                for (let i = 0; i < adjustmentCount && i < sortedIndices.length; i++) {
-                    scaledWidths[sortedIndices[i].idx] += adjustmentPerColumn;
-                }
-            }
-
-            return scaledWidths;
+            return fitColumnWidths(parsedColumns, totalContainerWidth);
         }
 
         // Original behavior: distribute extra space to auto-size columns

@@ -43,7 +43,7 @@ interface DownloadPlaylistModalProps {
  * Download/mirror a playlist to a local folder with quality/format choice.
  * "Mirror" removes previously-downloaded tracks that left the playlist (per
  * the folder manifest) — re-running it keeps a smart playlist's folder in
- * sync, the desktop counterpart of Navic's rolling cache.
+ * sync, the desktop counterpart of Worbus for Android's rolling cache.
  */
 export const DownloadPlaylistModal = ({
     handlers,

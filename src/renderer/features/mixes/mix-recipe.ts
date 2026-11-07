@@ -1,5 +1,5 @@
 import type { Mix, MixKind } from '/@/renderer/store/mixes.store';
-import type { StationCharacterId } from '/@/shared/types/station-types';
+import type { StationCharacterId, StationVariety } from '/@/shared/types/station-types';
 
 import {
     characterFromAny,
@@ -10,7 +10,7 @@ import {
 // navi-connect "Mixed for You" (B-149, B-151): the form's kinds and their words, the recipe each
 // one saves, what a stored recipe plays as, and the seed pickers' search rule. Pure, so
 // mix-recipe.harness.ts can replay them; the form, the page and mix-engine.ts only feed them and
-// carry out what they answer. The same spec is implemented in Navic, so the two clients offer
+// carry out what they answer. The same spec is implemented in Worbus for Android, so the two clients offer
 // the same kinds in the same order with the same words.
 
 // --- The form's kinds ----------------------------------------------------------------------------
@@ -36,15 +36,26 @@ export const FORM_KINDS: readonly FormKindRow[] = [
     { description: 'Around a song, steered by your skips and likes', id: 'radio', label: 'Radio' },
     { description: YOUR_MIX_LINE, id: 'yourMix', label: 'Your mix' },
     { description: 'A random run through one genre', id: 'genre', label: 'Genre' },
-    { description: 'More like one artist', id: 'artist', label: 'Artist' },
+    { description: 'More like the artists you pick', id: 'artist', label: 'Artist' },
 ];
 
 /**
  * The kinds offered. Your mix is the hub's fingerprint station, which nothing else can build, so
- * it needs the station engine; Radio, Genre and Artist each have a path without it.
+ * it needs the station engine; Radio, Genre and Artist each have a path without it. It is the
+ * primary user's listening (Worbus P2), so a signed-in user who is not primary is not offered it.
  */
-export const formKindsFor = (engine: boolean): readonly FormKindRow[] =>
-    engine ? FORM_KINDS : FORM_KINDS.filter((row) => row.id !== 'yourMix');
+export const formKindsFor = (engine: boolean, yourMix = true): readonly FormKindRow[] =>
+    engine && yourMix ? FORM_KINDS : FORM_KINDS.filter((row) => row.id !== 'yourMix');
+
+/**
+ * Worbus P2: a saved recipe that plays as Your mix or the Sonic Fingerprint - both read the
+ * primary user's listening - so it is listed for the primary user only (see `stationPlan` and
+ * `localKind`: `fingerprint`, `adaptive` and a seedless `station`).
+ */
+export const isPrimaryOnlyMix = (mix: { kind: string; seedId?: null | string }): boolean =>
+    mix.kind === 'fingerprint' ||
+    mix.kind === 'adaptive' ||
+    (mix.kind === 'station' && !mix.seedId);
 
 /** A genre run is random, so it has no character; the other three are stations. */
 export const formKindTakesCharacter = (kind: FormKind): boolean => kind !== 'genre';
@@ -52,11 +63,11 @@ export const formKindTakesCharacter = (kind: FormKind): boolean => kind !== 'gen
 /** The name the form suggests, until the user writes their own. Empty: nothing to suggest yet. */
 export const suggestedMixName = (
     kind: FormKind,
-    seeds: { artist?: null | string; genre?: null | string; song?: null | string },
+    seeds: { artists?: readonly string[]; genre?: null | string; song?: null | string },
 ): string => {
     switch (kind) {
         case 'artist':
-            return seeds.artist ?? '';
+            return radioTitle(seeds.artists ?? []);
         case 'genre':
             return seeds.genre ?? '';
         case 'radio':
@@ -78,19 +89,36 @@ export interface MixRecipe {
     moodCharacter?: string;
     name: string;
     seedId: string;
+    /** A custom radio's artists (P5), when there are several. */
+    seedIds?: string[];
     seedName: string;
+    /** Artist variety (P5), when not the character's own. */
+    variety?: StationVariety;
 }
 
+/** The most artists one custom radio takes (the hub keeps at most 8 `seedIds`, PROTOCOL §17.1). */
+export const CUSTOM_RADIO_MAX_ARTISTS = 8;
+
+/** A custom radio's name: the artists' names in pick order (Worbus for Android's `radioTitle`). */
+export const radioTitle = (names: readonly string[]): string =>
+    names
+        .map((name) => name.trim())
+        .filter(Boolean)
+        .join(', ');
+
 export interface RecipeInput {
-    artist: null | { id: string; name: string };
+    /** Artist: one to CUSTOM_RADIO_MAX_ARTISTS, in pick order. More than one is a custom radio. */
+    artists: readonly { id: string; name: string }[];
     character: StationCharacterId;
     count: number;
-    /** A genre NAME. Navidrome's genre ids are not portable: Navic and `getRandomSongs` take names. */
+    /** A genre NAME. Navidrome's genre ids are not portable: Worbus for Android and `getRandomSongs` take names. */
     genre: null | string;
     kind: FormKind;
     name: string;
     /** The playing song, for Radio. */
     song: null | undefined | { albumId?: string; id: string; name: string };
+    /** Artist variety; medium (the character's own) is not written. */
+    variety?: StationVariety;
 }
 
 /** The recipe to save, or null while it cannot be: no name, or the kind's seed is missing. */
@@ -103,18 +131,27 @@ export const buildRecipe = (input: RecipeInput): MixRecipe | null => {
     };
     const { count } = input;
     switch (input.kind) {
-        case 'artist':
-            if (!input.artist?.id) return null;
+        case 'artist': {
+            const seen = new Set<string>();
+            const artists = input.artists
+                .filter((a) => a.id && !seen.has(a.id) && seen.add(a.id))
+                .slice(0, CUSTOM_RADIO_MAX_ARTISTS);
+            const first = artists[0];
+            if (!first) return null;
             return {
                 ...character,
                 count,
-                // The seed's artwork (§17.1), stamped once: the artist's own image.
-                coverArtId: input.artist.id,
+                // The seed's artwork (§17.1), stamped once: the (first) artist's own image.
+                coverArtId: first.id,
                 kind: 'artist',
                 name,
-                seedId: input.artist.id,
-                seedName: input.artist.name,
+                seedId: first.id,
+                // A custom radio (P5): every artist; `seedId` stays the first, for older clients.
+                ...(artists.length > 1 ? { seedIds: artists.map((a) => a.id) } : {}),
+                seedName: first.name,
+                ...(input.variety && input.variety !== 'medium' ? { variety: input.variety } : {}),
             };
+        }
         case 'genre': {
             const genre = input.genre?.trim();
             if (!genre) return null;
@@ -146,7 +183,23 @@ export const buildRecipe = (input: RecipeInput): MixRecipe | null => {
 
 // --- What a stored recipe plays as --------------------------------------------------------------
 
-type RecipeFields = Pick<Mix, 'character' | 'kind' | 'moodCharacter' | 'seedId' | 'seedName'>;
+type RecipeFields = Partial<Pick<Mix, 'name' | 'seedIds' | 'variety'>> &
+    Pick<Mix, 'character' | 'kind' | 'moodCharacter' | 'seedId' | 'seedName'>;
+
+/** The artists an `artist` mix plays: its `seedIds`, else its `seedId` (Worbus for Android's `mixArtistIds`). */
+export const mixArtistIds = (
+    mix: Partial<Pick<Mix, 'seedIds'>> & Pick<Mix, 'seedId'>,
+): string[] => {
+    const ids = [...new Set((mix.seedIds ?? []).filter(Boolean))];
+    return ids.length > 0 ? ids : mix.seedId ? [mix.seedId] : [];
+};
+
+/** A custom radio: an `artist` mix of more than one artist (P5). */
+export const isCustomRadio = (mix: Partial<Pick<Mix, 'seedIds'>> & Pick<Mix, 'kind'>): boolean =>
+    mix.kind === 'artist' && mixArtistIds({ seedId: '', seedIds: mix.seedIds }).length > 1;
+
+const varietyOf = (value: string | undefined): StationVariety | undefined =>
+    value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
 
 /**
  * A recipe's character: its own `character`, else the one its legacy `moodCharacter` names. An
@@ -167,7 +220,15 @@ export interface MixPlan {
 
 /** A station to start for a recipe (PROTOCOL §18.1). */
 export type StationPlan =
-    | { artistId: string; artistName: string; character: StationCharacterId; kind: 'artist' }
+    | {
+          /** One, or a custom radio's several (P5), in pick order. */
+          artistIds: string[];
+          /** The station's name: the artist's, or the custom radio's. */
+          artistName: string;
+          character: StationCharacterId;
+          kind: 'artist';
+          variety?: StationVariety;
+      }
     | { character: StationCharacterId; kind: 'track'; songId: string }
     | { character: StationCharacterId; kind: 'yourMix' };
 
@@ -200,15 +261,17 @@ const stationPlan = (mix: RecipeFields, preferred: StationCharacterId): null | S
     switch (mix.kind) {
         case 'adaptive':
             return { character: mixCharacter(mix), kind: 'yourMix' };
-        case 'artist':
-            return mix.seedId
-                ? {
-                      artistId: mix.seedId,
-                      artistName: mix.seedName,
-                      character: mixCharacter(mix),
-                      kind: 'artist',
-                  }
-                : null;
+        case 'artist': {
+            const artistIds = mixArtistIds(mix);
+            if (artistIds.length === 0) return null;
+            return {
+                artistIds,
+                artistName: artistIds.length > 1 ? mix.name || mix.seedName : mix.seedName,
+                character: mixCharacter(mix),
+                kind: 'artist',
+                ...(varietyOf(mix.variety) ? { variety: varietyOf(mix.variety) } : {}),
+            };
+        }
         case 'fingerprint':
             return { character: toCharacterId(mix.character) ?? preferred, kind: 'yourMix' };
         case 'similar':
@@ -249,7 +312,7 @@ export const genreNameOf = (
 // --- The row's words -----------------------------------------------------------------------------
 
 /**
- * The character a recipe stores, read as Navic reads it: its `character`, else its legacy
+ * The character a recipe stores, read as Worbus for Android reads it: its `character`, else its legacy
  * `moodCharacter`, each as an id, a hub MoodCharacter name or this client's old preset id. Null
  * when it stores none (an Artist recipe from before characters), unlike `mixCharacter`, which
  * plays such a recipe on Balanced.
@@ -281,7 +344,7 @@ export const storedCharacter = (
 type CharacterWords = (id: StationCharacterId) => string;
 
 /**
- * How each kind was built, in a phrase, for a row's second line. Worded as Navic's
+ * How each kind was built, in a phrase, for a row's second line. Worded as Worbus for Android's
  * `mixKindLabel` words it ("<Kind> from <seed>", then " · <character>" where the recipe plays as
  * a station), so a mix reads the same on both clients. The legacy kinds that now play as Your mix
  * are called Your mix.
@@ -289,10 +352,15 @@ type CharacterWords = (id: StationCharacterId) => string;
 const KIND_LINE: Record<MixKind, (mix: RecipeFields, words: CharacterWords) => string> = {
     adaptive: (mix, words) => `Your mix · ${words(mixCharacter(mix))}`,
     // An Artist row names its character as a Radio row does; one that stores none is not given
-    // a guessed one (Navic's `mixKindLabel`).
+    // a guessed one (Worbus for Android's `mixKindLabel`).
     artist: (mix, words) => {
         const character = storedCharacter(mix);
-        const line = mix.seedName ? `Artist from ${mix.seedName}` : 'Artist';
+        // A custom radio (P5): its name already lists the artists (Worbus for Android's `mixKindLabel`).
+        const line = isCustomRadio(mix)
+            ? 'Custom radio'
+            : mix.seedName
+              ? `Artist from ${mix.seedName}`
+              : 'Artist';
         return character ? `${line} · ${words(character)}` : line;
     },
     fingerprint: () => 'Your mix',
@@ -312,7 +380,7 @@ export const mixLine = (mix: RecipeFields, words: CharacterWords): null | string
     Object.hasOwn(KIND_LINE, mix.kind) ? KIND_LINE[mix.kind as MixKind](mix, words) : null;
 
 /**
- * The always-present Your mix entry's line, as Navic words it: what it is built from, then the
+ * The always-present Your mix entry's line, as Worbus for Android words it: what it is built from, then the
  * character it plays in, the one autoplay uses.
  */
 export const yourMixLine = (characterWords: string): string =>

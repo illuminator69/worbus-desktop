@@ -1,5 +1,5 @@
 .scroll-area {
-    height: calc(100vh - 90px);
+    height: var(--content-height, calc(100vh - 90px));
 }
 
 .drag-container {

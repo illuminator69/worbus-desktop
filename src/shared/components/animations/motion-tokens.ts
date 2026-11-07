@@ -1,14 +1,7 @@
-import type { MantineTransition } from '@mantine/core';
-import type { Transition, Variants } from 'motion/react';
-
 /**
- * Shared "expressive" motion vocabulary, ported from Navic's Material3Transitions.kt so
- * the two clients feel related. Durations and emphasized easings live here; call sites
- * pull from them instead of hardcoding timing.
- *
- * Gated by the Appearance "Expressive motion" toggle (data-motion on the root). When the
- * toggle is off, call sites fall back to their prior/plain transitions — these tokens are
- * only applied on the enabled path, so motion can be turned off safely.
+ * Durations and easings for the two motion/react transitions the shell keeps (the sidebar and
+ * rail crossfade, the command palette's group fold). Both turn off under reduced motion; CSS
+ * motion uses the tokens in global.css (the arrival grammar, design brief 8).
  */
 
 // Material 3 duration tokens (ms).
@@ -20,9 +13,7 @@ export const DURATION = {
 } as const;
 
 // Emphasized easings as cubic-bezier control points (motion/react `ease` arrays).
-// `emphasized` approximates Navic's two-segment PathEasing with the M3 standard-emphasized
-// bezier (CSS/JS can't express an arbitrary path), which is a close visual match.
-type Bezier = [number, number, number, number];
+export type Bezier = [number, number, number, number];
 
 export const EASING: Record<
     'emphasized' | 'emphasizedAccelerate' | 'emphasizedDecelerate',
@@ -33,100 +24,55 @@ export const EASING: Record<
     emphasizedDecelerate: [0.05, 0.7, 0.1, 1],
 };
 
-const bezierCss = (points: Bezier) => `cubic-bezier(${points.join(', ')})`;
+/**
+ * The arrival grammar's rise as numbers, for motion/react transitions that must share it
+ * (`--arrive-ms`, `--arrive-ease` in global.css, `arrive-rise` in arrival.module.css).
+ */
+export const KIT_RISE_PX = 8;
+export const KIT_MS = 240;
+export const KIT_EASE: Bezier = [0.2, 0.7, 0.2, 1];
 
-// Same easings as CSS strings (Mantine `timingFunction`, CSS custom properties).
-export const EASING_CSS = {
-    emphasized: bezierCss(EASING.emphasized),
-    emphasizedAccelerate: bezierCss(EASING.emphasizedAccelerate),
-    emphasizedDecelerate: bezierCss(EASING.emphasizedDecelerate),
+/** The shell's own tween, as `global.css` sets it (`--motion-duration`, `--motion-ease`). */
+export interface MotionClock {
+    ease: Bezier;
+    ms: number;
+}
+
+/** The values in `global.css`, used when the variables cannot be read or parsed. */
+export const FALLBACK_CLOCK: MotionClock = { ease: [0.3, 0.7, 0.2, 1], ms: 300 };
+
+const NUMBER = String.raw`(-?\d*\.?\d+)`;
+const BEZIER = new RegExp(
+    String.raw`cubic-bezier\(\s*${NUMBER}\s*,\s*${NUMBER}\s*,\s*${NUMBER}\s*,\s*${NUMBER}\s*\)`,
+);
+
+/** `300ms` or `0.3s` to milliseconds; `undefined` for anything else. */
+export const parseCssTime = (value: string): number | undefined => {
+    const match = new RegExp(String.raw`^${NUMBER}(ms|s)$`).exec(value.trim());
+    if (!match) return undefined;
+    return Number(match[1]) * (match[2] === 's' ? 1000 : 1);
 };
+
+/** `cubic-bezier(a, b, c, d)` to the control points `motion/react` takes; `undefined` for anything else. */
+export const parseCssBezier = (value: string): Bezier | undefined => {
+    const match = BEZIER.exec(value);
+    if (!match) return undefined;
+    return [Number(match[1]), Number(match[2]), Number(match[3]), Number(match[4])];
+};
+
+let clock: MotionClock | undefined;
 
 /**
- * Navic's "Shared Z-axis" (fade + scale) as a Mantine custom transition, for modals.
- * Direction-specific easing isn't expressible in a single Mantine transition, so we
- * approximate decelerate-in / accelerate-out with asymmetric durations at the call site
- * (longer enter, shorter exit) and the emphasized easing.
+ * The grid tween's duration and curve, read from the CSS variables once so a motion/react
+ * transition can share the clock instead of keeping a second one. Cached after the first read.
  */
-export const sharedZAxisTransition: MantineTransition = {
-    common: { transformOrigin: 'center bottom' },
-    in: { opacity: 1, transform: 'scale(1)' },
-    out: { opacity: 0, transform: 'scale(0.9)' },
-    transitionProperty: 'transform, opacity',
-};
-
-const prefersReducedMotion = () =>
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-/**
- * Mantine transitionProps for overlays. When motion is enabled, returns the emphasized
- * spec; when disabled, returns the component's prior/plain spec so behavior is unchanged.
- * If the OS prefers reduced motion, the emphasized path degrades to a quick opacity-only
- * fade (no scale).
- */
-export const modalTransitionProps = (motionEnabled: boolean) => {
-    if (!motionEnabled) {
-        return { duration: 300, exitDuration: 300, transition: 'fade' as const };
-    }
-
-    if (prefersReducedMotion()) {
-        return {
-            duration: DURATION.medium1,
-            exitDuration: DURATION.medium1,
-            transition: 'fade' as const,
-        };
-    }
-
-    return {
-        duration: DURATION.long1,
-        exitDuration: DURATION.medium1,
-        timingFunction: EASING_CSS.emphasized,
-        transition: sharedZAxisTransition,
+export const readMotionClock = (): MotionClock => {
+    if (clock) return clock;
+    if (typeof document === 'undefined') return FALLBACK_CLOCK;
+    const style = getComputedStyle(document.documentElement);
+    clock = {
+        ease: parseCssBezier(style.getPropertyValue('--motion-ease')) ?? FALLBACK_CLOCK.ease,
+        ms: parseCssTime(style.getPropertyValue('--motion-duration')) ?? FALLBACK_CLOCK.ms,
     };
-};
-
-/** Emphasized timing/easing for directional-fade overlays (popovers, dropdown menus). */
-export const overlayTransitionProps = (motionEnabled: boolean, transition: MantineTransition) => {
-    if (!motionEnabled) {
-        return { transition };
-    }
-
-    if (prefersReducedMotion()) {
-        return {
-            duration: DURATION.medium1,
-            exitDuration: DURATION.medium1,
-            transition: 'fade' as const,
-        };
-    }
-
-    return {
-        duration: DURATION.medium2,
-        exitDuration: DURATION.medium1,
-        timingFunction: EASING_CSS.emphasized,
-        transition,
-    };
-};
-
-// motion/react variants for the context-menu surface: emphasized fade + subtle scale.
-export const emphasizedMenuVariants: Variants = {
-    hidden: { opacity: 0, scale: 0.96 },
-    show: { opacity: 1, scale: 1 },
-};
-
-export const emphasizedMenuTransition: Transition = {
-    duration: DURATION.medium2 / 1000,
-    ease: EASING.emphasized,
-};
-
-// motion/react transition for route/page changes (Navic's shared-axis feel).
-export const pageTransition: Transition = {
-    duration: DURATION.long1 / 1000,
-    ease: EASING.emphasized,
-};
-
-export const pageVariants: Variants = {
-    hidden: { opacity: 0, x: 12 },
-    show: { opacity: 1, x: 0 },
+    return clock;
 };

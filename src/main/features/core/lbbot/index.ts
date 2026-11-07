@@ -78,8 +78,11 @@ import type {
 
 import { BrowserWindow, ipcMain, Notification } from 'electron';
 
-import { getHubConfig } from '../hub';
+import { getHubConfig, hubAuth } from '../hub';
+import { albumSourcesParams } from './album-sources-params';
 
+import { getMainWindow } from '/@/main/index';
+import { toFindIt } from '/@/shared/utils/find-it';
 import {
     albumDownloadBody,
     mergePreviewParams,
@@ -93,6 +96,8 @@ import {
     toPreview,
     toSiblingGroups,
 } from '/@/shared/utils/lbbot-album-wire';
+import { describeFailure, isOlderScanRefusal, refusalCode } from '/@/shared/utils/lbbot-failure';
+import { LB_ANSWERED } from '/@/shared/utils/lbbot-mode';
 import { hasMetaFields, normalizeLbBotWebUrl } from '/@/shared/utils/lbbot-wire';
 
 /**
@@ -117,8 +122,9 @@ import { hasMetaFields, normalizeLbBotWebUrl } from '/@/shared/utils/lbbot-wire'
 
 /** `ws://host:4790` → `http://host:4790`; null when the hub isn't configured. */
 const hubBase = (): null | string => {
-    const { enabled, token, url } = getHubConfig();
-    if (!enabled || !url || !token) return null;
+    const { enabled, url } = getHubConfig();
+    // Worbus P2: the device secret, else the typed token (hubAuth); neither means no hub.
+    if (!enabled || !url || !hubAuth.bearer()) return null;
     return url
         .replace(/^ws/, 'http')
         .replace(/\/+$/, '')
@@ -126,58 +132,24 @@ const hubBase = (): null | string => {
 };
 
 const authHeaders = (): Record<string, string> => ({
-    Authorization: `Bearer ${getHubConfig().token}`,
+    Authorization: `Bearer ${hubAuth.bearer() ?? ''}`,
 });
 
 type Json = Record<string, unknown>;
 
-/**
- * Turn a non-2xx into a sentence worth showing.
- *
- * Two of these are not what their status code normally means, and getting either
- * wrong wastes a debugging round:
- *
- * - **404 is not "not found".** Every route here is a hub whitelist entry, so a
- *   404 means *the hub proxies no such route* — it is older than this app and
- *   needs restarting. `hub.py` is a long-running process; editing it changes
- *   nothing until it restarts, which alone accounted for a whole round of "the
- *   button does nothing" on the Navic side.
- * - **502 is usually "busy", not "refused".** Every lb-bot route takes its
- *   process-wide `_review_lock`, and the hub's default 20s proxy timeout is the
- *   only thing separating slow from failed. The hub's own body reads
- *   `{"error": "lb-bot unreachable"}`, which taken literally is misleading while
- *   a large search holds that lock.
- *
- * Anything else prefers lb-bot's own `error`, which it writes for humans.
- */
-const describeFailure = (status: number, body: Json | null): string => {
-    const upstream = typeof body?.error === 'string' ? body.error : '';
-    // lb-bot's own 404 (I-019: `unknown_mbid`, `no_override`) carries a `code`; the
-    // hub's "no such route" 404 does not. Only the first is a sentence to relay.
-    if (status === 404 && typeof body?.code === 'string' && upstream) return upstream;
-    // lb-bot's own 502 for a MusicBrainz outage says so and that nothing was stored.
-    if (status === 502 && body?.retryable === true && upstream) return upstream;
-    // An lb-bot older than the hub answers an unknown POST with 405 "The method
-    // is not allowed" (its catch-all route is GET-only), where an unknown GET is
-    // a 404. Same condition; never relay the raw text.
-    if (status === 405) {
-        return 'This lb-bot is older than the hub and does not have that route yet.';
-    }
-    if (status === 404) {
-        return 'This hub does not know that route — restart the hub to pick up its newer lb-bot features.';
-    }
-    if (status === 502 || status === 504) {
-        return 'lb-bot is busy or unreachable. It handles one request at a time while searching; try again in a moment.';
-    }
-    if (status === 0) return 'Could not reach the hub.';
-    return upstream || `Request failed (${status})`;
-};
+// `describeFailure` lives in `/@/shared/utils/lbbot-failure` (pure, with a harness).
 
 const failed = <T>(
     status: number,
     error: string,
     tooLarge = false,
-    extra: { code?: string; matched?: number; retryable?: boolean; total?: number } = {},
+    extra: {
+        code?: string;
+        matched?: number;
+        retryable?: boolean;
+        total?: number;
+        upstreamError?: string;
+    } = {},
 ): LbBotResult<T> => ({
     data: null,
     error,
@@ -188,6 +160,7 @@ const failed = <T>(
     ...(typeof extra.matched === 'number' ? { matched: extra.matched } : {}),
     ...(extra.retryable ? { retryable: true } : {}),
     ...(typeof extra.total === 'number' ? { total: extra.total } : {}),
+    ...(extra.upstreamError ? { upstreamError: extra.upstreamError } : {}),
 });
 
 /**
@@ -210,6 +183,13 @@ const POLL_TIMEOUT_MS = 12_000;
  * throw that away again on purpose; the writes and the user-initiated reads do
  * not — see LbBotResult.
  */
+/**
+ * Worbus P2 (review I3): an `lbbot_too_old` was passed on and no answer has got through since. The
+ * hub serves this user only answers that prove lb-bot's identity (R17), so the next one that does
+ * ends the renderer's too-old state (`LB_ANSWERED`).
+ */
+let tooOldSeen = false;
+
 const request = async <T = Json>(
     method: 'GET' | 'POST',
     path: string,
@@ -255,6 +235,13 @@ const request = async <T = Json>(
         // Logged unconditionally: a button that does nothing, with nothing in the
         // console either, is the bug this whole result type exists to prevent.
         console.error(`[lbbot] ${method} ${path} → ${res.status}`);
+        // Worbus P1: THE one place lb-bot's two refusals are noticed, whichever route got them
+        // and whether or not its handler passes `code` on. A 409 `downloads_off` turns every
+        // download surface off; a 401 `signin_required` (an older hub sends no bearer, B-263)
+        // marks lb-bot refused for this connection. The renderer applies both (`useLbBotRefusals`).
+        const refusal = refusalCode(res.status, body);
+        if (refusal === 'lbbot_too_old') tooOldSeen = true;
+        if (refusal) getMainWindow()?.webContents.send('lbbot-refusal', { code: refusal });
         // The hub's own oversize-body 502 (B-013), not lb-bot's — see LbBotResult.tooLarge.
         return failed(res.status, describeFailure(res.status, body), body?.tooLarge === true, {
             code: typeof body?.code === 'string' ? body.code : undefined,
@@ -262,7 +249,12 @@ const request = async <T = Json>(
             matched: typeof body?.matched === 'number' ? body.matched : undefined,
             retryable: body?.retryable === true,
             total: typeof body?.total === 'number' ? body.total : undefined,
+            upstreamError: typeof body?.error === 'string' ? body.error : undefined,
         });
+    }
+    if (tooOldSeen) {
+        tooOldSeen = false;
+        getMainWindow()?.webContents.send('lbbot-refusal', { code: LB_ANSWERED });
     }
     return { data: (body ?? {}) as T, error: '', ok: true, status: res.status };
 };
@@ -295,8 +287,11 @@ const num = (value: unknown): number => {
 // doesn't advertise: assume supported rather than hiding working features.
 ipcMain.handle('lbbot-status', async (): Promise<LbBotStatus> => {
     const data = await get('/lb/status');
+    // Worbus P1: lb-bot's downloads mode, relayed by a P1 hub; absent from an older one.
+    const downloads = data?.downloads === 'on' || data?.downloads === 'off' ? data.downloads : null;
     return {
         available: data?.configured === true && data?.upstreamReachable === true,
+        ...(downloads ? { downloads } : {}),
         routes: Array.isArray(data?.routes)
             ? data.routes.filter((route): route is string => typeof route === 'string')
             : [],
@@ -356,12 +351,16 @@ const toScan = (raw: unknown): LbBotArtistScan | null => {
     const scan = raw as Record<string, unknown>;
     const state = str(scan.state);
     if (!SCAN_STATES.has(state)) return null;
+    // Worbus P1: the counts, when lb-bot sends them (an older lb-bot sends none: 0 of 0).
+    const total = Math.max(0, Math.floor(num(scan.total)));
     return {
+        done: total ? Math.min(total, Math.max(0, Math.floor(num(scan.done)))) : 0,
         error: str(scan.error),
         finishedAt: num(scan.finishedAt),
         startedAt: num(scan.startedAt),
         state: state as LbBotArtistScan['state'],
         taskId: str(scan.taskId),
+        total,
     };
 };
 
@@ -379,6 +378,8 @@ ipcMain.handle(
         });
         if (!data) return null;
         const scan = toScan(data.scan);
+        // Worbus P1: absent when not indexed and from an older lb-bot (both read as false).
+        const unresolved = typeof data.unresolved === 'boolean' ? data.unresolved : undefined;
         if (data.indexed !== true) {
             return {
                 artistName: '',
@@ -401,6 +402,7 @@ ipcMain.handle(
             // button watches to know it is done.
             scannedAt: num(data.scanned_at),
             stale: data.stale === true,
+            ...(unresolved === undefined ? {} : { unresolved }),
         };
     },
 );
@@ -408,22 +410,38 @@ ipcMain.handle(
 // Scanning an artist walks MusicBrainz at one request a second — 10-60s for a
 // large discography — so it is always an explicit user action, never automatic
 // on page open. Returns the background task id, or null if the trigger failed.
+//
+// Worbus P1: with no MBID, lb-bot P1 scans by the Navidrome id alone (`{nd_id}`,
+// "Scan now"), resolving the artist on MusicBrainz itself; a scan already running
+// for the artist answers `running: true` with its task id. An lb-bot from before P1
+// answers that body 400 "mbid is required", told apart as `olderLbBot`.
 ipcMain.handle(
     'lbbot-index-artist',
     async (
         _event,
-        args: { mbid: string; name: string; ndId: string },
+        args: { mbid?: string; name: string; ndId: string },
     ): Promise<LbBotIndexStart | null> => {
-        // lb-bot requires both: the MBID is what it scans, the name is what it
-        // matches the library against. Without an MBID there is nothing to ask.
-        if (!args.mbid || !args.name) return null;
-        const { data } = await request('POST', '/lb/artist/discography', {
-            body: { mbid: args.mbid, name: args.name, nd_id: args.ndId },
+        // With an MBID lb-bot needs both: the MBID is what it scans, the name is
+        // what it matches the library against. Without one, the Navidrome id.
+        if (args.mbid ? !args.name : !args.ndId) return null;
+        const result = await request('POST', '/lb/artist/discography', {
+            body: args.mbid
+                ? { mbid: args.mbid, name: args.name, nd_id: args.ndId }
+                : { nd_id: args.ndId },
         });
+        // lb-bot's own words, not `describeFailure`'s sentence for them.
+        if (!args.mbid && isOlderScanRefusal(result.status, result.upstreamError)) {
+            return { covered: false, olderLbBot: true, taskId: '' };
+        }
+        const { data } = result;
         if (data?.ok !== true) return null;
         // A blank `task_id` with `covered: true` is lb-bot's decision to start
         // nothing: another library artist holds this discography.
-        return { covered: data.covered === true, taskId: str(data.task_id) };
+        return {
+            covered: data.covered === true,
+            ...(data.running === true ? { running: true } : {}),
+            taskId: str(data.task_id),
+        };
     },
 );
 
@@ -479,7 +497,9 @@ ipcMain.handle(
                 year: args.year ?? '',
             },
         });
-        if (!result.ok) return failed<boolean>(result.status, result.error);
+        if (!result.ok) {
+            return failed<boolean>(result.status, result.error, false, { code: result.code });
+        }
         const ok = result.data?.ok === true;
         return {
             data: ok,
@@ -541,7 +561,8 @@ const toCheckRow = (row: unknown): LbBotToCheck[] => {
 
 ipcMain.handle('lbbot-overrides', async (): Promise<LbBotResult<LbBotOverrideList>> => {
     const result = await request('GET', '/lb/overrides');
-    if (!result.ok) return failed<LbBotOverrideList>(result.status, result.error);
+    if (!result.ok)
+        return failed<LbBotOverrideList>(result.status, result.error, false, { code: result.code });
     // A body without the list is not an empty list: it is not an answer.
     if (!Array.isArray(result.data?.artists)) {
         return failed<LbBotOverrideList>(result.status, 'lb-bot answered with no override list.');
@@ -911,7 +932,10 @@ const nullableNum = (value: unknown): null | number =>
 
 ipcMain.handle('lbbot-listening-status', async (): Promise<LbBotResult<LbBotListeningStatus>> => {
     const result = await request('GET', '/lb/listening/status');
-    if (!result.ok) return failed<LbBotListeningStatus>(result.status, result.error);
+    if (!result.ok)
+        return failed<LbBotListeningStatus>(result.status, result.error, false, {
+            code: result.code,
+        });
     const d: Json = result.data ?? {};
     if (!LISTENING_STATES.has(d.state as LbBotListeningState)) {
         return failed<LbBotListeningStatus>(result.status, 'lb-bot sent no listening state.');
@@ -980,7 +1004,10 @@ ipcMain.handle(
         const result = await request('GET', '/lb/listening/summary', {
             params: { period: args.period, tz: args.tz },
         });
-        if (!result.ok) return failed<LbBotListeningSummary>(result.status, result.error);
+        if (!result.ok)
+            return failed<LbBotListeningSummary>(result.status, result.error, false, {
+                code: result.code,
+            });
         const d: Json = result.data ?? {};
         if (!d.totals || typeof d.totals !== 'object') {
             return failed<LbBotListeningSummary>(result.status, 'lb-bot sent no totals.');
@@ -1039,7 +1066,8 @@ ipcMain.handle(
         const result = await request('GET', '/lb/listening/unowned', {
             params: { kind: args.kind, limit: String(args.limit), period: args.period },
         });
-        if (!result.ok) return failed<LbBotUnowned>(result.status, result.error);
+        if (!result.ok)
+            return failed<LbBotUnowned>(result.status, result.error, false, { code: result.code });
         const d: Json = result.data ?? {};
         return {
             data: {
@@ -1076,7 +1104,8 @@ ipcMain.handle(
                 limit: String(args.limit),
             },
         });
-        if (!result.ok) return failed<LbBotRecent>(result.status, result.error);
+        if (!result.ok)
+            return failed<LbBotRecent>(result.status, result.error, false, { code: result.code });
         return {
             data: {
                 nextBefore: nullableNum(result.data?.nextBefore),
@@ -1093,7 +1122,8 @@ ipcMain.handle(
 // ListenBrainz. The caller watches `status` for the state to move.
 ipcMain.handle('lbbot-listening-sync', async (): Promise<LbBotResult<boolean>> => {
     const result = await request('POST', '/lb/listening/sync');
-    if (!result.ok) return failed<boolean>(result.status, result.error);
+    if (!result.ok)
+        return failed<boolean>(result.status, result.error, false, { code: result.code });
     const ok = result.data?.ok === true;
     return {
         data: ok,
@@ -1209,7 +1239,7 @@ ipcMain.handle(
 
 ipcMain.handle('lbbot-index-keys', async (): Promise<LbBotResult<LbBotIndexKeys>> => {
     const result = await request('GET', '/lb/index/keys', { timeoutMs: INDEX_SYNC_TIMEOUT_MS });
-    if (!result.ok) return failed(result.status, result.error);
+    if (!result.ok) return failed(result.status, result.error, false, { code: result.code });
     const d = result.data ?? {};
     const epoch = str(d.epoch);
     if (!epoch || !Array.isArray(d.keys)) {
@@ -1362,6 +1392,9 @@ const toMeta = (data: Json): LbBotMeta => {
         : [];
     return {
         credits: Array.isArray(data.credits) ? data.credits.flatMap(toMetaCredit) : [],
+        // Worbus P1: kept absent when lb-bot sent no key, so a persisted body can tell "never
+        // asked" from "asked, nothing" (the renderer re-asks the first once per session).
+        ...(Array.isArray(data.findIt) ? { findIt: toFindIt(data.findIt) } : {}),
         found: data.found === true,
         imageUrl: str(data.imageUrl),
         links: Array.isArray(data.links) ? data.links.flatMap(toMetaLink) : [],
@@ -1444,7 +1477,9 @@ ipcMain.handle(
             if (args.releaseMbid) params.release_mbid = args.releaseMbid;
         }
         const result = await request('GET', `/lb/meta/${args.kind}`, { params });
-        if (!result.ok) return failed<LbBotMeta>(result.status, result.error);
+        if (!result.ok) {
+            return failed<LbBotMeta>(result.status, result.error, false, { code: result.code });
+        }
         // A 200 whose body held nothing (empty / unparseable -> `{}`) is not an
         // answer: null data, so the caller keeps what it shows.
         const body = result.data ?? {};
@@ -1589,7 +1624,10 @@ ipcMain.handle(
         const q = (args.q ?? '').trim();
         if (!q) return { data: [], error: '', ok: true, status: 200 };
         const result = await request('GET', '/lb/artist/lookup', { params: { q } });
-        if (!result.ok) return failed<LbBotArtistCandidate[]>(result.status, result.error);
+        if (!result.ok)
+            return failed<LbBotArtistCandidate[]>(result.status, result.error, false, {
+                code: result.code,
+            });
         if (!Array.isArray(result.data?.candidates)) {
             return failed<LbBotArtistCandidate[]>(result.status, 'lb-bot sent no candidate list.');
         }
@@ -1663,7 +1701,10 @@ ipcMain.handle(
         const q = (args.q ?? '').trim();
         if (!q) return { data: [], error: '', ok: true, status: 200 };
         const result = await request('GET', '/lb/album/lookup', { params: { q } });
-        if (!result.ok) return failed<LbBotAlbumCandidate[]>(result.status, result.error);
+        if (!result.ok)
+            return failed<LbBotAlbumCandidate[]>(result.status, result.error, false, {
+                code: result.code,
+            });
         return {
             data: toAlbumCandidates(result.data),
             error: '',
@@ -1927,9 +1968,11 @@ ipcMain.handle(
         const data = result.data;
         const resolved = (data?.resolved ?? {}) as Json;
         const ok = result.ok && data?.ok === true;
+        const code = ok ? '' : result.code || str(data?.code);
         return {
             // B-084: the echo of `allFiles`; absent stays undefined (an older hub or lb-bot).
             ...(typeof data?.allFiles === 'boolean' ? { allFiles: data.allFiles } : {}),
+            ...(code ? { code } : {}),
             // A 200 carrying `ok: false` is lb-bot refusing for its own reason —
             // which it states in `error`, and which is the sentence worth showing.
             error: ok ? '' : result.error || str(data?.error) || 'lb-bot refused the download.',
@@ -1964,7 +2007,7 @@ ipcMain.handle(
             },
             timeoutMs: POLL_TIMEOUT_MS,
         });
-        if (!result.ok) return failed(result.status, result.error);
+        if (!result.ok) return failed(result.status, result.error, false, { code: result.code });
         return { data: toFillStatus(result.data), error: '', ok: true, status: result.status };
     },
 );
@@ -1992,7 +2035,7 @@ ipcMain.handle(
             params: { group_ids: groupIds.join(','), release_mbids: releaseMbids.join(',') },
             timeoutMs: POLL_TIMEOUT_MS,
         });
-        if (!result.ok) return failed(result.status, result.error);
+        if (!result.ok) return failed(result.status, result.error, false, { code: result.code });
         const d = result.data ?? {};
         const albums: Record<string, LbBotFillStatus> = {};
         const rawAlbums = (d.albums ?? {}) as Record<string, Json>;
@@ -2022,7 +2065,7 @@ ipcMain.handle(
     async (
         _event,
         args: { releaseMbid: string },
-    ): Promise<{ cancelled: boolean; ok: boolean; status: LbBotFillStatus }> => {
+    ): Promise<{ cancelled: boolean; code?: string; ok: boolean; status: LbBotFillStatus }> => {
         if (!args.releaseMbid) return { cancelled: false, ok: false, status: UNKNOWN_STATUS };
         const result = await request('POST', '/lb/album/cancel', {
             body: { release_mbid: args.releaseMbid },
@@ -2032,6 +2075,8 @@ ipcMain.handle(
             // `false` with `ok` is lb-bot saying "too late" — the files are
             // being placed — or "nothing was running". The status says which.
             cancelled: data?.cancelled === true,
+            // Worbus P1: the refusal's code, so the renderer applies it from this answer too.
+            code: result.code,
             ok: result.ok && data?.ok === true,
             status: toFillStatus((data?.status ?? null) as Json | null),
         };
@@ -2153,32 +2198,19 @@ ipcMain.handle(
         args: {
             album?: string;
             artist?: string;
+            refresh?: boolean;
             releaseMbid?: string;
             rgid: string;
             total?: number;
         },
     ): Promise<LbBotResult<LbBotGapSource[]>> => {
         if (!args.rgid) return failed(0, 'No release');
-        // The release we already resolved, when we have one. lb-bot otherwise
-        // re-resolves the group at MusicBrainz, and its resolver caches a
-        // transient failure for five minutes without retrying inside that
-        // window — so one 503 made this a hard "Could not resolve album" for the
-        // same album for the next five minutes. These values came from
-        // /lb/album/releases, so they cost nothing.
         const result = await request('GET', '/lb/album/sources', {
-            params: {
-                rgid: args.rgid,
-                ...(args.releaseMbid
-                    ? {
-                          album: args.album ?? '',
-                          artist: args.artist ?? '',
-                          release_mbid: args.releaseMbid,
-                          total: String(args.total ?? 0),
-                      }
-                    : {}),
-            },
+            params: albumSourcesParams({ ...args, refresh: args.refresh === true }),
         });
-        if (!result.ok) return failed(result.status, result.error);
+        if (!result.ok) {
+            return failed(result.status, result.error, false, { code: result.code });
+        }
         const rows = Array.isArray(result.data?.sources) ? result.data.sources : [];
         return { data: rows.flatMap(toSource), error: '', ok: true, status: result.status };
     },
@@ -2260,7 +2292,9 @@ ipcMain.handle(
             params: { group_id: args.groupId },
             timeoutMs: POLL_TIMEOUT_MS,
         });
-        if (!result.ok) return failed(result.status, result.error);
+        if (!result.ok) {
+            return failed(result.status, result.error, false, { code: result.code });
+        }
         return {
             data: toGap(result.data ?? {}, args.groupId),
             error: '',
@@ -2286,7 +2320,9 @@ ipcMain.handle(
         const result = await request('GET', '/lb/gap/source-files', {
             params: { group_id: args.groupId, source_index: String(args.sourceIndex) },
         });
-        if (!result.ok) return failed(result.status, result.error);
+        if (!result.ok) {
+            return failed(result.status, result.error, false, { code: result.code });
+        }
         const d = result.data ?? {};
         return {
             data: {
@@ -2308,9 +2344,13 @@ ipcMain.handle(
  *  on the gap detail is how a running search is watched. */
 const gapAction = async (route: string, body: Json): Promise<LbBotResult<boolean>> => {
     const result = await request('POST', route, { body });
-    if (!result.ok) return failed(result.status, result.error);
+    // lb-bot's `code` rides along (R12, B-238): the box decides from it whether the refusal says
+    // the cards are stale, never from the sentence.
+    if (!result.ok) return failed(result.status, result.error, false, { code: result.code });
     const ok = result.data?.ok !== false;
+    const code = ok ? '' : str(result.data?.code);
     return {
+        ...(code ? { code } : {}),
         data: ok,
         error: ok ? '' : str(result.data?.error) || 'lb-bot refused the request.',
         ok,
@@ -2358,7 +2398,7 @@ ipcMain.handle('lbbot-gap-rescan', async (_event, args: { groupId: string }) =>
 );
 
 /**
- * Tell the user a fill landed while Feishin was in the background.
+ * Tell the user a fill landed while Worbus for desktop was in the background.
  *
  * The renderer raises a toast unconditionally; this is the half a toast cannot do,
  * and it is deliberately suppressed when the window is focused so a fill that
@@ -2373,7 +2413,7 @@ ipcMain.handle('lbbot-notify', (event, args: { body: string; title: string }) =>
     if (window?.isFocused()) return;
     try {
         const notification = new Notification({ body: args.body, title: args.title });
-        // Bring Feishin forward on click — the album is on an artist page somewhere,
+        // Bring Worbus for desktop forward on click — the album is on an artist page somewhere,
         // and the notification is the only handle the user has on it.
         notification.on('click', () => {
             window?.show();
@@ -2583,6 +2623,20 @@ const toWishlistEntry = (row: unknown): LbBotWishlistEntry[] => {
 // reading the wrong one is not an error anywhere: it yields an empty array, and
 // an empty wishlist is a perfectly ordinary state, so the page would simply have
 // said "nothing on the wishlist" forever.
+
+// Worbus P4 (design §6.5): Needs attention reads only `counts` from `/lb/attention` (its
+// `imports`, the albums lb-bot could not finish filing). Only the numbers cross to the renderer;
+// null (an older hub or lb-bot, a refusal, a non-admin) reads as no imports.
+ipcMain.handle('lbbot-attention-counts', async (): Promise<null | Record<string, number>> => {
+    const data = await get('/lb/attention');
+    const counts = data?.counts;
+    if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
+    return Object.fromEntries(
+        Object.entries(counts as Json).filter(
+            (entry): entry is [string, number] => typeof entry[1] === 'number',
+        ),
+    );
+});
 
 ipcMain.handle('lbbot-wishlist', async (): Promise<LbBotWishlist> => {
     const data = await get('/lb/wishlist');

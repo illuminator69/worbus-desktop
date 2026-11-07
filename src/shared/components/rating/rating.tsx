@@ -6,11 +6,17 @@ import { useCallback } from 'react';
 import styles from './rating.module.css';
 
 interface RatingProps extends MantineRatingProps {
+    /**
+     * A save is in flight: a change is dropped, but the stars keep their inputs, so a keyboard user's
+     * focus stays on them (`readOnly` removes the inputs, and focus falls to the page).
+     */
+    busy?: boolean;
     preventDefault?: boolean;
     stopPropagation?: boolean;
 }
 
 export const Rating = ({
+    busy = false,
     classNames,
     onChange,
     preventDefault = true,
@@ -21,6 +27,7 @@ export const Rating = ({
 }: RatingProps) => {
     const valueChange = useCallback(
         (rating: number) => {
+            if (busy) return;
             if (onChange) {
                 if (rating === props.value) {
                     onChange(0);
@@ -29,7 +36,7 @@ export const Rating = ({
                 }
             }
         },
-        [onChange, props.value],
+        [busy, onChange, props.value],
     );
 
     const debouncedOnChange = debounce(valueChange, 100);

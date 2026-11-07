@@ -1,0 +1,98 @@
+.group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.group-label {
+    padding: 12px 10px 4px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--theme-colors-foreground-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    user-select: none;
+}
+
+/* One row: the SidebarItem link, the Library group's toggle and the More target share it. */
+.row {
+    --button-height: 34px;
+
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--theme-colors-foreground);
+    cursor: default;
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 8px;
+
+    &:focus-visible {
+        outline: none;
+        border-color: var(--theme-colors-primary-filled);
+    }
+
+    :root[data-cover-wash='true'] & {
+        color: var(--theme-colors-foreground-muted);
+    }
+}
+
+button.row:hover {
+    background: var(--theme-colors-surface);
+}
+
+.row.selected {
+    :root[data-cover-wash='true'] & {
+        color: var(--wash-accct);
+        background: var(--wash-accc);
+    }
+}
+
+.row-inner {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.row-label {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.more-chevron {
+    flex-shrink: 0;
+    opacity: 0.8;
+}
+
+.badge {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    font-size: 11.5px;
+    font-weight: 800;
+    line-height: 1;
+
+    /* The board's dark label: it reads on every theme's warning colour; the wash's light scheme takes white. */
+    color: #1b1304;
+    background: var(--theme-colors-state-warning);
+    border-radius: 10px;
+
+    :root[data-cover-wash='true'][data-mantine-color-scheme='light'] & {
+        color: #fff;
+    }
+}

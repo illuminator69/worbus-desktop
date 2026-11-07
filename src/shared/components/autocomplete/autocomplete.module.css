@@ -47,6 +47,14 @@
     color: var(--theme-colors-surface-foreground);
     background: var(--theme-colors-surface);
     border: 1px solid var(--theme-colors-border);
+
+    /* With the cover wash the surface role is translucent: a floating layer keeps its tint over the
+       opaque page colour, so what is under it does not show through. */
+    :root[data-cover-wash='true'] & {
+        background:
+            linear-gradient(var(--theme-colors-surface), var(--theme-colors-surface)),
+            var(--theme-colors-background);
+    }
 }
 
 .option {

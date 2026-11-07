@@ -16,6 +16,10 @@ const HOME_ITEMS: Array<[string, string]> = [
     [HomeItem.RECENTLY_ADDED, 'page.home.newlyAdded'],
     [HomeItem.RECENTLY_RELEASED, 'page.home.recentlyReleased'],
     [HomeItem.MOST_PLAYED, 'page.home.mostPlayed'],
+    [HomeItem.FRESH, 'page.home.fresh'],
+    [HomeItem.MIXES, 'page.home.yourMixes'],
+    [HomeItem.REDISCOVERY, 'page.home.rediscover'],
+    [HomeItem.SIMILAR_ARTISTS, 'page.home.fansAlsoLike'],
 ];
 
 export const HomeSettings = memo(() => {

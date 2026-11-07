@@ -8,7 +8,7 @@ import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
 
 // navi-connect: Symfonium-style "saved queues" + Continue Listening. A rolling, per-client history
-// of automatically-captured queue snapshots. Mirrors Navic's SavedQueueRepository model (see
+// of automatically-captured queue snapshots. Mirrors Worbus for Android's SavedQueueRepository model (see
 // navic .../domain/repositories/SavedQueueRepository.kt) so the two clients behave alike. Purely
 // local (persisted to this renderer's storage); the hub is not involved.
 
@@ -118,7 +118,7 @@ export const useSavedQueuesStore = createWithEqualityFn<SavedQueuesSlice>()(
                                 .filter((r) => r?.id && (r.songs?.length ?? 0) > 0)
                                 .map((r) => {
                                     // Keep local-only enrichment the hub record can't
-                                    // carry (a Navic-origin row has no cover URL for this
+                                    // carry (a Worbus for Android-origin row has no cover URL for this
                                     // server, and an offline rename may not be up yet).
                                     const local = localById.get(r.id);
                                     // The hub's copy of a record carries wire-shaped
@@ -218,7 +218,7 @@ export const useContinueListening = (serverId: null | string | undefined, limit 
     useSavedQueuesStore(
         (state) =>
             state.queues
-                // An empty serverId means "unknown", not "some other server" — Navic-origin rows
+                // An empty serverId means "unknown", not "some other server" — Worbus for Android-origin rows
                 // never carry one. Excluding them hid the phone's queues from this list entirely.
                 .filter((q) => !serverId || !q.serverId || q.serverId === serverId)
                 .slice()

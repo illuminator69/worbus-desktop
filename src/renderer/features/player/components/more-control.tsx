@@ -9,6 +9,7 @@ import styles from './more-control.module.css';
 import { AutoDjPanel } from '/@/renderer/features/player/components/auto-dj-panel';
 import { DlnaCastPanel } from '/@/renderer/features/player/components/dlna-cast-panel';
 import { PlaybackOptionsPanel } from '/@/renderer/features/player/components/playback-options-panel';
+import { openShuffleAllModal } from '/@/renderer/features/player/components/shuffle-all-modal';
 import {
     SleepTimerPanel,
     useSleepTimerValue,
@@ -36,9 +37,14 @@ const ICONS: Record<MoreItemId, AppIconSelection> = {
     equaliser: 'audioLines',
     lyrics: 'microphone',
     playbackOptions: 'mediaSettings',
+    playRandom: 'mediaRandom',
     sleepTimer: 'sleepTimer',
     stop: 'mediaStop',
 };
+
+// Remix icons are drawn by their fill, which an Icon without one leaves transparent: Play random's
+// is one (the transport drew it with `fill="default"`), the rest are stroked.
+const FILLED: ReadonlySet<MoreItemId> = new Set(['playRandom']);
 
 // The panels keep the sizes they had in their own popovers.
 const WIDTHS: Record<View, { maw?: number; miw: number }> = {
@@ -64,11 +70,19 @@ export const MoreControl = () => {
     const isRadioActive = useIsRadioActive();
     const { stop: stopRadio } = useRadioControls();
     const [opened, setOpened] = useState(false);
-    const [view, setView] = useState<View>('list');
+    const [view, setViewState] = useState<View>('list');
+    // Which way the last move between the list and a panel went, so the new view slides in from
+    // that side. Null when More has just opened: the popover's own transition covers that.
+    const [direction, setDirection] = useState<'back' | 'forward' | null>(null);
+    const setView = useCallback((next: View) => {
+        setDirection(next === 'list' ? 'back' : 'forward');
+        setViewState(next);
+    }, []);
 
     const close = useCallback(() => {
         setOpened(false);
-        setView('list');
+        setViewState('list');
+        setDirection(null);
     }, []);
 
     // Mounted whether or not More is open: DLNA discovery and group events keep arriving.
@@ -98,7 +112,7 @@ export const MoreControl = () => {
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [opened, view]);
+    }, [opened, setView, view]);
 
     const labels: Record<MoreItemId, string> = {
         autoDj: t('setting.autoDJ'),
@@ -106,6 +120,7 @@ export const MoreControl = () => {
         equaliser: t('setting.equalizer'),
         lyrics: t('player.lyrics'),
         playbackOptions: t('player.playbackOptions'),
+        playRandom: t('form.shuffleAll.title'),
         sleepTimer: t('player.sleepTimer'),
         stop: t('player.stopPlayback'),
     };
@@ -118,6 +133,9 @@ export const MoreControl = () => {
                 break;
             case 'lyrics':
                 toggleLyrics();
+                break;
+            case 'playRandom':
+                openShuffleAllModal();
                 break;
             case 'stop':
                 if (isRadioActive) stopRadio();
@@ -166,49 +184,61 @@ export const MoreControl = () => {
                 />
             </Popover.Target>
             <Popover.Dropdown maw={WIDTHS[view].maw} miw={WIDTHS[view].miw} onClick={stop} p="xs">
-                {view === 'list' ? (
-                    <div className={styles.list} role="menu">
-                        {items.map((item) => (
-                            <div key={item.id}>
-                                {item.separatorBefore && <div className={styles.separator} />}
-                                <button
-                                    className={styles.row}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (item.kind === 'panel') openPanel(item.id as PanelId);
-                                        else act(item.id);
-                                    }}
-                                    role="menuitem"
-                                    type="button"
-                                >
-                                    <Icon icon={ICONS[item.id]} />
-                                    <span className={styles.label}>{labels[item.id]}</span>
-                                    {values[item.id] && (
-                                        <span className={styles.value}>{values[item.id]}</span>
-                                    )}
-                                    {item.kind === 'panel' && (
-                                        <Icon className={styles.chevron} icon="arrowRightS" />
-                                    )}
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <>
-                        <button
-                            className={clsx(styles.row, styles.back)}
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                setView('list');
-                            }}
-                            type="button"
-                        >
-                            <Icon icon="arrowLeftS" />
-                            <span>{t('common.back')}</span>
-                        </button>
-                        {renderPanel(view)}
-                    </>
-                )}
+                <div
+                    className={clsx(
+                        direction === 'forward' && styles.enterForward,
+                        direction === 'back' && styles.enterBack,
+                    )}
+                    key={view}
+                >
+                    {view === 'list' ? (
+                        <div className={styles.list} role="menu">
+                            {items.map((item) => (
+                                <div key={item.id}>
+                                    {item.separatorBefore && <div className={styles.separator} />}
+                                    <button
+                                        className={styles.row}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (item.kind === 'panel')
+                                                openPanel(item.id as PanelId);
+                                            else act(item.id);
+                                        }}
+                                        role="menuitem"
+                                        type="button"
+                                    >
+                                        <Icon
+                                            fill={FILLED.has(item.id) ? 'default' : undefined}
+                                            icon={ICONS[item.id]}
+                                        />
+                                        <span className={styles.label}>{labels[item.id]}</span>
+                                        {values[item.id] && (
+                                            <span className={styles.value}>{values[item.id]}</span>
+                                        )}
+                                        {item.kind === 'panel' && (
+                                            <Icon className={styles.chevron} icon="arrowRightS" />
+                                        )}
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <>
+                            <button
+                                className={clsx(styles.row, styles.back)}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    setView('list');
+                                }}
+                                type="button"
+                            >
+                                <Icon icon="arrowLeftS" />
+                                <span>{t('common.back')}</span>
+                            </button>
+                            {renderPanel(view)}
+                        </>
+                    )}
+                </div>
             </Popover.Dropdown>
         </Popover>
     );

@@ -15,7 +15,9 @@ import Store from 'electron-store';
 import { promises as fs, watch as fsWatch } from 'fs';
 import path from 'path';
 
+import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
+import { migratedFrom } from '/@/main/migrate-from-feishin';
 
 const getFrame = () => {
     const isWindows = process.platform === 'win32';
@@ -121,21 +123,25 @@ export const store = new Store<any>({
         window_start_minimized: false,
         window_window_bar_style: getFrame(),
     },
-    migrations: {
-        '>=0.21.2': (store) => {
-            store.set('window_bar_style', 'linux');
-        },
-        '>=1.0.0': (store) => {
-            store.clear();
-        },
-    },
+    // Worbus P4: upstream's `'>=1.0.0'` emptying of the store is gone (migrations.ts).
+    migrations: SETTINGS_MIGRATIONS,
 });
 
+/**
+ * Worbus P2: keys main keeps to itself. `hubAuth.*` holds the device secret's ciphertext and its
+ * marker; the renderer has no business reading or replacing either through the generic settings
+ * channel (hub/auth.ts).
+ */
+const isMainOnlyKey = (property: unknown): boolean =>
+    typeof property !== 'string' || property === 'hubAuth' || property.startsWith('hubAuth.');
+
 ipcMain.handle('settings-get', (_event, data: { property: string }) => {
+    if (isMainOnlyKey(data.property)) return undefined;
     return store.get(`${data.property}`);
 });
 
 ipcMain.on('settings-set', (__event, data: { property: string; value: any }) => {
+    if (isMainOnlyKey(data.property)) return;
     if (data.value === undefined) {
         store.delete(data.property);
     } else {
@@ -144,12 +150,17 @@ ipcMain.on('settings-set', (__event, data: { property: string; value: any }) => 
 });
 
 ipcMain.handle('settings-set-sync', (__event, data: { property: string; value: any }) => {
+    if (isMainOnlyKey(data.property)) return;
     if (data.value === null) {
         store.delete(data.property);
     } else {
         store.set(data.property, data.value);
     }
 });
+
+export const PASSWORD_UNREADABLE_AFTER_MOVE =
+    "Your saved password couldn't be read after the move from Feishin. Sign in again.";
+const unreadableAfterMove = new Set<string>();
 
 ipcMain.handle('password-get', (_event, server: string): null | string => {
     if (safeStorage.isEncryptionAvailable()) {
@@ -162,8 +173,26 @@ ipcMain.handle('password-get', (_event, server: string): null | string => {
         const encrypted = servers[server];
         if (!encrypted) return null;
 
-        const decrypted = safeStorage.decryptString(Buffer.from(encrypted, 'hex'));
-        return decrypted;
+        try {
+            return safeStorage.decryptString(Buffer.from(encrypted, 'hex'));
+        } catch (error) {
+            // Worbus P5 (design §6.4): the keyring key follows the app's name, so a password the
+            // old Feishin saved may not read here. Say so and ask for the sign-in (no password ->
+            // the server's sign-in), never clearing it silently: the old app still reads it.
+            if (!migratedFrom(storePath)) throw error;
+            // Once per server and session: the edit form and the 401 paths ask again and again.
+            if (!unreadableAfterMove.has(server)) {
+                unreadableAfterMove.add(server);
+                log.warn('Saved password unreadable after the move from Feishin', {
+                    serverId: server,
+                });
+                _event.sender.send(
+                    'password-unreadable-after-move',
+                    PASSWORD_UNREADABLE_AFTER_MOVE,
+                );
+            }
+            return null;
+        }
     }
 
     log.warn('Password encryption unavailable', { serverId: server });

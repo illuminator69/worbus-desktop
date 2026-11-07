@@ -9,6 +9,7 @@ import {
     ItemTableListInnerColumn,
     TableColumnContainer,
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
+import { showFullTextWhenCut } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
 import { AppRoute } from '/@/renderer/router/routes';
 import { Badge } from '/@/shared/components/badge/badge';
 import { Group } from '/@/shared/components/group/group';
@@ -32,8 +33,23 @@ const GenreBadgeColumn = (props: ItemTableListInnerColumn) => {
 
     if (Array.isArray(row)) {
         return (
-            <TableColumnContainer {...props}>
-                <Group className={styles.group} wrap="wrap">
+            <TableColumnContainer {...props} className={styles.cell}>
+                {/* One row of badges (B-267); a badge cut by the cell ellipsises its own label, and
+                    the badges past the ones the cell's width can show are hidden whole (the CSS). */}
+                <Group
+                    className={styles.group}
+                    onMouseEnter={(event) =>
+                        showFullTextWhenCut(
+                            event.currentTarget,
+                            genres.map((genre) => genre.name).join(', '),
+                            genres.length > MAX_GENRES ||
+                                Array.from(event.currentTarget.children).some(
+                                    (badge) => badge.getClientRects().length === 0,
+                                ),
+                        )
+                    }
+                    wrap="nowrap"
+                >
                     {genres.slice(0, MAX_GENRES).map((genre) => (
                         <Badge
                             component={Link}
