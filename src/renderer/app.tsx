@@ -29,6 +29,7 @@ import { initCustomThemes } from '/@/renderer/store/custom-themes.store';
 import * as coverSeeds from '/@/renderer/themes/cover/cover-seed-store';
 import { useCoverWash } from '/@/renderer/themes/cover/use-cover-wash';
 import { useAppTheme } from '/@/renderer/themes/use-app-theme';
+import { toast } from '/@/shared/components/toast/toast';
 import { logger } from '/@/renderer/utils/logger';
 import { sanitizeCss } from '/@/renderer/utils/sanitize';
 import { WebAudio } from '/@/shared/types/types';
@@ -38,6 +39,10 @@ import { AudioPlayers } from '/@/renderer/features/player/components/audio-playe
 
 const ipc = isElectron() ? window.api.ipc : null;
 const utils = isElectron() ? window.api.utils : null;
+
+// Worbus P5 (design §6.4): a saved password the move from Feishin left unreadable. Registered once,
+// before the first render, so nothing sent at sign-in is missed.
+utils?.onPasswordUnreadableAfterMove((message) => toast.warn({ message }));
 
 if (import.meta.env.DEV) {
     void import('/@/renderer/dev-handle');

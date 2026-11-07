@@ -1,5 +1,7 @@
 import type { UpdateCheckResult } from 'electron-updater';
 
+// First, before anything that reads the settings path (Worbus P5, design §6.4).
+import './first-start';
 import { is } from '@electron-toolkit/utils';
 import { createHash } from 'crypto';
 import {
@@ -7,6 +9,7 @@ import {
     BrowserWindow,
     BrowserWindowConstructorOptions,
     desktopCapturer,
+    dialog,
     globalShortcut,
     ipcMain,
     Menu,
@@ -38,6 +41,7 @@ import './features';
 import { hotkeyToElectronAccelerator } from './utils';
 
 import { disableAutoUpdates, isLinux, isMacOS, isWindows } from '/@/main/env';
+import { blockedByOldApp, COPY_FAILED_BODY, firstStart, firstStartLine } from '/@/main/first-start';
 import {
     clampWindowBoundsToDisplay,
     DEFAULT_WINDOW_BOUNDS,
@@ -1222,6 +1226,16 @@ if (!singleInstance) {
 
     app.whenReady()
         .then(() => {
+            // The old Feishin is running: first-start.ts shows its dialog and quits.
+            if (blockedByOldApp) return;
+            log.info(firstStartLine());
+            if ('error' in firstStart) {
+                void dialog.showMessageBox({
+                    buttons: ['OK'],
+                    message: COPY_FAILED_BODY,
+                    type: 'warning',
+                });
+            }
             log.info('App ready', {
                 arch: process.arch,
                 electron: process.versions.electron,

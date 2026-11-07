@@ -17,6 +17,7 @@ import path from 'path';
 
 import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
+import { migratedFrom } from '/@/main/migrate-from-feishin';
 
 const getFrame = () => {
     const isWindows = process.platform === 'win32';
@@ -157,6 +158,10 @@ ipcMain.handle('settings-set-sync', (__event, data: { property: string; value: a
     }
 });
 
+export const PASSWORD_UNREADABLE_AFTER_MOVE =
+    "Your saved password couldn't be read after the move from Feishin. Sign in again.";
+const unreadableAfterMove = new Set<string>();
+
 ipcMain.handle('password-get', (_event, server: string): null | string => {
     if (safeStorage.isEncryptionAvailable()) {
         const servers = store.get('server') as Record<string, string> | undefined;
@@ -168,8 +173,23 @@ ipcMain.handle('password-get', (_event, server: string): null | string => {
         const encrypted = servers[server];
         if (!encrypted) return null;
 
-        const decrypted = safeStorage.decryptString(Buffer.from(encrypted, 'hex'));
-        return decrypted;
+        try {
+            return safeStorage.decryptString(Buffer.from(encrypted, 'hex'));
+        } catch (error) {
+            // Worbus P5 (design §6.4): the keyring key follows the app's name, so a password the
+            // old Feishin saved may not read here. Say so and ask for the sign-in (no password ->
+            // the server's sign-in), never clearing it silently: the old app still reads it.
+            if (!migratedFrom(storePath)) throw error;
+            log.warn('Saved password unreadable after the move from Feishin', { serverId: server });
+            if (!unreadableAfterMove.has(server)) {
+                unreadableAfterMove.add(server);
+                _event.sender.send(
+                    'password-unreadable-after-move',
+                    PASSWORD_UNREADABLE_AFTER_MOVE,
+                );
+            }
+            return null;
+        }
     }
 
     log.warn('Password encryption unavailable', { serverId: server });

@@ -67,6 +67,20 @@ pnpm install
 pnpm run build && pnpm exec electron-builder --linux --x64 --dir   # -> dist/linux-unpacked/
 ```
 
+### Coming from Feishin
+
+Worbus keeps its settings in its own folder: `~/.config/Worbus` on Linux, `%APPDATA%\Worbus` on
+Windows, `~/Library/Application Support/Worbus` on macOS. The first time it starts it copies your
+Feishin folder (`feishin`) into it: servers, themes, EQ presets, custom CSS and the rest. Feishin's
+folder is left as it was, so Feishin keeps working.
+
+- **The Worbus Server sign-in is not copied.** Worbus signs in as a new device, named after your
+  computer; Feishin stays signed in.
+- **Close Feishin first.** While Feishin is running Worbus copies nothing; it asks you to close
+  Feishin and start Worbus again.
+- **Saved passwords** may not survive the move on Linux, where the system keyring keys them by the
+  app's name. Worbus then says so and asks you to sign in to that server once.
+
 ### Configuration
 
 1. On first start you are asked for the path to your MPV binary. If you do not have MPV installed,
