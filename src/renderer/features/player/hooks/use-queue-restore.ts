@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
+import { createStartupSeek } from '/@/renderer/features/player/hooks/startup-seek';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
 import {
     setTimestamp,
@@ -45,16 +46,24 @@ export const QueueRestoreTimestampHook = () => {
 };
 
 /**
- * navi-connect: set once the hub has placed the playhead (a load, an adopted session, a seek).
- * The startup seek below goes back to where this device was when it was closed, and fires the
- * first time playback starts - which, after a transfer back to this device, is the transfer's
- * own start: the hub's position was taken, then replaced by the old one.
+ * navi-connect: the startup seek goes back to where this device was when it was closed, and fires
+ * the first time playback starts - which, after a transfer back to this device, is the transfer's
+ * own start. So the hub, once it has placed the playhead (a load, an adopted session, a seek),
+ * withdraws it; or, when the engine was not up yet to take the hub's seek, retargets it to the
+ * hub's position so the first play lands there (B-339). State in startup-seek.ts.
  */
-let startupSeekWithdrawn = false;
+const startupSeek = createStartupSeek();
 
 export const withdrawStartupSeek = () => {
-    startupSeekWithdrawn = true;
+    startupSeek.withdraw();
 };
+
+/**
+ * B-339: replace the pending startup seek's target with `sec`, on the song now current. False when
+ * no startup seek is pending (applied, cancelled or withdrawn): the caller seeks as usual.
+ */
+export const retargetStartupSeek = (sec: number): boolean =>
+    startupSeek.retarget(sec, usePlayerStore.getState().getCurrentSong()?._uniqueId);
 
 export const useInitialTimestampRestore = () => {
     const { mediaSeekToTimestamp } = usePlayerActions();
@@ -64,66 +73,23 @@ export const useInitialTimestampRestore = () => {
     const timestamp = useTimestampStoreBase((state) => state.timestamp);
 
     const startupRestoreInitializedRef = useRef(false);
-    const startupSeekArmedRef = useRef<null | number>(null);
-    const startupSeekTargetUniqueIdRef = useRef<null | string>(null);
-    const startupSeekAppliedRef = useRef(false);
-
-    const cancelStartupSeek = useCallback(() => {
-        if (startupSeekAppliedRef.current) {
-            return;
-        }
-
-        startupSeekAppliedRef.current = true;
-        startupSeekArmedRef.current = null;
-        startupSeekTargetUniqueIdRef.current = null;
-    }, []);
 
     const applyStartupSeek = useCallback(() => {
-        const seekTimestamp = startupSeekArmedRef.current;
-
-        if (startupSeekAppliedRef.current) {
+        const seekTimestamp = startupSeek.takeOnPlaying(
+            usePlayerStore.getState().getCurrentSong()?._uniqueId,
+        );
+        if (seekTimestamp === null) {
             return;
         }
-
-        if (startupSeekWithdrawn) {
-            cancelStartupSeek();
-            return;
-        }
-
-        if (!seekTimestamp || seekTimestamp <= 0) {
-            return;
-        }
-
-        const targetUniqueId = startupSeekTargetUniqueIdRef.current;
-        const currentUniqueId = usePlayerStore.getState().getCurrentSong()?._uniqueId;
-
-        if (targetUniqueId && currentUniqueId !== targetUniqueId) {
-            cancelStartupSeek();
-            return;
-        }
-
-        startupSeekAppliedRef.current = true;
-        startupSeekArmedRef.current = null;
-        startupSeekTargetUniqueIdRef.current = null;
 
         setTimeout(() => {
             mediaSeekToTimestamp(seekTimestamp);
         }, 100);
-    }, [cancelStartupSeek, mediaSeekToTimestamp]);
+    }, [mediaSeekToTimestamp]);
 
     useEffect(() => {
-        const targetUniqueId = startupSeekTargetUniqueIdRef.current;
-        if (
-            !targetUniqueId ||
-            startupSeekAppliedRef.current ||
-            !currentSong ||
-            currentSong._uniqueId === targetUniqueId
-        ) {
-            return;
-        }
-
-        cancelStartupSeek();
-    }, [cancelStartupSeek, currentSong]);
+        startupSeek.noteCurrentSong(currentSong?._uniqueId);
+    }, [currentSong]);
 
     useEffect(() => {
         if (startupRestoreInitializedRef.current || startupRestoreSessionHandled) {
@@ -137,10 +103,7 @@ export const useInitialTimestampRestore = () => {
         startupRestoreInitializedRef.current = true;
         startupRestoreSessionHandled = true;
 
-        if (timestamp > 0) {
-            startupSeekArmedRef.current = timestamp;
-            startupSeekTargetUniqueIdRef.current = currentSong._uniqueId;
-        }
+        startupSeek.arm(timestamp, currentSong._uniqueId);
 
         if (playerStatus === PlayerStatus.PLAYING) {
             applyStartupSeek();

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
+import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
@@ -80,7 +81,11 @@ import {
 import { useActiveFillsStore } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { lbBotModeActions } from '/@/renderer/features/lbbot/stores/lbbot-mode.store';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
-import { withdrawStartupSeek } from '/@/renderer/features/player/hooks/use-queue-restore';
+import { engineTakesSeekNow } from '/@/renderer/features/player/hooks/startup-seek';
+import {
+    retargetStartupSeek,
+    withdrawStartupSeek,
+} from '/@/renderer/features/player/hooks/use-queue-restore';
 import { parseStationCursor } from '/@/renderer/features/player/station/station-logic';
 import {
     stationIdForPublish,
@@ -978,16 +983,32 @@ export const useHub = () => {
 
     // Arm a seek for when the player reports the target track. If that track is ALREADY
     // current, seeking now is both correct and necessary — nothing will re-arm it,
-    // because onCurrentSongChange only fires on an actual change.
+    // because onCurrentSongChange only fires on an actual change. B-339: unless the engine is
+    // not up yet at a fresh start; then the startup seek carries the hub's position (arm-seek.ts).
     const armSeek = useCallback(
         (targetIndex: number, sec: number, pause: boolean) => {
-            withdrawStartupSeek(); // the hub's position, not the one this device closed at
-            if (targetIndex === usePlayerStore.getState().player.index) {
-                mediaSeekToTimestamp(sec);
-                if (pause) setTimeout(() => mediaPause(), 100);
-                return;
+            const outcome = armSeekStep(targetIndex, sec, pause, {
+                armPending: (index, at, pauseAfter) => {
+                    pendingSeek.current = {
+                        armedAt: Date.now(),
+                        index,
+                        pause: pauseAfter,
+                        sec: at,
+                    };
+                },
+                currentIndex: usePlayerStore.getState().player.index,
+                engineTakesSeek: engineTakesSeekNow(),
+                pauseSoon: () => setTimeout(() => mediaPause(), 100),
+                retargetStartupSeek,
+                seekNow: mediaSeekToTimestamp,
+                showPosition: (at) => setTimestamp(at, { seek: true }),
+                withdrawStartupSeek,
+            });
+            if (outcome === 'retargeted') {
+                logger.info('[hub] engine not up yet: the first play starts at the hub position', {
+                    sec,
+                });
             }
-            pendingSeek.current = { armedAt: Date.now(), index: targetIndex, pause, sec };
         },
         [mediaPause, mediaSeekToTimestamp],
     );

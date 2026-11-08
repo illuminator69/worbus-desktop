@@ -13,6 +13,7 @@ import {
 } from '/@/renderer/features/player/audio-player/engine/retry-decision';
 import { AudioPlayer, PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { convertToLogVolume } from '/@/renderer/features/player/audio-player/utils/player-utils';
+import { setEngineSeekProbe } from '/@/renderer/features/player/hooks/startup-seek';
 import { logger } from '/@/renderer/utils/logger';
 import { PlayerStatus } from '/@/shared/types/types';
 
@@ -445,8 +446,25 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
         }
     }, [preservesPitch]);
 
+    // navi-connect (B-339): whether a seek sent now reaches the playing element. Before its
+    // react-player has mounted and reported ready, `seekTo` goes to a null ref and is dropped, so
+    // the hub's adopt at a fresh start leaves the startup seek to carry its position instead.
+    const ready1 = useRef(false);
+    const ready2 = useRef(false);
+    useEffect(() => {
+        setEngineSeekProbe(() => {
+            const which = playerNumRef.current === 2 ? 2 : 1;
+            const ref = which === 2 ? player2Ref : player1Ref;
+            return (
+                (which === 2 ? ready2 : ready1).current && Boolean(ref.current?.getInternalPlayer())
+            );
+        });
+        return () => setEngineSeekProbe(null);
+    }, []);
+
     const handleOnReadyPlayer1 = useCallback(
         (player: ReactPlayer) => {
+            ready1.current = true; // navi-connect (B-339)
             const internal = player.getInternalPlayer();
             if (internal && internal instanceof HTMLAudioElement) {
                 internal.preservesPitch = preservesPitch;
@@ -458,6 +476,7 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
 
     const handleOnReadyPlayer2 = useCallback(
         (player: ReactPlayer) => {
+            ready2.current = true; // navi-connect (B-339)
             const internal = player.getInternalPlayer();
             if (internal && internal instanceof HTMLAudioElement) {
                 internal.preservesPitch = preservesPitch;
