@@ -14,17 +14,24 @@ export interface StartupSeek {
     /** The song now current. A different one from the seek's target cancels it. */
     noteCurrentSong: (uniqueId: null | string | undefined) => void;
     /**
-     * Replace the pending seek's target with the hub's position, on the song now current. False
-     * when no startup seek is pending any more (applied, cancelled or withdrawn).
+     * Replace the pending seek's target with the hub's position, on the song now current. True
+     * until the first PLAYING after the restore effect ran (closed at 0 s included: the first play
+     * then starts at 0 s, and that is what the hub's position replaces), or the seek was cancelled
+     * or withdrawn; false from then on, so a mid-session seek is never retargeted.
      */
     retarget: (sec: number, uniqueId: null | string | undefined) => boolean;
-    /** Playback started: the position to seek to, exactly once; null otherwise. */
+    /**
+     * Playback started: the position to seek to, exactly once; null otherwise. Closes the startup
+     * seek once the restore effect has armed it (whatever it had to restore) or the hub retargeted
+     * it; before either, it stays open.
+     */
     takeOnPlaying: (currentUniqueId: null | string | undefined) => null | number;
     /** The hub placed the playhead itself: the startup seek must not take it back. */
     withdraw: () => void;
 }
 
 export const createStartupSeek = (): StartupSeek => {
+    let armed = false;
     let done = false;
     let retargeted = false;
     let sec: null | number = null;
@@ -39,7 +46,9 @@ export const createStartupSeek = (): StartupSeek => {
     return {
         arm: (at, uniqueId) => {
             // An adopt that came before the queue hydrated already said where to start.
-            if (done || retargeted || !(at > 0)) return;
+            if (done || retargeted) return;
+            armed = true;
+            if (!(at > 0)) return; // closed at 0 s: nothing to seek to, open until the first play
             sec = at;
             target = uniqueId ?? null;
         },
@@ -56,25 +65,24 @@ export const createStartupSeek = (): StartupSeek => {
         },
         takeOnPlaying: (currentUniqueId) => {
             if (done) return null;
-            if (sec === null || !(sec > 0)) return null; // nothing to restore yet: stays pending
-            if (target && currentUniqueId !== target) {
-                cancel();
-                return null;
-            }
+            if (!armed && sec === null) return null; // the restore has not run yet: stays open
             const at = sec;
-            done = true;
-            sec = null;
-            target = null;
-            return at;
+            const onSong = !target || currentUniqueId === target;
+            cancel(); // B-339 review: the first play closes it, also with nothing to restore
+            return at !== null && at > 0 && onSong ? at : null;
         },
         withdraw: cancel,
     };
 };
 
 /**
- * navi-connect (B-339): whether the playing engine can take a seek now. The web engine registers a
- * probe once it mounts (true after its current element reported ready); a seek sent before that
- * goes to a null ref and is dropped without a trace. No probe registered reads as "not up".
+ * navi-connect (B-339): whether the playing engine can take a seek now. Only the web player can
+ * drop one: a seek sent before its react-player has mounted goes to a null ref and is lost without
+ * a trace. It registers a probe on mount; with no probe (not mounted yet) or a throwing one, it
+ * reads as not up. The probe means "this element has reported ready at least once", not "ready
+ * for its current source": like react-player's own isReady it stays true after a track change, and
+ * a seek then goes to the element directly, as it did before this change. The mpv, DLNA and
+ * jukebox engines take a seek at any time and always read as up, as on the base.
  */
 let seekProbe: (() => boolean) | null = null;
 
@@ -82,7 +90,8 @@ export const setEngineSeekProbe = (probe: (() => boolean) | null) => {
     seekProbe = probe;
 };
 
-export const engineTakesSeekNow = (): boolean => {
+export const engineTakesSeekNow = (webPlayer: boolean): boolean => {
+    if (!webPlayer) return true;
     try {
         return seekProbe ? seekProbe() : false;
     } catch {

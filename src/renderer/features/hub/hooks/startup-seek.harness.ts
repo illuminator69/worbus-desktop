@@ -15,21 +15,32 @@ import { armSeekStep } from '../utils/arm-seek.ts';
  * 0.5.0): the persisted queue hydrates and use-queue-restore arms its startup seek (where this
  * device closed); the hub's orphaned-session adopt takes the `align` path at t (same track
  * current) and calls armSeek; the web player mounts at t+5 ms; the user presses play (first
- * PLAYING). A seek sent to the engine before it is up goes to a null ref and is dropped
- * (web-player-engine's `player1Ref.current?.seekTo`); `writes` is every `currentTime` write the
- * element got.
+ * PLAYING). A seek sent to the web engine before it is up goes to a null ref and is dropped
+ * (web-player-engine's `player1Ref.current?.seekTo`); the mpv, DLNA and jukebox engines take a
+ * seek at any time. `writes` is the seeks this model of the engine accepts.
+ *
+ * What it drives: the real `createStartupSeek`, `armSeekStep` and `engineTakesSeekNow`. What it
+ * does not reach: the hooks' wiring (use-hub's armSeek, useInitialTimestampRestore's effects),
+ * `retargetStartupSeek`'s read of the player store, the 100 ms timer before the startup seek is
+ * sent, the playback-type setting read, and the web engine's own ready flags. The model's
+ * `engine.ready` is both what the probe returns and what decides whether a seek lands, so a probe
+ * that disagrees with the real element would pass here; only the walk (F3) sees the element.
  */
 
 const HUB_SEC = 86.683; // the hub's positionMs 86683, as seen in B-339
 const CLOSED_SEC = 80.2; // where this device was when it closed (the persisted timestamp)
 
-const startup = (current = { index: 3, uniqueId: 'u3' }) => {
+const startup = (
+    current = { index: 3, uniqueId: 'u3' },
+    kind: 'mpv' | 'web' = 'web', // mpv stands for every engine but the web player
+) => {
     const seek = createStartupSeek();
-    const engine = { ready: false };
+    const engine = { ready: kind !== 'web' };
     const writes: number[] = [];
     const pending: Array<{ index: number; pause: boolean; sec: number }> = [];
     const shown: number[] = [];
-    setEngineSeekProbe(() => engine.ready);
+    // Only the web engine registers a probe (web-player-engine.tsx).
+    setEngineSeekProbe(kind === 'web' ? () => engine.ready : null);
 
     // web-player.tsx onPlayerSeekToTimestamp -> the ReactPlayer ref; null before the mount.
     const engineSeek = (sec: number) => {
@@ -40,7 +51,7 @@ const startup = (current = { index: 3, uniqueId: 'u3' }) => {
         armSeekStep(targetIndex, sec, true, {
             armPending: (index, at, pause) => pending.push({ index, pause, sec: at }),
             currentIndex: current.index,
-            engineTakesSeek: engineTakesSeekNow(),
+            engineTakesSeek: engineTakesSeekNow(kind === 'web'),
             pauseSoon: () => {},
             retargetStartupSeek: (at) => seek.retarget(at, current.uniqueId),
             seekNow: (at) => {
@@ -140,10 +151,75 @@ test('alignToAnotherRowKeepsTheSeek', () => {
 
 test('noProbeReadsAsNotUp', () => {
     setEngineSeekProbe(null);
-    assert.equal(engineTakesSeekNow(), false);
+    assert.equal(engineTakesSeekNow(true), false);
     setEngineSeekProbe(() => {
         throw new Error('unmounted');
     });
-    assert.equal(engineTakesSeekNow(), false);
+    assert.equal(engineTakesSeekNow(true), false);
     setEngineSeekProbe(null);
+});
+
+test('nonWebEngineAlignSeeksAtOnce', () => {
+    // mpv (and DLNA, jukebox): no probe, and a seek reaches it at any time, as on the base.
+    const s = startup({ index: 3, uniqueId: 'u3' }, 'mpv');
+    s.seek.arm(CLOSED_SEC, 'u3');
+    assert.equal(s.armSeek(3, HUB_SEC), 'seeked');
+    assert.deepEqual(s.writes, [HUB_SEC], 'sought at once');
+    assert.equal(engineTakesSeekNow(false), true, 'every engine but the web player is up');
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC], 'the startup seek was withdrawn');
+});
+
+test('nonWebEngineMidSessionSeeksAtOnce', () => {
+    // The review's run: closed at 0 s, played, then a same-track align (the phone force-stopped,
+    // play pressed here). The seek goes to the engine now; nothing waits for a later PLAYING.
+    const s = startup({ index: 3, uniqueId: 'u3' }, 'mpv');
+    s.seek.arm(0, 'u3');
+    s.playing();
+    assert.equal(s.armSeek(3, HUB_SEC), 'seeked');
+    assert.deepEqual(s.writes, [HUB_SEC]);
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC], 'no late jump on the next PLAYING');
+});
+
+test('retargetAfterFirstPlayWithNothingArmedSeeks', () => {
+    // Closed at 0 s: nothing to restore. The first PLAYING closes the startup seek, so a later
+    // same-track align while the web player is not up (remounted after the radio, say) seeks as
+    // the base did, instead of arming a seek for some later PLAYING.
+    const s = startup();
+    s.seek.arm(0, 'u3');
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, []);
+    s.engine.ready = false;
+    assert.equal(s.seek.retarget(HUB_SEC, 'u3'), false, 'no startup seek pending');
+    assert.equal(s.armSeek(3, HUB_SEC), 'seeked');
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, [], 'no seek carried to a later PLAYING');
+});
+
+test('retargetIsFalseOnceAppliedOrWithdrawn', () => {
+    const applied = startup();
+    applied.seek.arm(CLOSED_SEC, 'u3');
+    applied.engine.ready = true;
+    applied.playing();
+    assert.deepEqual(applied.writes, [CLOSED_SEC]);
+    assert.equal(applied.seek.retarget(HUB_SEC, 'u3'), false, 'applied');
+
+    const withdrawn = startup();
+    withdrawn.seek.arm(CLOSED_SEC, 'u3');
+    withdrawn.seek.withdraw();
+    assert.equal(withdrawn.seek.retarget(HUB_SEC, 'u3'), false, 'withdrawn');
+});
+
+test('alignBeforeMountClosedAtZeroLandsAtHubPosition', () => {
+    // Closed at 0 s, the hub at 86.683 s: until the first PLAYING the startup seek ("start where
+    // this device closed", 0 s) is still the one the first play carries, so it takes the hub's.
+    const s = startup();
+    s.seek.arm(0, 'u3');
+    assert.equal(s.armSeek(3, HUB_SEC), 'retargeted');
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC]);
 });

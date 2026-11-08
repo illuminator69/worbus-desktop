@@ -122,7 +122,7 @@ import {
 import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { LibraryItem, QueueSong, Song } from '/@/shared/types/domain-types';
-import { PlayerRepeat, PlayerShuffle, PlayerStatus } from '/@/shared/types/types';
+import { PlayerRepeat, PlayerShuffle, PlayerStatus, PlayerType } from '/@/shared/types/types';
 import { HubSignInResult, parseHubUser } from '/@/shared/utils/hub-signin';
 import {
     isProgressOnlyFrame,
@@ -983,7 +983,7 @@ export const useHub = () => {
 
     // Arm a seek for when the player reports the target track. If that track is ALREADY
     // current, seeking now is both correct and necessary — nothing will re-arm it,
-    // because onCurrentSongChange only fires on an actual change. B-339: unless the engine is
+    // because onCurrentSongChange only fires on an actual change. B-339: unless the web player is
     // not up yet at a fresh start; then the startup seek carries the hub's position (arm-seek.ts).
     const armSeek = useCallback(
         (targetIndex: number, sec: number, pause: boolean) => {
@@ -997,7 +997,10 @@ export const useHub = () => {
                     };
                 },
                 currentIndex: usePlayerStore.getState().player.index,
-                engineTakesSeek: engineTakesSeekNow(),
+                // Only the web player can drop a seek before it mounts; the others are up.
+                engineTakesSeek: engineTakesSeekNow(
+                    useSettingsStore.getState().playback.type === PlayerType.WEB,
+                ),
                 pauseSoon: () => setTimeout(() => mediaPause(), 100),
                 retargetStartupSeek,
                 seekNow: mediaSeekToTimestamp,

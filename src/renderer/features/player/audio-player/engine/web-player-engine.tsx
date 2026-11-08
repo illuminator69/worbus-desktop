@@ -449,6 +449,9 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
     // navi-connect (B-339): whether a seek sent now reaches the playing element. Before its
     // react-player has mounted and reported ready, `seekTo` goes to a null ref and is dropped, so
     // the hub's adopt at a fresh start leaves the startup seek to carry its position instead.
+    // ready1/ready2 mean "this element reported ready at least once", not "ready for its current
+    // src": like react-player 2's own isReady, they are not reset on a src change, so after a track
+    // change a seek goes to the element directly, before the new source's canplay, as before.
     const ready1 = useRef(false);
     const ready2 = useRef(false);
     useEffect(() => {

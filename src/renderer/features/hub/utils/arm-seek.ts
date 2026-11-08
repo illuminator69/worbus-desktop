@@ -10,7 +10,10 @@ export interface ArmSeekDeps {
     /** Hold the seek for onCurrentSongChange (use-hub's pendingSeek). */
     armPending: (index: number, sec: number, pause: boolean) => void;
     currentIndex: number;
-    /** Whether the engine can take a seek now (startup-seek's engineTakesSeekNow). */
+    /**
+     * Whether the engine can take a seek now (startup-seek's engineTakesSeekNow): always for the
+     * mpv, DLNA and jukebox engines; for the web player, once it has mounted and reported ready.
+     */
     engineTakesSeek: boolean;
     /** Re-assert the pause shortly after (the adopt loads paused). */
     pauseSoon: () => void;
@@ -38,7 +41,7 @@ export const armSeekStep = (
     }
     // B-339: at a fresh start the adopt can come before the web player has mounted, and a seek
     // sent then is dropped. Keep the startup seek alive instead, aimed at the hub's position: the
-    // first play carries it. Only while one is pending; after that, seek as always.
+    // first play carries it. Only until that first play; after it, seek as always.
     if (!deps.engineTakesSeek && deps.retargetStartupSeek(sec)) {
         deps.showPosition(sec);
         if (pause) deps.pauseSoon();

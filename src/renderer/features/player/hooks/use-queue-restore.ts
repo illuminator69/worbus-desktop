@@ -59,8 +59,9 @@ export const withdrawStartupSeek = () => {
 };
 
 /**
- * B-339: replace the pending startup seek's target with `sec`, on the song now current. False when
- * no startup seek is pending (applied, cancelled or withdrawn): the caller seeks as usual.
+ * B-339: replace the pending startup seek's target with `sec`, on the song now current, and return
+ * true. False when no startup seek is pending: after the first PLAYING (also when there was nothing
+ * to restore), or once it was cancelled or withdrawn. The caller then seeks as usual.
  */
 export const retargetStartupSeek = (sec: number): boolean =>
     startupSeek.retarget(sec, usePlayerStore.getState().getCurrentSong()?._uniqueId);
