@@ -54,7 +54,7 @@ test('client_name_is_worbus', async () => {
 
     const { CLIENT_NAME, userAgent } = await load();
     assert.equal(CLIENT_NAME, 'Worbus-Desktop');
-    assert.equal(userAgent('0.6.0'), 'Worbus-Desktop/0.6.0');
+    assert.equal(userAgent('0.7.0'), 'Worbus-Desktop/0.7.0');
 });
 
 test('default_device_name', async () => {
@@ -85,7 +85,7 @@ test('builder_config_ids', () => {
     assert.equal(yamlValue(builder, 'executableName'), 'worbus');
     assert.equal(pkg.productName, 'Worbus', 'package.json productName names the settings folder');
     assert.equal(pkg.name, 'worbus');
-    assert.equal(pkg.version, '0.6.0');
+    assert.equal(pkg.version, '0.7.0');
     assert.match(builder, /^\s+repo:\s*worbus-desktop\s*$/m, 'the publish block is the fork');
     // The packaged entry groups the window: its WM_CLASS is ("worbus", "worbus") (walk, X11).
     assert.match(builder, /^\s+StartupWMClass:\s*worbus\s*$/m);

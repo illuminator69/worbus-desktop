@@ -6,7 +6,7 @@
 /** The Subsonic `c=` every request sends; Navidrome's Players list shows it. */
 export const CLIENT_NAME = 'Worbus-Desktop';
 
-/** The User-Agent of the app's own calls (lrclib), `Worbus-Desktop/0.6.0`. */
+/** The User-Agent of the app's own calls (lrclib), `Worbus-Desktop/0.7.0`. */
 export const userAgent = (version: string): string => `${CLIENT_NAME}/${version}`;
 
 /** What a device is called when nobody named it: the computer's own name, else Worbus. */

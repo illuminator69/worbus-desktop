@@ -6,9 +6,9 @@ import test from 'node:test';
  * Worbus P6 lane F, F2:  node --test src/main/release-slots.harness.ts
  *
  * The places a release is described: the AppStream metainfo (two screenshots at the fixed raw URLs and
- * a 0.6.0 release above 0.5.0's), the web manifest (one wide screenshot that is ours, not upstream's
- * preview) and the release job (a SHA256SUMS over the release files, written before the release is
- * created and not listing itself).
+ * the current release above the one before), the web manifest (one wide screenshot that is ours, not
+ * upstream's preview, and Ink as its theme colour, P7 Q-154) and the release job (a SHA256SUMS over the
+ * release files, written before the release is created and not listing itself).
  */
 
 const ROOT = new URL('../../', import.meta.url);
@@ -35,8 +35,8 @@ test('metainfo_has_screenshots', () => {
     });
 
     const versions = [...xml.matchAll(/<release\b[^>]*\bversion="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(versions.slice(0, 2), ['0.6.0', '0.5.0'], '0.6.0 sits above 0.5.0');
-    assert.equal(JSON.parse(text('package.json')).version, '0.6.0', 'package.json is 0.6.0');
+    assert.deepEqual(versions.slice(0, 2), ['0.7.0', '0.6.0'], '0.7.0 sits above 0.6.0');
+    assert.equal(JSON.parse(text('package.json')).version, '0.7.0', 'package.json is 0.7.0');
 });
 
 test('manifest_screenshot_is_ours', () => {
@@ -55,6 +55,13 @@ test('manifest_screenshot_is_ours', () => {
         existsSync(new URL('media/screenshot-wide.webp', ROOT)),
         'media/screenshot-wide.webp exists',
     );
+});
+
+test('manifest_theme_is_ink', () => {
+    // Q-154: the installed web app's title bar, next to the Ink icon; not upstream's purple.
+    const config = text('web.vite.config.ts');
+    assert.match(config, /theme_color:\s*'#18211F'/, 'theme_color is Ink');
+    assert.doesNotMatch(config, /#1E003D/i, 'no upstream purple left in the web build');
 });
 
 test('release_attaches_checksums', () => {

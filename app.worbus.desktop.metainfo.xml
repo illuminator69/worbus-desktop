@@ -45,6 +45,11 @@
     <category>Music</category>
   </categories>
   <releases>
+    <release date="2026-11-08" type="stable" version="0.7.0">
+      <description>
+        <p>After a fresh start, the resumed song plays from where the Worbus Server says, not from the beginning.</p>
+      </description>
+    </release>
     <release date="2026-11-07" type="stable" version="0.6.0">
       <description>
         <p>A single-colour icon, screenshots in the store listings, and checksums beside the downloads.</p>

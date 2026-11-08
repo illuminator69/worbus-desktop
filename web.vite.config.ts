@@ -127,7 +127,7 @@ export default defineConfig({
                 ],
                 short_name: 'Worbus',
                 start_url: '/',
-                theme_color: '#1E003D',
+                theme_color: '#18211F',
             },
             manifestFilename: 'assets/manifest.webmanifest',
             outDir: path.resolve(__dirname, './out/web/'),
