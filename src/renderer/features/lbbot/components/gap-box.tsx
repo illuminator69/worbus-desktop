@@ -33,6 +33,7 @@ import {
     gapViewOnAsk,
     heldTracks,
     missingTracks,
+    searchProgressLine,
 } from '/@/renderer/features/lbbot/gap-stage';
 import { useKeepTopInView } from '/@/renderer/features/lbbot/hooks/use-keep-top-in-view';
 import {
@@ -733,7 +734,8 @@ const GapBox = ({
                     {stage.kind === 'searching' && (
                         <p className={styles.busy}>
                             <span aria-hidden="true" className={scanStyles.spin} />
-                            {gap?.sourceTask?.current || t('naviConnect.gapBox.searching')}
+                            {searchProgressLine(gap?.sourceTask) ||
+                                t('naviConnect.gapBox.searching')}
                         </p>
                     )}
                     {stage.kind === 'noSources' && (

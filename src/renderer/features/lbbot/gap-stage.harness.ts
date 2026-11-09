@@ -16,6 +16,7 @@ import {
     gapStage,
     gapViewOnAsk,
     heldTracks,
+    searchProgressLine,
 } from './gap-stage.ts';
 import { currentStep } from './request-steps.ts';
 
@@ -485,4 +486,15 @@ test('the result row holds from the landing the box saw, not from the ledger set
         gapStage(input({ fill: null, gap: filled, landedAt: 100_000, now: 101_000 })).kind,
         'done',
     );
+});
+
+test('searchAgainNeverShowsTheFinishedSearchsLine', () => {
+    // VM walk: the first frame after Search again (~100 ms, before the new task reached the cache)
+    // showed the previous, finished task's "ranking 3 peer(s)...". Only a task still searching
+    // speaks; until the new one arrives the box says its own "Searching".
+    const task = (status: string, current: string) => ({ current, status }) as LbBotGapTask;
+    assert.equal(searchProgressLine(task('complete', 'ranking 3 peer(s)...')), '', 'old line shown');
+    assert.equal(searchProgressLine(task('error', 'ranking 3 peer(s)...')), '');
+    assert.equal(searchProgressLine(task('running', '0 peer(s), 0 file(s)')), '0 peer(s), 0 file(s)');
+    assert.equal(searchProgressLine(null), '');
 });

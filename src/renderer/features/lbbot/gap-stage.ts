@@ -130,6 +130,10 @@ const HELD_TRACK_STATES: ReadonlySet<LbBotGapTrackState> = new Set<LbBotGapTrack
 
 const SEARCH_IN_FLIGHT = new Set(['queued', 'running']);
 
+/** The searching stage's progress line: the record's source task's own line ('' for the box's). */
+export const searchProgressLine = (task: GapRecord['sourceTask'] | undefined): string =>
+    task?.current ?? '';
+
 /**
  * Fill progress, counted off the tracks rather than off a task: a gap fill is per-track and has no
  * single transfer to report. Measured against the tracks being filled, not the album's length:
