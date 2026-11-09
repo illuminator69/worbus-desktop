@@ -28,14 +28,13 @@ export interface LoadExpectation {
 
 export type LoadVerdict = { error?: string; ok: boolean };
 
-/** What the player shows now. `rowIndex` is the store's index mapped to a queue row (shuffle). */
+/** What the player shows now. `rowIndex` is the playing row of the queue (`playingQueueIndex`). */
 export interface PlayerLook {
     playing: boolean;
     positionSec: number;
     /** The engine clock is advancing (playhead-run.ts). */
     rolling: boolean;
     rowIndex: number;
-    storeIndex: number;
 }
 
 export const PAUSED_POSITION_SLACK_SEC = 3;
@@ -53,9 +52,10 @@ export const loadProven = (
     exp: LoadExpectation,
     look: PlayerLook,
 ): { ok: false; onTarget: boolean } | { ok: true } => {
-    // The hub's index is a row of the queue, and with shuffle on the store's index is a position
-    // in the shuffled order: either counts (I-031).
-    const onTarget = look.storeIndex === exp.index || look.rowIndex === exp.index;
+    // The hub's index is a row of the queue. Only the playing row counts: the store's own index
+    // is a play position under shuffle, and it was counted too while a load wrote a row into it
+    // (W1, fixed in the store), so a different song at that position read as on target.
+    const onTarget = look.rowIndex === exp.index;
     if (onTarget) {
         // B-053: a lone seek step is not proof that the engine started.
         if (!exp.wantPause && look.rolling) return { ok: true };

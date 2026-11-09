@@ -328,6 +328,9 @@ function dial(url: string, gen: number): void {
                 // `idleVolume`: the renderer applies `do:setVolume` whenever it arrives,
                 // also while another device is playing, so the hub may send this device a
                 // level somebody set on its row in a picker (`act:volume` with `target`).
+                // `playOrder` (W1): this device owns its play order under shuffle; it sends
+                // `shuffle` + `order` with every `setQueue` and adopts the ones a hub sends in
+                // `load`, `queueChanged` and `setShuffle`. The cast bridge's hello does not.
                 caps: [
                     'receiver',
                     'controller',
@@ -335,6 +338,7 @@ function dial(url: string, gen: number): void {
                     'transferAckV2',
                     'cmdEcho',
                     'idleVolume',
+                    'playOrder',
                 ],
                 id: deviceId(),
                 // What this device is, for the icon its row gets in every picker. An older

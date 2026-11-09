@@ -14,7 +14,7 @@ import {
 import { QueueStationChips } from '/@/renderer/features/player/station/queue-station-chips';
 import { ListConfigMenu } from '/@/renderer/features/shared/components/list-config-menu';
 import { SearchInput } from '/@/renderer/features/shared/components/search-input';
-import { usePlayerStoreBase } from '/@/renderer/store';
+import { playPosition, usePlayerStoreBase } from '/@/renderer/store';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Box } from '/@/shared/components/box/box';
 import { Divider } from '/@/shared/components/divider/divider';
@@ -75,7 +75,9 @@ export const PlayQueueListControls = ({
     }, []);
 
     const actions = useQueueActions(() => {
-        const index = usePlayerStoreBase.getState().player.index;
+        // The list draws the play order (B-351), so the playing song's place in it is the play
+        // position.
+        const index = playPosition(usePlayerStoreBase.getState());
         if (index !== -1) {
             tableRef.current?.scrollToIndex(index);
         }

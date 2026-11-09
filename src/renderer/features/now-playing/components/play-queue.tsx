@@ -23,7 +23,7 @@ import { useDragDrop } from '/@/renderer/hooks/use-drag-drop';
 import { useHotkeys } from '/@/renderer/hooks/use-hotkeys';
 import {
     isShuffleEnabled,
-    mapShuffledToQueueIndex,
+    playPosition,
     subscribeCurrentTrack,
     subscribePlayerQueue,
     useCurrentServerId,
@@ -79,6 +79,9 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
         const serverId = useCurrentServerId();
         const remoteQueue = useHubStore((s) => s.remoteQueue, shallow);
         const remoteIndex = useHubStore((s) => s.remoteQueueIndex);
+        // B-351: under shuffle the local list is in play order, and a drag reorders the queue,
+        // not the play order, so it takes none (as Worbus for Android since B-341).
+        const localShuffle = usePlayerStore((s) => isShuffleEnabled(s));
 
         // While playback is on another navi-connect device the side queue shows the REMOTE
         // session queue. The `remote:<i>` uniqueId is the sentinel that routes a row
@@ -106,9 +109,12 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
 
             // Grouped, these indexes would be converted with the grouping before the change:
             // the side queue follows from the effect below instead.
+            // The list draws the play order (queueListRows), so the playing song sits at the
+            // play position, not at its queue row.
             const unsubCurrentTrack = subscribeCurrentTrack((e) => {
-                if (!grouped && followCurrentSong && e.index !== -1) {
-                    tableRef.current?.scrollToIndex(e.index, {
+                const index = playPosition(usePlayerStore.getState());
+                if (!grouped && followCurrentSong && e.index !== -1 && index !== -1) {
+                    tableRef.current?.scrollToIndex(index, {
                         align: 'center',
                         behavior: 'auto',
                     });
@@ -118,12 +124,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
             const handleAutoDJQueueAdded = () => {
                 // A top-up regroups the side queue; it must not move the user.
                 if (!grouped && followCurrentSong) {
-                    const state = usePlayerStore.getState();
-                    let index = state.player.index;
-
-                    if (isShuffleEnabled(state)) {
-                        index = mapShuffledToQueueIndex(index, state.queue.shuffled);
-                    }
+                    const index = playPosition(usePlayerStore.getState());
 
                     if (index !== -1) {
                         // Use setTimeout to ensure the DOM has updated with the new queue items
@@ -142,12 +143,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
             setQueue();
 
             if (!grouped && followCurrentSong) {
-                const state = usePlayerStore.getState();
-                let index = state.player.index;
-
-                if (isShuffleEnabled(state)) {
-                    index = mapShuffledToQueueIndex(index, state.queue.shuffled);
-                }
+                const index = playPosition(usePlayerStore.getState());
 
                 if (index !== -1) {
                     setTimeout(() => {
@@ -252,7 +248,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
                     enableAlternateRowColors={table.enableAlternateRowColors}
                     // Remote rows are draggable too: the reorder is routed to the hub
                     // session in player-context.moveSelectedTo (single-item moves).
-                    enableDrag
+                    enableDrag={isRemoteActive || !localShuffle}
                     enableExpansion={false}
                     enableHeader={grouped ? false : table.enableHeader}
                     enableHorizontalBorders={table.enableHorizontalBorders}

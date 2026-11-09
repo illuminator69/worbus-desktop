@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { createAuthHeader, jfApiClient } from '/@/renderer/api/jellyfin/jellyfin-api';
 import { useRadioStore } from '/@/renderer/features/radio/store/radio-store';
+import { playPosition } from '/@/renderer/store/play-order';
 import { isShuffleEnabled, usePlayerStoreBase } from '/@/renderer/store/player.store';
 import { getServerUrl, normalizeServerUrl } from '/@/renderer/utils/normalize-server-url';
 import { jfNormalize } from '/@/shared/api/jellyfin/jellyfin-normalize';
@@ -53,7 +54,7 @@ const getNowPlayingQueueWindow = (): undefined | { Id: string }[] => {
         const state = usePlayerStoreBase.getState();
         const { default: order, shuffled, songs } = state.queue;
         const playOrder = isShuffleEnabled(state) ? shuffled.map((idx) => order[idx]) : order;
-        const index = state.player.index;
+        const index = playPosition(state);
 
         if (index < 0 || index >= playOrder.length) {
             return undefined;

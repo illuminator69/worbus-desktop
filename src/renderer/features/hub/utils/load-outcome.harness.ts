@@ -30,14 +30,13 @@ const look = (patch: Partial<PlayerLook> = {}): PlayerLook => ({
     positionSec: 0,
     rolling: false,
     rowIndex: 0,
-    storeIndex: 0,
     ...patch,
 });
 
 test('aPlayingLoadIsProvenByARunningClockOnTheTarget', () => {
     const exp = expectLoad(2, 120, false);
-    assert.deepEqual(loadProven(exp, look({ storeIndex: 1 })), { ok: false, onTarget: false });
-    assert.deepEqual(loadProven(exp, look({ playing: true, storeIndex: 2 })), {
+    assert.deepEqual(loadProven(exp, look({ rowIndex: 1 })), { ok: false, onTarget: false });
+    assert.deepEqual(loadProven(exp, look({ playing: true, rowIndex: 2 })), {
         ok: false,
         onTarget: true,
     });
@@ -49,30 +48,30 @@ test('aPlayingLoadIsProvenByARunningClockOnTheTarget', () => {
 test('aPauseDuringAPlayingLoadIsAnsweredOnceSettled', () => {
     const exp = expectLoad(2, 120, false);
     reaimLoad(exp, { cmd: 'pause' });
-    assert.deepEqual(loadProven(exp, look({ positionSec: 120.6, storeIndex: 2 })), { ok: true });
+    assert.deepEqual(loadProven(exp, look({ positionSec: 120.6, rowIndex: 2 })), { ok: true });
     assert.equal(exp.overridden, true, 'its failure must not pause or report over the pause');
 });
 
 test('aPlayDuringAPausedLoadWaitsForTheClock', () => {
     const exp = expectLoad(2, 120, true);
     reaimLoad(exp, { cmd: 'play' });
-    assert.equal(loadProven(exp, look({ positionSec: 120, storeIndex: 2 })).ok, false);
-    assert.equal(loadProven(exp, look({ playing: true, rolling: true, storeIndex: 2 })).ok, true);
+    assert.equal(loadProven(exp, look({ positionSec: 120, rowIndex: 2 })).ok, false);
+    assert.equal(loadProven(exp, look({ playing: true, rolling: true, rowIndex: 2 })).ok, true);
 });
 
 test('aSeekMovesWhereAPausedLoadMustSettle', () => {
     const exp = expectLoad(2, 120, true);
     reaimLoad(exp, { cmd: 'seek', positionMs: 30_000 });
-    assert.equal(loadProven(exp, look({ positionSec: 120, storeIndex: 2 })).ok, false);
-    assert.equal(loadProven(exp, look({ positionSec: 30.2, storeIndex: 2 })).ok, true);
+    assert.equal(loadProven(exp, look({ positionSec: 120, rowIndex: 2 })).ok, false);
+    assert.equal(loadProven(exp, look({ positionSec: 30.2, rowIndex: 2 })).ok, true);
     assert.equal(exp.overridden, false, 'a seek leaves the play state the load asked for');
 });
 
 test('aJumpMovesTheTargetRow', () => {
     const exp = expectLoad(2, 120, false);
     reaimLoad(exp, { cmd: 'jump', index: 5 });
-    assert.equal(loadProven(exp, look({ rolling: true, storeIndex: 2 })).ok, false);
-    assert.equal(loadProven(exp, look({ rolling: true, storeIndex: 5 })).ok, true);
+    assert.equal(loadProven(exp, look({ rolling: true, rowIndex: 2 })).ok, false);
+    assert.equal(loadProven(exp, look({ rolling: true, rowIndex: 5 })).ok, true);
 });
 
 test('otherDirectivesLeaveItAlone', () => {
@@ -85,10 +84,10 @@ test('otherDirectivesLeaveItAlone', () => {
 
 test('aClearClosesItWithWhatItHadReached', () => {
     const started = expectLoad(2, 120, false);
-    closeLoad(started, look({ playing: true, rolling: true, storeIndex: 2 }));
+    closeLoad(started, look({ playing: true, rolling: true, rowIndex: 2 }));
     assert.deepEqual(started.verdict, { ok: true });
     const notYet = expectLoad(2, 120, false);
-    closeLoad(notYet, look({ storeIndex: 2 }));
+    closeLoad(notYet, look({ rowIndex: 2 }));
     assert.equal(notYet.verdict?.ok, false);
 });
 

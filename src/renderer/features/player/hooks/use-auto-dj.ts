@@ -11,8 +11,9 @@ import { remainingRemote } from '/@/renderer/features/player/station/station-log
 import { useStationMode, useStationStore } from '/@/renderer/features/player/station/station-store';
 import {
     AUTO_DJ_STRATEGY,
-    isShuffleEnabled,
-    mapShuffledToQueueIndex,
+    playingQueueIndex,
+    playOrder,
+    playPosition,
     useAutoDJSettings,
     useCurrentServer,
     useCurrentServerId,
@@ -50,15 +51,9 @@ export const useAutoDJ = () => {
 
         const selector = (state: ReturnType<typeof usePlayerStoreBase.getState>) => {
             const queue = state.getQueue();
-            let index = state.player.index;
-            let remaining: number;
-
-            if (isShuffleEnabled(state)) {
-                remaining = state.queue.shuffled.length - index - 1;
-                index = mapShuffledToQueueIndex(index, state.queue.shuffled);
-            } else {
-                remaining = queue.items.slice(index + 1).length;
-            }
+            const index = playingQueueIndex(state);
+            // What is left to play after the playing song, in play order.
+            const remaining = Math.max(0, playOrder(state).length - playPosition(state) - 1);
 
             return { index, remaining, song: queue.items[index] };
         };

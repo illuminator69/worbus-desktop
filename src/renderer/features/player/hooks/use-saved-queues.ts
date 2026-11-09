@@ -14,6 +14,7 @@ import {
     resolveQueueSource,
 } from '/@/renderer/features/player/utils/saved-queue-source';
 import {
+    playingQueueIndex,
     SavedQueue,
     useCurrentServerId,
     useHubStore,
@@ -66,7 +67,9 @@ export const useSavedQueuesCapture = () => {
                 return;
             }
 
-            const index = Math.min(Math.max(state.player.index, 0), items.length - 1);
+            // The playing row of `items` (queue order): under shuffle the play position named
+            // another song for the card and its cover (B-367).
+            const index = Math.min(Math.max(playingQueueIndex(state), 0), items.length - 1);
             const current = items[index];
             const positionSeconds = Math.max(
                 0,
@@ -162,7 +165,7 @@ export const useSavedQueuesCapture = () => {
             (state) => {
                 const items = state.getQueue().items;
                 return [
-                    state.player.index,
+                    playingQueueIndex(state),
                     items.length,
                     items[0]?.id ?? '',
                     items[items.length - 1]?.id ?? '',

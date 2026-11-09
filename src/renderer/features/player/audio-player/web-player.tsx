@@ -19,6 +19,7 @@ import { PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
 import {
+    playPosition,
     useMpvSettings,
     usePlaybackSettings,
     usePlayerActions,
@@ -128,7 +129,7 @@ export function WebPlayer() {
             if (last > duration * 0.85 && playedSeconds < duration * 0.15) {
                 setTimestamp(0);
                 eventEmitter.emit('PLAYER_REPEATED', {
-                    index: usePlayerStoreBase.getState().player.index,
+                    index: playPosition(usePlayerStoreBase.getState()),
                 });
             }
         },

@@ -5,6 +5,9 @@ import eslintPluginReact from 'eslint-plugin-react';
 import eslintPluginReactHooks from 'eslint-plugin-react-hooks';
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh';
 
+const PLAYER_INDEX_MESSAGE =
+    'player.index is a play position under shuffle: read playingQueueIndex, playOrder or playPosition from the store.';
+
 export default tseslint.config(
     { ignores: ['**/node_modules', '**/dist', '**/out', 'commitlint.config.mjs'] },
     tseslint.configs.recommended,
@@ -49,6 +52,32 @@ export default tseslint.config(
             'react/display-name': 'off',
             semi: ['error', 'always'],
             'single-attribute-per-line': 'off',
+        },
+    },
+    {
+        // W1 (B-305, B-367, B-371): `player.index` is a play position under shuffle, so outside
+        // the store it is read through playingQueueIndex / playOrder / playPosition
+        // (src/renderer/store/play-order.ts). play-order-guard.harness.ts checks the same.
+        files: ['src/renderer/**/*.{ts,tsx}'],
+        ignores: ['src/renderer/store/**'],
+        rules: {
+            'no-restricted-syntax': [
+                'error',
+                {
+                    message: PLAYER_INDEX_MESSAGE,
+                    selector:
+                        "MemberExpression[property.name='index'][object.property.name='player']",
+                },
+                {
+                    message: PLAYER_INDEX_MESSAGE,
+                    selector: "MemberExpression[property.name='index'][object.name='player']",
+                },
+                {
+                    message: PLAYER_INDEX_MESSAGE,
+                    selector:
+                        "VariableDeclarator[init.property.name='player'] > ObjectPattern > Property[key.name='index']",
+                },
+            ],
         },
     },
     eslintConfigPrettier,

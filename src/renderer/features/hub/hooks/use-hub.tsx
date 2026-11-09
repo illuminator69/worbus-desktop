@@ -69,11 +69,14 @@ import {
     PlayheadRun,
 } from '/@/renderer/features/hub/utils/playhead-run';
 import {
+    publicationFields,
+    publicationSignature,
+} from '/@/renderer/features/hub/utils/queue-publication';
+import {
     pinsAfterFrame,
     releaseActPin,
     sendAct,
 } from '/@/renderer/features/hub/utils/remote-queue';
-import { publicationFields } from '/@/renderer/features/hub/utils/queue-publication';
 import { placeholderSong, resolveHubTracks } from '/@/renderer/features/hub/utils/resolve-songs';
 import { serverKeyMove } from '/@/renderer/features/hub/utils/server-key';
 import {
@@ -122,10 +125,12 @@ import {
 } from '/@/renderer/features/player/utils/saved-queue-source';
 import { isPreviewId, previewHubTrack } from '/@/renderer/features/preview/preview-track';
 import {
+    isPermutation,
     isShuffleEnabled,
     isTimestampSeek,
-    mapShuffledToQueueIndex,
     mixesFromHub,
+    playingQueueIndex,
+    PlayOrderAdopt,
     SavedQueue,
     SavedQueueKind,
     setTimestamp,
@@ -300,6 +305,53 @@ const keptSignInResult = (result: HubSignInResult | null): HubSignInResult | nul
 const sessionOrder = (order: unknown): null | number[] =>
     Array.isArray(order) && order.every((n) => typeof n === 'number') ? (order as number[]) : null;
 
+/** W1: the hub publishes and adopts the playing device's play order (`playOrder` feature). */
+const speaksPlayOrder = (): boolean => useHubStore.getState().features.includes('playOrder');
+
+/**
+ * W1: the play order a frame carries with its queue (`do:load`, `do:queueChanged`, a session),
+ * from a hub that speaks `playOrder`; undefined from an older hub, whose order this device does
+ * not adopt (it keeps its own, under the same rule).
+ */
+const adoptOf = (frame: any): PlayOrderAdopt | undefined =>
+    speaksPlayOrder() && typeof frame?.shuffle === 'boolean'
+        ? { order: sessionOrder(frame.order), shuffle: frame.shuffle }
+        : undefined;
+
+/** The player's shuffle mode or play order is not what `adopt` says. */
+const orderDiffers = (
+    state: ReturnType<typeof usePlayerStore.getState>,
+    adopt: PlayOrderAdopt,
+): boolean => {
+    if (isShuffleEnabled(state) !== adopt.shuffle) return true;
+    if (!adopt.shuffle || !isPermutation(adopt.order, state.queue.default.length)) return false;
+    return adopt.order.some((row, position) => state.queue.shuffled[position] !== row);
+};
+
+/** The publish dedupe key of what the player holds now (queue-publication.ts). */
+const localSignature = (): string => {
+    const state = usePlayerStore.getState();
+    const withOrder = speaksPlayOrder();
+    return publicationSignature(
+        state.getQueue().items.map((item) => item.id),
+        withOrder && isShuffleEnabled(state) ? state.queue.shuffled : null,
+        withOrder,
+    );
+};
+
+/**
+ * The publish dedupe key of a frame adopted with `ids`: set before (or as) the frame is applied,
+ * so the adopt is not published back. An order that is not a permutation of the frame's rows is
+ * not adopted (the store builds its own), so it keys as none and the player's own order is
+ * published to the hub.
+ */
+const frameSignature = (ids: readonly string[], adopt: PlayOrderAdopt | undefined): string =>
+    publicationSignature(
+        ids,
+        adopt?.shuffle && isPermutation(adopt.order, ids.length) ? adopt.order : null,
+        speaksPlayOrder(),
+    );
+
 /**
  * What a report says about the player, read from the stores at the moment it is sent.
  *
@@ -317,9 +369,7 @@ const sessionOrder = (order: unknown): null | number[] =>
 const readPlayer = (): { index: number; isPlaying: boolean; positionMs: number } => {
     const state = usePlayerStore.getState();
     return {
-        index: isShuffleEnabled(state)
-            ? mapShuffledToQueueIndex(state.player.index, state.queue.shuffled)
-            : state.player.index,
+        index: playingQueueIndex(state),
         isPlaying: state.player.status === PlayerStatus.PLAYING,
         positionMs: Math.round((useTimestampStoreBase.getState().timestamp || 0) * 1000),
     };
@@ -774,7 +824,10 @@ export const useHub = () => {
         if (!(activeId.current === null || activeId.current === myId.current)) return;
         const state = usePlayerStore.getState();
         const items = state.getQueue().items;
-        const sig = items.map((item) => item.id).join(',');
+        const idsSig = items.map((item) => item.id).join(',');
+        // W1: with a playOrder hub the key holds the order too, so a shuffle toggle or a
+        // re-shuffle here is published like a queue edit, also while paused when active.
+        const sig = localSignature();
         // Unclaimed-session escape (mirrors Worbus for Android's publishQueueIfOurs): nobody is the
         // active receiver and WE are playing, so this client IS the live receiver — but
         // the signature dedupe would suppress the publish forever (adopting the hub's
@@ -796,7 +849,7 @@ export const useHub = () => {
         if (
             activeId.current === null &&
             !playing.current &&
-            sig ===
+            idsSig ===
                 useHubStore
                     .getState()
                     .remoteQueue.map((track) => track.id)
@@ -855,14 +908,23 @@ export const useHub = () => {
                 );
                 return;
             }
+            // The playhead as it is now, unless the queue changed while the tracks resolved:
+            // then the snapshot the tracks were built from, since `order` indexes those tracks
+            // and must never travel with another list (W1).
             const live = usePlayerStore.getState();
+            const liveIds = live
+                .getQueue()
+                .items.map((item) => item.id)
+                .join(',');
+            const fields = publicationFields(liveIds === idsSig ? live : state, speaksPlayOrder());
             logger.info(
-                `[hub] setQueue index=${live.player.index} pos=${positionMs.current} ` +
-                    `play=${playing.current} active=${activeId.current ?? 'none'}`,
+                `[hub] setQueue index=${fields.index} pos=${positionMs.current} ` +
+                    `play=${playing.current} active=${activeId.current ?? 'none'}` +
+                    ('shuffle' in fields ? ` shuffle=${fields.shuffle}` : ''),
             );
             sendAct('setQueue', {
                 coverImageUrl: savedQueueCoverUrl(),
-                ...publicationFields(live, false),
+                ...fields,
                 play: playing.current,
                 positionMs: positionMs.current,
                 savedQueueId: sqId,
@@ -916,7 +978,9 @@ export const useHub = () => {
             if (gen !== publishGen.current) return;
             sendAct('setQueue', {
                 coverImageUrl: savedQueueCoverUrl(),
-                index: usePlayerStore.getState().player.index,
+                // The playing row (B-305). No order: the hub reads one only from the device
+                // that plays, and this one does not.
+                index: playingQueueIndex(usePlayerStore.getState()),
                 play: true,
                 positionMs: 0,
                 savedQueueId: sqId,
@@ -928,7 +992,7 @@ export const useHub = () => {
             });
         })();
         // Keep the sig in sync so publishQueue doesn't re-send this queue later.
-        lastQueueSig.current = items.map((item) => item.id).join(',');
+        lastQueueSig.current = localSignature();
         // The session plays it remotely — silence the local player.
         mediaPause();
     }, [buildHubTracks, mediaPause, resolveSavedQueueId, savedQueueCoverUrl]);
@@ -968,7 +1032,6 @@ export const useHub = () => {
             positionSec: useTimestampStoreBase.getState().timestamp || 0,
             rolling: isPlayheadRolling(playheadRun.current, Date.now(), ROLLING_PROOF_MS),
             rowIndex: readPlayer().index,
-            storeIndex: state.player.index,
         };
     }, []);
 
@@ -1017,7 +1080,7 @@ export const useHub = () => {
                         sec: at,
                     };
                 },
-                currentIndex: usePlayerStore.getState().player.index,
+                currentIndex: playingQueueIndex(usePlayerStore.getState()),
                 // Only the web player can drop a seek before it mounts; the others are up.
                 engineTakesSeek: engineTakesSeekNow(
                     useSettingsStore.getState().playback.type === PlayerType.WEB,
@@ -1098,10 +1161,14 @@ export const useHub = () => {
                     const budgetMs = Number(msg.timeoutMs) || 10_000;
                     const targetSec = (msg.positionMs ?? 0) / 1000;
                     const incomingIds: string[] = (msg.tracks ?? []).map((t: any) => t.id);
+                    // W1: the play order the hub sent with the queue (a playOrder hub only).
+                    const adopt = adoptOf(msg);
                     // We become the active device once this queue loads, so pre-set the
                     // publish signature to the loaded queue — otherwise onCurrentSongChange
                     // republishes it back to the hub with a stale position.
-                    if (incomingIds.length) lastQueueSig.current = incomingIds.join(',');
+                    if (incomingIds.length) {
+                        lastQueueSig.current = frameSignature(incomingIds, adopt);
+                    }
                     const state = usePlayerStore.getState();
                     const currentIds = state.getQueue().items.map((item) => item.id);
                     const sameQueue =
@@ -1129,8 +1196,16 @@ export const useHub = () => {
                         // Queue is already loaded locally (e.g. transfer back to
                         // this device). Reloading would reinitialise the audio
                         // engine to 0 and lose the seek — instead just position
-                        // and play. The hub's position is authoritative.
-                        if ((msg.index ?? 0) !== state.player.index) {
+                        // and play. The hub's position is authoritative, and so is the
+                        // play order it sent (W1: the song after this one stays the same
+                        // across a transfer).
+                        if (adopt) {
+                            setShuffle(
+                                adopt.shuffle ? PlayerShuffle.TRACK : PlayerShuffle.NONE,
+                                adopt.order,
+                            );
+                        }
+                        if ((msg.index ?? 0) !== playingQueueIndex(usePlayerStore.getState())) {
                             // Changing track reloads the source; an immediate
                             // seek would be lost. Arm it for onCurrentSongChange.
                             pendingSeek.current = {
@@ -1162,7 +1237,8 @@ export const useHub = () => {
                             sec: targetSec,
                         };
                         // Load straight into the requested state — see setQueue's `play`.
-                        setQueue(songs, msg.index ?? 0, targetSec, !wantPause);
+                        // `msg.index` is a row; the play order is the hub's when it sent one.
+                        setQueue(songs, msg.index ?? 0, targetSec, !wantPause, adopt);
                     }
                     if (wantPause) {
                         mediaPause();
@@ -1218,6 +1294,10 @@ export const useHub = () => {
                     const songs = await resolveSongs(msg.tracks, heldSongs());
                     if (!songs.length) break;
                     hubDrivenUntil.current = Date.now() + 2000;
+                    // W1: a controller's edit, with the play order the hub patched by the same
+                    // rule (a playOrder hub only). Adopted as sent, and not echoed back.
+                    const adopt = adoptOf(msg);
+                    const adoptedIds = songs.map((song) => song.id);
                     // The hub echoes ITS OWN cursor, which is only as fresh as our last 1 Hz
                     // report. An Auto DJ top-up landing just after a local auto-advance therefore
                     // names the track that has already ENDED, `sameSong` reads false, and the
@@ -1242,7 +1322,8 @@ export const useHub = () => {
                         // setQueue, and — crucially — no seek. Restoring a position the
                         // engine never left is what made every remote enqueue audible as a
                         // one-second gap with the artwork blinking through it.
-                        reconcileQueue(songs, nextIndex);
+                        reconcileQueue(songs, nextIndex, adopt);
+                        lastQueueSig.current = frameSignature(adoptedIds, adopt);
                         break;
                     }
                     // The playing track is gone (removed from under us). Its replacement has
@@ -1251,7 +1332,8 @@ export const useHub = () => {
                     const kept = armedSeeksAfterRowMove();
                     pendingSeek.current = kept.waiting;
                     landingSeek.current = kept.landing;
-                    setQueue(songs, nextIndex, 0, wasPlaying);
+                    setQueue(songs, nextIndex, 0, wasPlaying, adopt);
+                    lastQueueSig.current = frameSignature(adoptedIds, adopt);
                     // I-031: setQueue leaves the timestamp store where the removed track was
                     // until its restore seeks to 0 some 100 ms on, and the report that follows
                     // this directive is read before that. Say "from the top" now.
@@ -1298,9 +1380,21 @@ export const useHub = () => {
                 case 'setRepeat':
                     setRepeat(msg.mode as PlayerRepeat);
                     break;
-                case 'setShuffle':
-                    setShuffle(msg.on ? PlayerShuffle.TRACK : PlayerShuffle.NONE);
+                case 'setShuffle': {
+                    // W1: from a playOrder hub the order is binding (a controller's shuffle on
+                    // or re-shuffle: the hub proposes it, this device adopts it as sent).
+                    const order = speaksPlayOrder() ? sessionOrder(msg.order) : undefined;
+                    setShuffle(msg.on ? PlayerShuffle.TRACK : PlayerShuffle.NONE, order);
+                    const ids = usePlayerStore
+                        .getState()
+                        .getQueue()
+                        .items.map((item) => item.id);
+                    lastQueueSig.current = frameSignature(
+                        ids,
+                        speaksPlayOrder() ? { order: order ?? null, shuffle: !!msg.on } : undefined,
+                    );
                     break;
+                }
                 default:
                     break;
             }
@@ -1366,7 +1460,10 @@ export const useHub = () => {
                 .items.map((item) => item.id)
                 .join(',');
             // B-053 diagnostics: the player as found, before the `load` path's await.
-            const found = { index: state.player.index, queue: state.getQueue().items.length };
+            const found = {
+                index: playingQueueIndex(state),
+                queue: state.getQueue().items.length,
+            };
 
             // Empty hub session: keep our local queue as the offline fallback; allow the
             // first real user play to publish it.
@@ -1412,9 +1509,21 @@ export const useHub = () => {
                 // local cursor — is where playback should resume. Aligning here is what
                 // makes "force-stop the phone, press play on the desktop" continue from
                 // the phone's spot instead of wherever this client was last parked.
+                // W1: the session's play order too (its custodian kept the last one published),
+                // so the song after this one is the one every controller shows. Only when it
+                // differs: a session frame comes on every change, and setShuffle without an
+                // order would re-shuffle.
+                const adopt = adoptOf(session);
+                if (adopt && orderDiffers(usePlayerStore.getState(), adopt)) {
+                    setShuffle(
+                        adopt.shuffle ? PlayerShuffle.TRACK : PlayerShuffle.NONE,
+                        adopt.order,
+                    );
+                }
                 const state2 = usePlayerStore.getState();
+                const playingRow = playingQueueIndex(state2);
                 const drift = Math.abs(positionMs.current - (session.positionMs ?? 0));
-                if (targetIndex === state2.player.index && drift < 2000) {
+                if (targetIndex === playingRow && drift < 2000) {
                     // NOT pinned to hubSig: doing so made publishQueue's dedupe suppress
                     // every later publish, so a local play could never claim the session.
                     lastQueueSig.current = '';
@@ -1427,8 +1536,14 @@ export const useHub = () => {
                 // engine, asynchronously, so the pause after it could land first and the track
                 // played for a moment: the blip when another device dropped out of the session
                 // (seen 2026-09-30 — a `timeupdate` then a `pause` scrobble as Worbus for Android reinstalled).
-                if (targetIndex !== state2.player.index) {
-                    setQueue(state2.getQueue().items, targetIndex, targetSec, false);
+                if (targetIndex !== playingRow) {
+                    setQueue(
+                        state2.getQueue().items,
+                        targetIndex,
+                        targetSec,
+                        false,
+                        adoptOf(session),
+                    );
                 }
                 armSeek(targetIndex, targetSec, true);
                 adoptPauseGuard.current = openAdoptPauseGuard();
@@ -1458,7 +1573,7 @@ export const useHub = () => {
             // could land first, so the audio arrived to a store that already read PAUSED —
             // and since the engines only act on status *changes*, every later pause (ours
             // and the user's click) was a no-op against it.
-            setQueue(songs, targetIndex, targetSec, false);
+            setQueue(songs, targetIndex, targetSec, false, adoptOf(session));
             // Net for anything that still manages to start (an in-flight auto-resume, the
             // armed pendingSeek's own load). Only when audio is genuinely rolling — against
             // a truly silent player hardPause's play/pause correction would be the thing
@@ -1469,7 +1584,7 @@ export const useHub = () => {
                 }
             }, 400);
         },
-        [armSeek, mediaPause, pauseIfRunaway, publishQueue, resolveSongs, setQueue],
+        [armSeek, mediaPause, pauseIfRunaway, publishQueue, resolveSongs, setQueue, setShuffle],
     );
 
     /**
@@ -2087,11 +2202,13 @@ export const useHub = () => {
     useEffect(() => {
         if (!hub) return undefined;
         return usePlayerStoreBase.subscribe(
+            // W1: the shuffle mode and the play order too - a toggle or re-shuffle on this device
+            // is published (publishQueue's key decides whether the hub is told).
             (state) =>
-                state
+                `${state
                     .getQueue()
                     .items.map((item) => item.id)
-                    .join(','),
+                    .join(',')}|${state.player.shuffle}|${state.queue.shuffled.join('.')}`,
             () => publishQueue(),
         );
     }, [publishQueue]);

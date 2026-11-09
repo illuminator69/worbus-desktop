@@ -57,6 +57,7 @@ import {
 import { onQueueSessionBegin } from '/@/renderer/features/player/utils/saved-queue-source';
 import {
     isShuffleEnabled,
+    playPosition,
     useCurrentServerId,
     useHubStore,
     usePlayerStore,
@@ -154,7 +155,7 @@ const readSnapshot = (): Snapshot => {
 
     const state = usePlayerStore.getState();
     const items = state.getQueue().items;
-    const playIndex = state.player.index;
+    const playIndex = playPosition(state);
     const shuffled = isShuffleEnabled(state) ? state.queue.shuffled : null;
     const playOrderSongs = shuffled ? shuffled.map((index) => items[index]) : items;
     const playOrder = playOrderSongs.map((song) => song?.id ?? '');
@@ -587,7 +588,7 @@ const StationAutoplayInner = () => {
                 const queue = state.getQueue();
                 const shuffled = isShuffleEnabled(state);
                 const length = shuffled ? state.queue.shuffled.length : queue.items.length;
-                const index = state.player.index;
+                const index = playPosition(state);
                 const song = shuffled
                     ? queue.items[state.queue.shuffled[index]]
                     : queue.items[index];
