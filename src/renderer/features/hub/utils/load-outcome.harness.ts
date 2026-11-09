@@ -3,7 +3,13 @@ import test from 'node:test';
 
 import type { PlayerLook } from './load-outcome.ts';
 
-import { closeLoad, expectLoad, loadProven, reaimLoad } from './load-outcome.ts';
+import {
+    closeLoad,
+    expectLoad,
+    loadProven,
+    reaimLoad,
+    reportedPositionMs,
+} from './load-outcome.ts';
 
 /**
  * B-111:  node --test src/renderer/features/hub/utils/load-outcome.harness.ts
@@ -83,4 +89,17 @@ test('aClearClosesItWithWhatItHadReached', () => {
     const notYet = expectLoad(2, 120, false);
     closeLoad(notYet, look({ storeIndex: 2 }));
     assert.equal(notYet.verdict?.ok, false);
+});
+
+// B-111 (review finding 2): a pause applied mid-load ends first and moves `applied` past the
+// load's seq, so the report after it is accepted by the hub. Read before the load's seek has
+// landed, the player still shows the outgoing track's offset (2:13) or 0, and the hub stored it
+// for the new track. While a load waits, a report says where the load is putting the player.
+test('aReportWhileALoadWaitsCarriesTheLoadsOffset', () => {
+    const exp = expectLoad(2, 30, false);
+    reaimLoad(exp, { cmd: 'pause' });
+    assert.equal(reportedPositionMs(exp, 133_000), 30_000, 'the outgoing track position leaked');
+    reaimLoad(exp, { cmd: 'seek', positionMs: 45_500 });
+    assert.equal(reportedPositionMs(exp, 30_000), 45_500, 'a seek re-aims it');
+    assert.equal(reportedPositionMs(null, 133_000), 133_000, 'no load waiting: the player');
 });

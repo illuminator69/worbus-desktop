@@ -48,6 +48,7 @@ import {
     loadProven,
     type PlayerLook,
     reaimLoad,
+    reportedPositionMs,
 } from '/@/renderer/features/hub/utils/load-outcome';
 import {
     adoptClaimDelay,
@@ -540,18 +541,32 @@ export const useHub = () => {
         }
     }, [hardPause, mediaPause]);
 
+    // The load generation (see awaitLoadOutcome): bumped by every load and by release.
+    const loadGen = useRef(0);
+    // B-111: the load still waiting for its outcome, which later directives re-aim
+    // (load-outcome.ts); null once it has ended.
+    const pendingLoad = useRef<null | { exp: LoadExpectation; gen: number }>(null);
+
+    /** The load still waiting for its outcome, unless a newer load or a release ended it. */
+    const livePendingLoad = useCallback((): LoadExpectation | null => {
+        const pending = pendingLoad.current;
+        return pending && pending.gen === loadGen.current ? pending.exp : null;
+    }, []);
+
     // `echo`: the report that follows `applied` moving. It is not gated on being the active
     // device: the hub decides who is, it has just sent this device a directive, and it reads
     // `applied` from every report.
     const report = useCallback((overrides?: Record<string, unknown>, echo = false) => {
         if (!hub || (!echo && !isActive())) return;
+        const player = readPlayer();
         hub.send({
-            ...readPlayer(),
+            ...player,
             applied: doEcho.current.applied,
+            positionMs: reportedPositionMs(livePendingLoad(), player.positionMs),
             t: 'report',
             ...overrides,
         });
-    }, []);
+    }, [livePendingLoad]);
 
     // I-033: tell the hub this device's volume, so its row in every picker shows the level it
     // is really at - set here, by the OS (MPRIS), by a DLNA renderer or by a `do:setVolume`
@@ -933,10 +948,6 @@ export const useHub = () => {
     //   paused  -> the target track is current, we are not playing, and the timestamp
     //              store sits at the requested offset (i.e. the seek actually landed)
     // ------------------------------------------------------------------ //
-    const loadGen = useRef(0);
-    // B-111: the load still waiting for its outcome, which later directives re-aim
-    // (load-outcome.ts); null once it has ended.
-    const pendingLoad = useRef<null | { exp: LoadExpectation; gen: number }>(null);
     // Time kept back from the hub's budget for the ack's own trip. Answering at the
     // deadline is the same as not answering: the hub has already rolled back.
     const ACK_RESERVE_MS = 1500;
@@ -952,12 +963,6 @@ export const useHub = () => {
             rowIndex: readPlayer().index,
             storeIndex: state.player.index,
         };
-    }, []);
-
-    /** The load still waiting for its outcome, unless a newer load or a release ended it. */
-    const livePendingLoad = useCallback((): LoadExpectation | null => {
-        const pending = pendingLoad.current;
-        return pending && pending.gen === loadGen.current ? pending.exp : null;
     }, []);
 
     const awaitLoadOutcome = useCallback(

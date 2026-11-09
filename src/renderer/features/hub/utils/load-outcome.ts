@@ -104,3 +104,9 @@ export const closeLoad = (exp: LoadExpectation, look: PlayerLook): void => {
         ? { ok: true }
         : { error: 'the queue was cleared before playback started', ok: false };
 };
+
+/**
+ * The position a report carries: the player's (`playerMs`), whatever load is still waiting.
+ */
+export const reportedPositionMs = (_exp: LoadExpectation | null, playerMs: number): number =>
+    playerMs;
