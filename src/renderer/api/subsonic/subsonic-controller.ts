@@ -12,7 +12,7 @@ import { mapStructuredLyric } from '/@/renderer/api/subsonic/subsonic-structured
 import {
     getDefaultTranscodingProfiles,
     getDirectPlayProfiles,
-} from '/@/renderer/features/player/components/audio-players';
+} from '/@/renderer/features/player/utils/direct-play-profiles';
 import { randomString } from '/@/renderer/utils';
 import { logger } from '/@/renderer/utils/logger';
 import { getServerUrl } from '/@/renderer/utils/normalize-server-url';
