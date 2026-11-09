@@ -6,6 +6,7 @@ import { api } from '/@/renderer/api';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { createStartupSeek } from '/@/renderer/features/player/hooks/startup-seek';
+import { savePlayQueueQuery } from '/@/renderer/features/player/utils/save-play-queue';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
 import {
     setTimestamp,
@@ -151,11 +152,11 @@ export const useSaveQueue = () => {
 
             return api.controller.savePlayQueue({
                 apiClientProps: { serverId },
-                query: {
-                    currentIndex: queue.items.length > 0 ? state.player.index : undefined,
-                    positionMs: useTimestampStoreBase.getState().timestamp * 1000,
-                    songs: queue.items.map((item) => item.id),
-                },
+                query: savePlayQueueQuery(
+                    queue.items,
+                    state,
+                    useTimestampStoreBase.getState().timestamp,
+                ),
             });
         },
         onError: (error) => {

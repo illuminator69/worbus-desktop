@@ -73,6 +73,7 @@ import {
     releaseActPin,
     sendAct,
 } from '/@/renderer/features/hub/utils/remote-queue';
+import { publicationFields } from '/@/renderer/features/hub/utils/queue-publication';
 import { placeholderSong, resolveHubTracks } from '/@/renderer/features/hub/utils/resolve-songs';
 import { serverKeyMove } from '/@/renderer/features/hub/utils/server-key';
 import {
@@ -861,7 +862,7 @@ export const useHub = () => {
             );
             sendAct('setQueue', {
                 coverImageUrl: savedQueueCoverUrl(),
-                index: live.player.index,
+                ...publicationFields(live, false),
                 play: playing.current,
                 positionMs: positionMs.current,
                 savedQueueId: sqId,

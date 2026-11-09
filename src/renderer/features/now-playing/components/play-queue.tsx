@@ -16,6 +16,7 @@ import { ItemListHandle } from '/@/renderer/components/item-list/types';
 import { eventEmitter } from '/@/renderer/events/event-emitter';
 import { hubTrackToQueueSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { useQueueRows } from '/@/renderer/features/now-playing/hooks/use-queue-rows';
+import { queueListRows } from '/@/renderer/features/now-playing/utils/queue-list-rows';
 import { useIsPlayerFetching, usePlayer } from '/@/renderer/features/player/context/player-context';
 import { searchLibraryItems } from '/@/renderer/features/shared/utils';
 import { useDragDrop } from '/@/renderer/hooks/use-drag-drop';
@@ -94,7 +95,7 @@ export const PlayQueue = forwardRef<ItemListHandle, QueueProps>(
             const setQueue = () => {
                 const queue = getQueue() || { groups: [], items: [] };
 
-                setData(queue.items);
+                setData(queueListRows(queue.items, usePlayerStore.getState()));
 
                 setGroups([]);
             };
