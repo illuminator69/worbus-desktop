@@ -1,7 +1,7 @@
 /**
  * The codecs this renderer plays itself, as Navidrome's `getTranscodeDecision` wants them, and the
- * transcoding profiles offered when it cannot. Moved out of `audio-players.tsx` unchanged so a
- * harness can load it (B-342).
+ * transcoding profiles offered when it cannot. Out of `audio-players.tsx` so a harness can load it
+ * (B-342).
  */
 const CODEC_PROBES = [
     { codec: 'mp3', container: 'mp3', mime: 'audio/mpeg' },
@@ -37,23 +37,34 @@ export interface DirectPlayProfile {
     protocols: string[];
 }
 
-const DIRECT_PLAY_PROFILES: DirectPlayProfile[] = [];
+/** Filled on first use, once; null until then. */
+let directPlayProfiles: DirectPlayProfile[] | null = null;
 
 export function getDefaultTranscodingProfiles() {
     return isSafari() ? SAFARI_TRANSCODING_PROFILES : DEFAULT_TRANSCODING_PROFILES;
 }
 
-export function getDirectPlayProfiles() {
-    return DIRECT_PLAY_PROFILES;
+/**
+ * B-342: probed here, on first use, not in a component's mount effect. The first caller at a fresh
+ * start is the restored queue's stream URL, which the web player resolves from its own effects,
+ * before its parent's mount effect could run; it then sent `directPlayProfiles: []` and Navidrome
+ * transcoded (or, without ffmpeg, failed) the restored song. `canPlayType` is synchronous, so
+ * nothing needs to wait. With no `Audio` (not a browser) the answer is `[]` and is not kept.
+ */
+export function getDirectPlayProfiles(): DirectPlayProfile[] {
+    if (directPlayProfiles) return directPlayProfiles;
+    if (typeof Audio === 'undefined') return [];
+    directPlayProfiles = detectBrowserProfile(new Audio());
+    return directPlayProfiles;
 }
 
 // Shamelessly taken from NavidromeUI
-export function detectBrowserProfile() {
-    const audio = new Audio();
+function detectBrowserProfile(audio: Pick<HTMLAudioElement, 'canPlayType'>) {
+    const profiles: DirectPlayProfile[] = [];
 
     for (const { codec, container, mime } of CODEC_PROBES) {
         if (audio.canPlayType(mime) === 'maybe' || audio.canPlayType(mime) === 'probably') {
-            DIRECT_PLAY_PROFILES.push({
+            profiles.push({
                 audioCodecs: Array.isArray(codec) ? codec : [codec],
                 containers: [container],
                 protocols: ['http'],
@@ -61,7 +72,7 @@ export function detectBrowserProfile() {
         }
     }
 
-    return DIRECT_PLAY_PROFILES;
+    return profiles;
 }
 
 function isSafari() {

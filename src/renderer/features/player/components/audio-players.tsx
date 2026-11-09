@@ -26,7 +26,7 @@ import { SavedQueuesCaptureHook } from '/@/renderer/features/player/hooks/use-sa
 import { ScrobbleHook } from '/@/renderer/features/player/hooks/use-scrobble';
 import { UpdateCurrentSongHook } from '/@/renderer/features/player/hooks/use-update-current-song';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
-import { detectBrowserProfile } from '/@/renderer/features/player/utils/direct-play-profiles';
+import { getDirectPlayProfiles } from '/@/renderer/features/player/utils/direct-play-profiles';
 import {
     StationAutoplayHook,
     StationServiceHook,
@@ -71,7 +71,7 @@ export const AudioPlayers = () => {
     } = usePlaybackSettings();
     const { setWebAudio, webAudio: audioContext } = useWebAudio();
     useEffect(() => {
-        logger.debug('DIRECT_PLAY_PROFILES', detectBrowserProfile());
+        logger.debug('DIRECT_PLAY_PROFILES', getDirectPlayProfiles());
     }, []);
     return (
         <>
