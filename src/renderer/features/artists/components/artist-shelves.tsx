@@ -15,6 +15,7 @@ import {
     type DiscographyChip,
     discographyChips,
     discographyLine,
+    lbBotCanScan,
     kindLines,
 } from '/@/renderer/features/discography/artist-shelves';
 import {
@@ -89,7 +90,7 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
     }, [items, itemsPerRow, releaseTypeItems]);
     // A chip the artist no longer has (a rescan, a Settings change) falls back to the first.
     const selected = chips.find((chip) => chip.kind === chosen) ?? chips[0];
-    const line = discographyLine(chips, discography.data !== undefined);
+    const line = discographyLine(chips, lbBotCanScan(discography.data));
     const row = useMemo(
         () => (selected ? chipRow(items, selected, itemsPerRow) : []),
         [items, itemsPerRow, selected],

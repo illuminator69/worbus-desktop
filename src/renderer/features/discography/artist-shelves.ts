@@ -144,6 +144,12 @@ export const discographyChips = (
 };
 
 /**
+ * Whether lb-bot can scan this artist: its discography read (`useLbBotDiscography`'s `data`)
+ * stands for an answer.
+ */
+export const lbBotCanScan = (discography: unknown): boolean => discography !== undefined;
+
+/**
  * What the artist page's Discography line shows: its chips and row; its header and "Show all" over
  * an empty row; or nothing. `scannable`: lb-bot answered for this artist, so the discography page
  * that "Show all" opens has its scan. B-369: the line used to need a chip, and an artist whose

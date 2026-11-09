@@ -8,6 +8,7 @@ import {
     discographyChips,
     discographyLine,
     kindLines,
+    lbBotCanScan,
     ownedPlayIds,
     popularReleases,
 } from './artist-shelves.ts';
@@ -232,4 +233,13 @@ test('anArtistWithOnlyAppearsOnStillReachesTheScan', () => {
     );
     assert.equal(discographyLine(own, true), 'chips');
     assert.equal(discographyLine(own, false), 'chips');
+});
+
+test('aFailedLbBotAnswerIsNotScannable', () => {
+    // B-369 review finding 4: main answers the discography read `null` when lb-bot is unreachable
+    // or erroring, and LbBotIndexButton hides on it. The line must stay away then too
+    // (navi-connect/CLAUDE.md §7: lb-bot unreachable renders nothing, the page looks as before).
+    assert.equal(lbBotCanScan(undefined), false, 'not configured');
+    assert.equal(lbBotCanScan(null), false, 'lb-bot down: the empty line showed with no scan');
+    assert.equal(lbBotCanScan({ releases: [] }), true);
 });
