@@ -5,7 +5,18 @@ import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
 import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
-import { createDirectiveRunner } from '/@/renderer/features/hub/utils/directive-runner';
+import {
+    createDirectiveRunner,
+    type Handled,
+} from '/@/renderer/features/hub/utils/directive-runner';
+import {
+    closeLoad,
+    expectLoad,
+    type LoadExpectation,
+    loadProven,
+    type PlayerLook,
+    reaimLoad,
+} from '/@/renderer/features/hub/utils/load-outcome';
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
@@ -921,18 +932,36 @@ export const useHub = () => {
     //              store sits at the requested offset (i.e. the seek actually landed)
     // ------------------------------------------------------------------ //
     const loadGen = useRef(0);
+    // B-111: the load still waiting for its outcome, which later directives re-aim
+    // (load-outcome.ts); null once it has ended.
+    const pendingLoad = useRef<null | { exp: LoadExpectation; gen: number }>(null);
     // Time kept back from the hub's budget for the ack's own trip. Answering at the
     // deadline is the same as not answering: the hub has already rolled back.
     const ACK_RESERVE_MS = 1500;
     const ROLLING_PROOF_MS = 600;
-    const PAUSED_POSITION_SLACK_SEC = 3;
+
+    /** What the player shows now, for the load's outcome (load-outcome.ts). */
+    const lookAtPlayer = useCallback((): PlayerLook => {
+        const state = usePlayerStore.getState();
+        return {
+            playing: state.player.status === PlayerStatus.PLAYING,
+            positionSec: useTimestampStoreBase.getState().timestamp || 0,
+            rolling: isPlayheadRolling(playheadRun.current, Date.now(), ROLLING_PROOF_MS),
+            rowIndex: readPlayer().index,
+            storeIndex: state.player.index,
+        };
+    }, []);
+
+    /** The load still waiting for its outcome, unless a newer load or a release ended it. */
+    const livePendingLoad = useCallback((): LoadExpectation | null => {
+        const pending = pendingLoad.current;
+        return pending && pending.gen === loadGen.current ? pending.exp : null;
+    }, []);
 
     const awaitLoadOutcome = useCallback(
         async (
             gen: number,
-            targetIndex: number,
-            targetSec: number,
-            wantPause: boolean,
+            exp: LoadExpectation,
             budgetMs: number,
         ): Promise<{ error?: string; ok: boolean }> => {
             const deadline = Date.now() + Math.max(1000, budgetMs - ACK_RESERVE_MS);
@@ -941,37 +970,14 @@ export const useHub = () => {
                 // transfer's slot has already moved on, and an ack from here could only
                 // describe a queue we no longer have.
                 if (loadGen.current !== gen) return { error: 'superseded', ok: false };
-                const state = usePlayerStore.getState();
-                // The hub's index is a row of the queue, and with shuffle on `player.index`
-                // is a position in the shuffled order. A load of the queue already held gets
-                // there through mediaPlayByIndex, which maps, so the ROW matches and the raw
-                // index does not; a load of another queue goes through setQueue, which writes
-                // the raw index. Either counts: comparing the raw index alone failed every
-                // load of the first kind under shuffle, and a load that fails is now paused
-                // (I-031, `refuse` in handleDo).
-                const onTarget =
-                    state.player.index === targetIndex || readPlayer().index === targetIndex;
-                if (onTarget) {
-                    if (!wantPause) {
-                        // B-053: same rule as audioIsRolling: a lone seek step is not
-                        // proof that the engine started.
-                        const rolling = isPlayheadRolling(
-                            playheadRun.current,
-                            Date.now(),
-                            ROLLING_PROOF_MS,
-                        );
-                        if (rolling) return { ok: true };
-                    } else if (state.player.status !== PlayerStatus.PLAYING) {
-                        const at = useTimestampStoreBase.getState().timestamp || 0;
-                        if (Math.abs(at - targetSec) <= PAUSED_POSITION_SLACK_SEC) {
-                            return { ok: true };
-                        }
-                    }
-                }
+                // `clear` closed it with what it had reached.
+                if (exp.verdict) return exp.verdict;
+                const proven = loadProven(exp, lookAtPlayer());
+                if (proven.ok) return { ok: true };
                 if (Date.now() >= deadline) {
                     return {
-                        error: onTarget
-                            ? `the player never ${wantPause ? 'settled at' : 'started'} the requested track`
+                        error: proven.onTarget
+                            ? `the player never ${exp.wantPause ? 'settled at' : 'started'} the requested track`
                             : 'the queue never reached the requested track',
                         ok: false,
                     };
@@ -979,7 +985,7 @@ export const useHub = () => {
                 await new Promise((resolve) => setTimeout(resolve, 100));
             }
         },
-        [],
+        [lookAtPlayer],
     );
 
     // Arm a seek for when the player reports the target track. If that track is ALREADY
@@ -1032,19 +1038,26 @@ export const useHub = () => {
         return map;
     }, []);
 
-    // Resolves once the directive has ENDED - carried out, refused or failed - which is what
-    // lets runDirective move `applied` after it: the store flips synchronously inside the
-    // player actions below, and a load waits for its outcome. The value says whether the
-    // report that follows is sent (do-echo.ts).
+    // Resolves once the directive has been APPLIED; for all but a load that is also when it has
+    // ENDED (carried out, refused or failed), which is what lets runDirective move `applied`
+    // after it: the store flips synchronously inside the player actions below. A load's end is
+    // its outcome, returned as `later` so the next directive is not held behind it (B-111). The
+    // value says whether the report that follows is sent (do-echo.ts).
     const handleDo = useCallback(
-        async (msg: any): Promise<DoExit> => {
+        async (msg: any): Promise<Handled<DoExit>> => {
             // Local player events caused by this directive are hub-driven, not
             // user actions (window covers async engine events). Every directive that
             // comes through here is about the session; `setVolume` is not, and does not
             // (applyVolume).
             hubDrivenUntil.current = Date.now() + 2000;
+            // B-111: a load still waiting for its outcome now waits for what this directive
+            // makes of it (load-outcome.ts).
+            const waitingLoad = livePendingLoad();
+            if (waitingLoad) reaimLoad(waitingLoad, msg);
             switch (msg.cmd) {
                 case 'clear':
+                    // A load still waiting is answered with what it had reached.
+                    if (waitingLoad) closeLoad(waitingLoad, lookAtPlayer());
                     // The other client emptied the session queue. Stop and drop ours too,
                     // otherwise this device keeps playing a queue the session no longer has.
                     mediaStop({ reset: true });
@@ -1141,20 +1154,28 @@ export const useHub = () => {
                         mediaPlay();
                     }
                     // Everything above is asynchronous. Watch for the result rather than
-                    // reporting the commands as one — see awaitLoadOutcome.
-                    const outcome = await awaitLoadOutcome(
-                        gen,
-                        msg.index ?? 0,
-                        targetSec,
-                        wantPause,
-                        budgetMs,
-                    );
-                    // A superseded load has no standing to answer: a newer directive owns
-                    // the player, and the hub has already cancelled this attempt's waiter.
-                    if (outcome.error === 'superseded') break;
-                    if (!outcome.ok) return refuse(outcome.error);
-                    hub?.send({ ok: true, t: 'loaded', transferId });
-                    break;
+                    // reporting the commands as one — see awaitLoadOutcome. Off the chain
+                    // (B-111): a pause pressed meanwhile is applied now, and re-aims this.
+                    const exp = expectLoad(msg.index ?? 0, targetSec, wantPause);
+                    pendingLoad.current = { exp, gen };
+                    const later = async (): Promise<DoExit> => {
+                        const outcome = await awaitLoadOutcome(gen, exp, budgetMs);
+                        if (pendingLoad.current?.exp === exp) pendingLoad.current = null;
+                        // A superseded load has no standing to answer: a newer directive owns
+                        // the player, and the hub has already cancelled this attempt's waiter.
+                        if (outcome.error === 'superseded') return 'echo';
+                        if (!outcome.ok) {
+                            // A later play or pause set the play state: say so, touch nothing.
+                            if (exp.overridden) {
+                                hub?.send({ error: outcome.error, ok: false, t: 'loaded', transferId });
+                                return 'silent';
+                            }
+                            return refuse(outcome.error);
+                        }
+                        hub?.send({ ok: true, t: 'loaded', transferId });
+                        return 'echo';
+                    };
+                    return { later: later() };
                 }
                 case 'pause':
                     notePauseRequest(); // B-058: a controller withdrew any play it asked for
@@ -1194,6 +1215,9 @@ export const useHub = () => {
                         const relocated = songs.findIndex((song) => song.id === playingId);
                         if (relocated >= 0) nextIndex = relocated;
                     }
+                    // B-111: a load still waiting now waits for that row.
+                    const stillWaiting = livePendingLoad();
+                    if (stillWaiting) stillWaiting.index = nextIndex;
                     const sameSong = !!playingId && songs[nextIndex]?.id === playingId;
                     if (sameSong) {
                         // The playing track survived the edit, so the audio engine has
@@ -1258,6 +1282,8 @@ export const useHub = () => {
         [
             awaitLoadOutcome,
             clearQueue,
+            livePendingLoad,
+            lookAtPlayer,
             heldSongs,
             mediaPause,
             mediaPlay,
