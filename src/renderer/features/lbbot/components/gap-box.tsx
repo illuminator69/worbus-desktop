@@ -55,6 +55,7 @@ import {
     useLbBotWebUrl,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { gapBoxShrinks } from '/@/renderer/features/lbbot/keep-top';
+import { gapSearchForce } from '/@/renderer/features/lbbot/search-again';
 import {
     useActiveFillsActions,
     useActiveGap,
@@ -424,14 +425,17 @@ const GapBox = ({
         }
     };
 
-    const search = async () => {
+    const search = async (press: 'allowMp3' | 'fillGaps' | 'searchAgain' = 'searchAgain') => {
         setView('sources');
         setSearchAsked(true);
         setPicked(null);
         try {
             let answer: LbBotGapAction | undefined;
             const ok = await act(async () => {
-                answer = await searchGapSources(groupId, (gap?.sources.length ?? 0) > 0);
+                answer = await searchGapSources(
+                    groupId,
+                    gapSearchForce(press, gap?.sources.length ?? 0),
+                );
                 return answer;
             });
             // A search makes the ledger row too, as Worbus for Android's does: waiting for a pick is worth
@@ -448,7 +452,7 @@ const GapBox = ({
         setView('sources');
         const looking =
             gap?.sourceTask?.status === 'queued' || gap?.sourceTask?.status === 'running';
-        if (!gap || (gap.sources.length === 0 && !looking)) void search();
+        if (!gap || (gap.sources.length === 0 && !looking)) void search('fillGaps');
     };
 
     const choose = (source: LbBotGapSource) => {
@@ -520,7 +524,7 @@ const GapBox = ({
             setError(t('naviConnect.gapBox.mp3Refused'));
             return;
         }
-        void search();
+        void search('allowMp3');
     };
 
     const recheck = () =>

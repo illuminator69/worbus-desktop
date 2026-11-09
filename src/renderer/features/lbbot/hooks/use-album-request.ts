@@ -14,6 +14,7 @@ import {
     useLbBotFillStatus,
     useLbBotTracklist,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { albumSearchPress } from '/@/renderer/features/lbbot/search-again';
 import {
     useActiveFill,
     useActiveFillsActions,
@@ -152,12 +153,13 @@ export const useAlbumRequest = ({
         const current = sessions.get(rgid);
         if (current && current.edition?.releaseMbid === resolvedEdition?.releaseMbid) {
             // The same edition again: only a failed or empty answer is asked again, on a fresh clock.
-            if (sourcesState === 'failed' || sourcesState === 'empty') {
+            const press = albumSearchPress(sourcesState);
+            if (press === 'read' || press === 'refresh') {
                 sessions.set(rgid, { ...current, startedAt: Date.now() });
                 setNow(Date.now());
                 emit();
-                void sources.refetch();
-            } else if (sourcesState === 'ready') {
+                void (press === 'refresh' ? sources.again() : sources.refetch());
+            } else if (press === 'reshow') {
                 // R11: the cards already found, brought back over a finished request's card
                 // (`albumBoxView` shows the sources asked for after the fill ended). No new search.
                 sessions.set(rgid, { ...current, startedAt: Date.now() });
