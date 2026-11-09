@@ -28,6 +28,7 @@ import {
 } from '../hub';
 import { type ArbitrationInput, claimStep, reevaluateClaims } from './arbitration';
 import { castHelloFrame } from './cast-hello';
+import { createCastLoader, type SendLoad } from './cast-load';
 import {
     adoptable,
     CastStatusLike,
@@ -203,6 +204,14 @@ class CastDeviceBridge {
      * for — so the race silently rewound playback.
      */
     private loadInFlight: null | Promise<boolean> = null;
+
+    /** B-106: the load procedure, its deadline and its answer to the hub (cast-load.ts). */
+    private readonly loader = createCastLoader<import('castv2-client').CastPlayer>({
+        ensureCast: () => this.ensureCast(),
+        log: (level, message) => log[level](`[cast-bridge] ${this.friendlyName}: ${message}`),
+        sendLoaded: (frame) => this.send(frame),
+        teardown: () => this.teardownCast(),
+    });
 
     /** Worbus P2: the receiver app session this bridge launched or joined. */
     private ownAppSessionId: null | string = null;
@@ -1020,16 +1029,8 @@ class CastDeviceBridge {
                     this.releasing = false;
                     this.tracks = msg.tracks ?? [];
                     this.index = msg.index ?? 0;
-                    const ok = await this.loadCurrent(msg.positionMs ?? 0, msg.play !== false);
-                    // PROTOCOL §7.1. Without this the hub commits the active slot and
-                    // never learns the speaker didn't start, so a transfer to a TV that
-                    // has been off for days reads as playing on every device until a
-                    // human intervenes.
-                    this.send({
-                        error: ok ? undefined : 'the speaker did not start playback',
-                        ok,
-                        t: 'loaded',
-                    });
+                    // PROTOCOL §7.1-7.2: the loader answers it with `loaded`.
+                    await this.loadCurrent(msg.positionMs ?? 0, msg.play !== false, msg);
                     break;
                 }
                 case 'pause':
@@ -1232,46 +1233,72 @@ class CastDeviceBridge {
         });
     }
 
-    /** @returns whether the speaker actually started (PROTOCOL §7.1's `loaded.ok`). */
-    private loadCurrent(positionMs: number, play: boolean): Promise<boolean> {
-        const attempt = this.loadCurrentOnce(positionMs, play).finally(() => {
+    /**
+     * @returns whether the speaker actually started (PROTOCOL §7.1's `loaded.ok`). `hubLoad`: the
+     * hub's `do:load` this serves, which the loader answers.
+     */
+    private loadCurrent(
+        positionMs: number,
+        play: boolean,
+        hubLoad?: { timeoutMs?: unknown; transferId?: unknown },
+    ): Promise<boolean> {
+        const attempt = this.loadCurrentOnce(positionMs, play, hubLoad).finally(() => {
             if (this.loadInFlight === attempt) this.loadInFlight = null;
         });
         this.loadInFlight = attempt;
         return attempt;
     }
 
-    private async loadCurrentOnce(positionMs: number, play: boolean): Promise<boolean> {
+    private async loadCurrentOnce(
+        positionMs: number,
+        play: boolean,
+        hubLoad: undefined | { timeoutMs?: unknown; transferId?: unknown },
+    ): Promise<boolean> {
+        const sendLoad = this.loadSender(positionMs, play);
+        const result = hubLoad
+            ? await this.loader.hubLoad(hubLoad, sendLoad)
+            : sendLoad
+              ? await this.loader.reload(sendLoad)
+              : 'failed';
+        if (result === 'abandoned') return false;
+        if (result === 'failed') {
+            // Out of options — the device is unreachable (asleep, moved to another
+            // address, off the network), or there was nothing to load. Say so instead of
+            // throwing to a caller that only logs: leaving `playing` true made every client
+            // show a playing bar for a speaker that was silent, and the scrubber ran on a ghost.
+            if (sendLoad) {
+                this.playing = false;
+                this.report();
+            }
+            return false;
+        }
+        this.lastPositionMs = positionMs;
+        this.playing = play;
+        this.report();
+        this.startTicker();
+        return true;
+    }
+
+    /** LOAD of the current track at `positionMs` for the loader; null when there is none. */
+    private loadSender(
+        positionMs: number,
+        play: boolean,
+    ): null | SendLoad<import('castv2-client').CastPlayer> {
         const track = this.tracks[this.index];
-        if (!track) return false;
+        if (!track) return null;
         if (!track.streamUrl) {
             log.error(
                 `[cast-bridge] ${this.friendlyName}: track "${track.title}" has no streamUrl — ` +
                     'the queue was published by an older client; start playback again on the ' +
                     'sending device to republish it',
             );
-            return false;
+            return null;
         }
         log.info(
             `[cast-bridge] ${this.friendlyName}: loading "${track.title}" ` +
                 `(${track.mime ?? 'audio/mpeg'}) @ ${positionMs}ms ` +
                 `[id ${logSafeStreamId(track.streamUrl)}]`,
         );
-        let player: import('castv2-client').CastPlayer;
-        try {
-            player = await this.ensureCast();
-        } catch (error) {
-            // Nothing to load into. This used to throw to a caller that only logged,
-            // leaving `playing` true — a playing bar over a speaker we could not even
-            // connect to.
-            log.error(
-                `[cast-bridge] ${this.friendlyName}: cannot reach the device ` +
-                    `(${(error as Error).message})`,
-            );
-            this.playing = false;
-            this.report();
-            return false;
-        }
         const media = {
             contentId: track.streamUrl,
             contentType: track.mime || 'audio/mpeg',
@@ -1285,71 +1312,21 @@ class CastDeviceBridge {
             },
             streamType: 'BUFFERED',
         };
-        const loadOnce = (target: import('castv2-client').CastPlayer): Promise<void> =>
-            new Promise<void>((resolve, reject) => {
-                const timeout = setTimeout(
-                    () => reject(new Error('load timed out after 10s')),
-                    10_000,
-                );
-                target.load(
-                    media,
-                    { autoplay: play, currentTime: positionMs / 1000 },
-                    (err, status) => {
-                        clearTimeout(timeout);
-                        if (err) {
-                            reject(err);
-                        } else {
-                            log.info(
-                                `[cast-bridge] ${this.friendlyName}: load ok → ` +
-                                    `${status?.playerState ?? 'no status'}`,
-                            );
-                            // Worbus P2: the media session this LOAD started is this bridge's.
-                            if (typeof status?.mediaSessionId === 'number') {
-                                this.ownMediaSessionId = status.mediaSessionId;
-                            }
-                            resolve();
-                        }
-                    },
-                );
+        return (target, answer) => {
+            target.load(media, { autoplay: play, currentTime: positionMs / 1000 }, (err, status) => {
+                if (!err) {
+                    log.info(
+                        `[cast-bridge] ${this.friendlyName}: load ok → ` +
+                            `${status?.playerState ?? 'no status'}`,
+                    );
+                    // Worbus P2: the media session this LOAD started is this bridge's.
+                    if (typeof status?.mediaSessionId === 'number') {
+                        this.ownMediaSessionId = status.mediaSessionId;
+                    }
+                }
+                answer(err);
             });
-
-        try {
-            await loadOnce(player);
-        } catch (error) {
-            // The previous media session may be dead (e.g. after release/stop)
-            // — retry once with a completely fresh cast session.
-            log.warn(
-                `[cast-bridge] ${this.friendlyName}: load failed (${(error as Error).message}), ` +
-                    'retrying with a fresh session',
-            );
-            this.teardownCast();
-            try {
-                // Breathe before retrying: a failed connect kicks off an mDNS re-query, and
-                // if the device has moved this is the window in which its new address lands
-                // (updateHost). Retrying instantly would just dial the stale one again.
-                await new Promise((r) => setTimeout(r, 1200));
-                const freshPlayer = await this.ensureCast();
-                await loadOnce(freshPlayer);
-            } catch (retryError) {
-                // Out of options — the device is unreachable (asleep, moved to another
-                // address, off the network). Say so instead of throwing to a caller that
-                // only logs: leaving `playing` true made every client show a playing bar
-                // for a speaker that was silent, and the scrubber ran on a ghost.
-                log.error(
-                    `[cast-bridge] ${this.friendlyName}: giving up on this load ` +
-                        `(${(retryError as Error).message})`,
-                );
-                this.teardownCast();
-                this.playing = false;
-                this.report();
-                return false;
-            }
-        }
-        this.lastPositionMs = positionMs;
-        this.playing = play;
-        this.report();
-        this.startTicker();
-        return true;
+        };
     }
 
     /**
