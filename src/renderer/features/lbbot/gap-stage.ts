@@ -130,9 +130,14 @@ const HELD_TRACK_STATES: ReadonlySet<LbBotGapTrackState> = new Set<LbBotGapTrack
 
 const SEARCH_IN_FLIGHT = new Set(['queued', 'running']);
 
-/** The searching stage's progress line: the record's source task's own line ('' for the box's). */
+/**
+ * The searching stage's progress line: the record's source task's own line, only while that task
+ * is still searching ('' for the box's own "Searching"). Right after Search again the record still
+ * holds the previous, finished task until a read brings the new one, and its last line ("ranking
+ * 3 peer(s)...") flashed as the new search's.
+ */
 export const searchProgressLine = (task: GapRecord['sourceTask'] | undefined): string =>
-    task?.current ?? '';
+    task && SEARCH_IN_FLIGHT.has(task.status) ? task.current : '';
 
 /**
  * Fill progress, counted off the tracks rather than off a task: a gap fill is per-track and has no
