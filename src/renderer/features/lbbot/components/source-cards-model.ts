@@ -106,10 +106,12 @@ export const folderName = (source: Pick<LbBotGapSource, 'folder' | 'peer'>): str
 
 /**
  * lb-bot's machine-readable reasons for refusing a Request because the card's list is gone (its
- * `/api/gaps/<id>/fetch`): `bad_source`, the card's index is no longer in the kept list, and
- * `no_sources`, there is no kept list at all.
+ * `/api/gaps/<id>/fetch`): `stale_source` (409), the card's folder is not in the list lb-bot holds
+ * now (a newer search replaced it; B-360, source ids are folder identities); `no_sources`, there is
+ * no kept list at all; and `bad_source`, which an lb-bot from before B-360 sent for an index past
+ * the end of the list (a newer one sends it only for an id that is not a number).
  */
-const STALE_LIST_CODES = new Set(['bad_source', 'no_sources']);
+const STALE_LIST_CODES = new Set(['bad_source', 'no_sources', 'stale_source']);
 
 /**
  * R12 (B-238): whether a refused Request says the cards on screen are stale, so Search again sits
