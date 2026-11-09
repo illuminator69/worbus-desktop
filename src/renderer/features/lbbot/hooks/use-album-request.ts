@@ -154,11 +154,12 @@ export const useAlbumRequest = ({
         if (current && current.edition?.releaseMbid === resolvedEdition?.releaseMbid) {
             // The same edition again: only a failed or empty answer is asked again, on a fresh clock.
             const press = albumSearchPress(sourcesState);
-            if (press === 'read' || press === 'refresh') {
+            if (press === 'refresh') {
                 sessions.set(rgid, { ...current, startedAt: Date.now() });
                 setNow(Date.now());
                 emit();
-                void (press === 'refresh' ? sources.again() : sources.refetch());
+                // `refresh=1`: past lb-bot's kept list and the hub's one-minute cache (B-256).
+                void sources.again();
             } else if (press === 'reshow') {
                 // R11: the cards already found, brought back over a finished request's card
                 // (`albumBoxView` shows the sources asked for after the fill ended). No new search.
