@@ -6,6 +6,7 @@ import type { ReleaseKind } from './release-kind.ts';
 import {
     chipRow,
     discographyChips,
+    discographyLine,
     kindLines,
     ownedPlayIds,
     popularReleases,
@@ -213,4 +214,21 @@ test('popularLeavesSwitchedOffKindsOut', () => {
     assert.deepEqual(chipKinds(chips), ['popular', 'album']);
     assert.equal(chips[0].total, 1);
     assert.deepEqual(keys(chipRow(items, chips[0], 4)), ['a1']);
+});
+
+test('anArtistWithOnlyAppearsOnStillReachesTheScan', () => {
+    // B-369: an owned artist whose library albums are all someone else's (Appears on) has no
+    // chip. The Discography line, with its link to the discography page where lb-bot's scan
+    // lives, must still show while lb-bot can scan them, with an empty row; it used to vanish.
+    const items = [
+        item({ key: 'a', kind: 'appears-on' }),
+        item({ key: 'b', kind: 'appears-on' }),
+    ];
+    const chips = discographyChips(items, ['album', 'single', 'appears-on'], new Set());
+    assert.deepEqual(chips, []);
+    assert.equal(discographyLine(chips, true), 'empty');
+    assert.equal(discographyLine(chips, false), 'none', 'no lb-bot: nothing to reach');
+    const own = discographyChips([...items, item({ key: 'c' })], ['album', 'single', 'appears-on'], new Set());
+    assert.equal(discographyLine(own, true), 'chips');
+    assert.equal(discographyLine(own, false), 'chips');
 });

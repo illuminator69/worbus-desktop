@@ -143,6 +143,15 @@ export const discographyChips = (
     return popular > 0 ? [{ kind: 'popular', kinds: shown, total: popular }, ...kinds] : kinds;
 };
 
+/**
+ * What the artist page's Discography line shows: its chips and row, or nothing. `scannable`: lb-bot
+ * answered for this artist (B-369).
+ */
+export const discographyLine = (
+    chips: DiscographyChip[],
+    _scannable: boolean,
+): 'chips' | 'empty' | 'none' => (chips.length > 0 ? 'chips' : 'none');
+
 /** The one row of tiles a chip shows: at most `itemsPerRow`, in the chip's order. */
 export const chipRow = (
     items: DiscographyItem[],

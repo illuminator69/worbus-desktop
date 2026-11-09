@@ -14,6 +14,7 @@ import {
     chipRow,
     type DiscographyChip,
     discographyChips,
+    discographyLine,
     kindLines,
 } from '/@/renderer/features/discography/artist-shelves';
 import {
@@ -88,6 +89,7 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
     }, [items, itemsPerRow, releaseTypeItems]);
     // A chip the artist no longer has (a rescan, a Settings change) falls back to the first.
     const selected = chips.find((chip) => chip.kind === chosen) ?? chips[0];
+    const line = discographyLine(chips, discography.data !== undefined);
     const row = useMemo(
         () => (selected ? chipRow(items, selected, itemsPerRow) : []),
         [items, itemsPerRow, selected],
@@ -123,7 +125,7 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
         <div className={styles.root} data-artist-shelves="" ref={cq.ref}>
             {cq.isCalculated && (
                 <>
-                    {selected && (
+                    {line === 'chips' && selected && (
                         <section className={styles.line} data-line="discography">
                             <div className={styles.head}>
                                 <h2 className={styles.title}>
