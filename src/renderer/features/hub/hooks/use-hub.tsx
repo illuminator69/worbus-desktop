@@ -44,6 +44,7 @@ import {
 import {
     closeLoad,
     expectLoad,
+    loadEnding,
     type LoadExpectation,
     loadProven,
     type PlayerLook,
@@ -1168,24 +1169,17 @@ export const useHub = () => {
                     const later = async (): Promise<DoExit> => {
                         const outcome = await awaitLoadOutcome(gen, exp, budgetMs);
                         if (pendingLoad.current?.exp === exp) pendingLoad.current = null;
-                        // A superseded load has no standing to answer: a newer directive owns
-                        // the player, and the hub has already cancelled this attempt's waiter.
-                        if (outcome.error === 'superseded') return 'echo';
-                        if (!outcome.ok) {
-                            // A later play or pause set the play state: say so, touch nothing.
-                            if (exp.overridden) {
-                                hub?.send({
-                                    error: outcome.error,
-                                    ok: false,
-                                    t: 'loaded',
-                                    transferId,
-                                });
-                                return 'silent';
-                            }
-                            return refuse(outcome.error);
+                        const ending = loadEnding(outcome, exp);
+                        if (ending.kind === 'refuse') return refuse(outcome.error);
+                        if (ending.kind === 'answered') {
+                            hub?.send({
+                                ...(ending.ok ? {} : { error: outcome.error }),
+                                ok: ending.ok,
+                                t: 'loaded',
+                                transferId,
+                            });
                         }
-                        hub?.send({ ok: true, t: 'loaded', transferId });
-                        return 'echo';
+                        return ending.exit;
                     };
                     return { later: later() };
                 }

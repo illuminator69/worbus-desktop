@@ -6,6 +6,7 @@ import type { PlayerLook } from './load-outcome.ts';
 import {
     closeLoad,
     expectLoad,
+    loadEnding,
     loadProven,
     reaimLoad,
     reportedPositionMs,
@@ -102,4 +103,23 @@ test('aReportWhileALoadWaitsCarriesTheLoadsOffset', () => {
     reaimLoad(exp, { cmd: 'seek', positionMs: 45_500 });
     assert.equal(reportedPositionMs(exp, 30_000), 45_500, 'a seek re-aims it');
     assert.equal(reportedPositionMs(null, 133_000), 133_000, 'no load waiting: the player');
+});
+
+// Review nit 6: a `release` during a pending load bumps the generation, the load ends
+// "superseded", and its `echo` exit sent one report after `released`, against the release's own
+// rule ("those two are this directive's last word"). A newer load ends with its own report.
+test('aSupersededLoadEndsWithoutAReport', () => {
+    const exp = expectLoad(2, 30, false);
+    assert.deepEqual(loadEnding({ error: 'superseded', ok: false }, exp), {
+        exit: 'silent',
+        kind: 'superseded',
+    });
+    assert.deepEqual(loadEnding({ ok: true }, exp), { exit: 'echo', kind: 'answered', ok: true });
+    assert.deepEqual(loadEnding({ error: 'x', ok: false }, exp), { kind: 'refuse' });
+    reaimLoad(exp, { cmd: 'pause' });
+    assert.deepEqual(loadEnding({ error: 'x', ok: false }, exp), {
+        exit: 'silent',
+        kind: 'answered',
+        ok: false,
+    });
 });

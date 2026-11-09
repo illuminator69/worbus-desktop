@@ -116,3 +116,26 @@ export const closeLoad = (exp: LoadExpectation, look: PlayerLook): void => {
  */
 export const reportedPositionMs = (exp: LoadExpectation | null, playerMs: number): number =>
     exp ? Math.round(exp.sec * 1000) : playerMs;
+
+/**
+ * How a load's wait ended, for use-hub's `later`: what the hub is told (`loaded`), and whether the
+ * report that follows the directive's end is sent (`exit`, do-echo.ts). `refuse`: the load could
+ * not start and nothing later set the play state, so use-hub refuses it (failedLoadExit).
+ */
+export type LoadEnding =
+    | { exit: 'echo' | 'silent'; kind: 'superseded' }
+    | { exit: 'echo' | 'silent'; kind: 'answered'; ok: boolean }
+    | { kind: 'refuse' };
+
+export const loadEnding = (
+    outcome: LoadVerdict,
+    exp: Pick<LoadExpectation, 'overridden'>,
+): LoadEnding => {
+    // A superseded load has no standing to answer: a newer directive owns the player, and the
+    // hub has already cancelled this attempt's waiter.
+    if (outcome.error === 'superseded') return { exit: 'echo', kind: 'superseded' };
+    if (outcome.ok) return { exit: 'echo', kind: 'answered', ok: true };
+    // A later play or pause set the play state: say so, touch nothing.
+    if (exp.overridden) return { exit: 'silent', kind: 'answered', ok: false };
+    return { kind: 'refuse' };
+};
