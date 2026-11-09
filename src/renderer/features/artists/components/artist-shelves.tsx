@@ -125,7 +125,7 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
         <div className={styles.root} data-artist-shelves="" ref={cq.ref}>
             {cq.isCalculated && (
                 <>
-                    {line === 'chips' && selected && (
+                    {line !== 'none' && (
                         <section className={styles.line} data-line="discography">
                             <div className={styles.head}>
                                 <h2 className={styles.title}>
@@ -142,38 +142,46 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
                                     {t('page.albumArtistDetail.showAll')}
                                 </Link>
                             </div>
-                            <SidewaysRow
-                                aria-label={t('page.albumArtistDetail.discographyKicker')}
-                                className={styles.chips}
-                                frameProps={{ className: styles.chipsFrame }}
-                                role="group"
-                                wheel="page"
-                            >
-                                {chips.map((chip) => (
-                                    <button
-                                        aria-pressed={chip.kind === selected.kind}
-                                        className={styles.chip}
-                                        data-chip={chip.kind}
-                                        key={chip.kind}
-                                        onClick={() => setChosen(chip.kind)}
-                                        onKeyDown={keepKeys}
-                                        type="button"
+                            {line === 'chips' && selected ? (
+                                <>
+                                    <SidewaysRow
+                                        aria-label={t('page.albumArtistDetail.discographyKicker')}
+                                        className={styles.chips}
+                                        frameProps={{ className: styles.chipsFrame }}
+                                        role="group"
+                                        wheel="page"
                                     >
-                                        {chipLabel(chip)}
-                                    </button>
-                                ))}
-                            </SidewaysRow>
-                            <Row itemsPerRow={itemsPerRow}>
-                                {row.map((item, index) => (
-                                    <Slot
-                                        {...tileProps}
-                                        arrivalFor={propsFor}
-                                        index={index}
-                                        item={item}
-                                        key={item.key}
-                                    />
-                                ))}
-                            </Row>
+                                        {chips.map((chip) => (
+                                            <button
+                                                aria-pressed={chip.kind === selected.kind}
+                                                className={styles.chip}
+                                                data-chip={chip.kind}
+                                                key={chip.kind}
+                                                onClick={() => setChosen(chip.kind)}
+                                                onKeyDown={keepKeys}
+                                                type="button"
+                                            >
+                                                {chipLabel(chip)}
+                                            </button>
+                                        ))}
+                                    </SidewaysRow>
+                                    <Row itemsPerRow={itemsPerRow}>
+                                        {row.map((item, index) => (
+                                            <Slot
+                                                {...tileProps}
+                                                arrivalFor={propsFor}
+                                                index={index}
+                                                item={item}
+                                                key={item.key}
+                                            />
+                                        ))}
+                                    </Row>
+                                </>
+                            ) : (
+                                <p className={styles.empty}>
+                                    {t('page.albumArtistDetail.discographyEmpty')}
+                                </p>
+                            )}
                         </section>
                     )}
                     {appearsOn && (

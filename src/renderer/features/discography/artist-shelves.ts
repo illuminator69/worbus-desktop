@@ -144,13 +144,19 @@ export const discographyChips = (
 };
 
 /**
- * What the artist page's Discography line shows: its chips and row, or nothing. `scannable`: lb-bot
- * answered for this artist (B-369).
+ * What the artist page's Discography line shows: its chips and row; its header and "Show all" over
+ * an empty row; or nothing. `scannable`: lb-bot answered for this artist, so the discography page
+ * that "Show all" opens has its scan. B-369: the line used to need a chip, and an artist whose
+ * library albums are all Appears on has none, so the only route to the scan vanished with it.
+ * With no lb-bot there is nothing that page could add, and the line stays away as before.
  */
 export const discographyLine = (
     chips: DiscographyChip[],
-    _scannable: boolean,
-): 'chips' | 'empty' | 'none' => (chips.length > 0 ? 'chips' : 'none');
+    scannable: boolean,
+): 'chips' | 'empty' | 'none' => {
+    if (chips.length > 0) return 'chips';
+    return scannable ? 'empty' : 'none';
+};
 
 /** The one row of tiles a chip shows: at most `itemsPerRow`, in the chip's order. */
 export const chipRow = (

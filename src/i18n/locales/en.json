@@ -488,6 +488,7 @@
     "page": {
         "albumArtistDetail": {
             "appearsOn": "Appears on",
+            "discographyEmpty": "No releases of their own in your library yet",
             "discographyKicker": "Discography",
             "favoriteSongs": "Favorite songs",
             "groupingTypeAll": "All release types",
