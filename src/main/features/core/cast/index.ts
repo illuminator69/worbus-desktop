@@ -1120,7 +1120,7 @@ class CastDeviceBridge {
                     // switch is what reset transfers to the beginning.
                     this.releasing = true;
                     // B-106: a load still out for this speaker must not start it after this.
-                    this.loader.release();
+                    this.loader.release(msg.transferId);
                     this.stopTicker();
                     await this.capturePosition();
                     this.playing = false;
@@ -1633,7 +1633,12 @@ class CastDeviceBridge {
         this.stopTicker();
         this.playing = false;
         this.report();
-        this.send({ index: this.index, positionMs: this.lastPositionMs, t: 'released' });
+        this.send({
+            index: this.index,
+            positionMs: this.lastPositionMs,
+            t: 'released',
+            transferId: this.loader.lastReleaseId(),
+        });
         this.teardownCast();
         this.releasing = false;
     }

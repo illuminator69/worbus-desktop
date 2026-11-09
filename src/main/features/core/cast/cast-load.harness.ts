@@ -214,3 +214,16 @@ test('aColdSpeakerThatStartsAt9sIsAnsweredOk', async () => {
     assert.equal(speaker.playing, 'load');
     assert.equal(counts.pauses, 0);
 });
+
+// Review nit 7: the bridge advertises `transferAckV2`, so the hub discards a `released` whose id
+// does not match the handoff it waits on. A speaker taken by another sender while a `do:release`
+// is being carried out (its getStatus can be orphaned by the takeover's teardown) was reported
+// released with no id, and the hub waited out RELEASE_TIMEOUT. It now carries the last release's.
+test('aSpeakerTakenDuringAReleaseIsReportedWithThatReleasesId', () => {
+    const { loader } = setup([]);
+    assert.equal(loader.lastReleaseId(), undefined, 'no release yet: no id');
+    loader.release('t9');
+    assert.equal(loader.lastReleaseId(), 't9');
+    loader.release(42);
+    assert.equal(loader.lastReleaseId(), undefined, 'not an id');
+});

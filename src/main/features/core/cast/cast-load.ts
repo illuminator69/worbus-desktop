@@ -61,8 +61,13 @@ export interface CastLoader<P> {
         directive: { timeoutMs?: unknown; transferId?: unknown },
         sendLoad: null | SendLoad<P>,
     ) => Promise<LoadResult>;
+    /**
+     * The `transferId` a `released` this bridge sends on its own (the speaker taken by another
+     * sender) carries, so the hub can match it to a handoff it is waiting on (PROTOCOL §7.2).
+     */
+    lastReleaseId: () => string | undefined;
     /** `do:release`: the session is leaving this speaker. */
-    release: () => void;
+    release: (transferId?: unknown) => void;
     /** A load this bridge starts itself (a jump, a reload after a failed seek or play). */
     reload: (sendLoad: SendLoad<P>) => Promise<LoadResult>;
 }
@@ -233,6 +238,7 @@ export const createCastLoader = <P>(deps: CastLoadDeps<P>): CastLoader<P> => {
             }
             return settle(await run(sendLoad));
         },
+        lastReleaseId: () => undefined,
         release: () => {
             dropPending();
             end(current, 'released');
