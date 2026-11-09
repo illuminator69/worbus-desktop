@@ -37,6 +37,11 @@ import {
     upgradeFromToken,
 } from '/@/renderer/features/hub/utils/hub-signin-actions';
 import {
+    type ArmedSeek,
+    armedSeekOnTrack,
+    seekOverArmedSeeks,
+} from '/@/renderer/features/hub/utils/armed-seek';
+import {
     closeLoad,
     expectLoad,
     type LoadExpectation,
@@ -399,12 +404,9 @@ export const useHub = () => {
     // reports the new song, because seeking during the source reload is lost.
     // `pause` re-asserts the paused state after the seek — mediaPlayByIndex
     // starts async playback that an immediate mediaPause() loses the race to.
-    const pendingSeek = useRef<null | {
-        armedAt: number;
-        index: number;
-        pause: boolean;
-        sec: number;
-    }>(null);
+    const pendingSeek = useRef<ArmedSeek | null>(null);
+    // The armed seek whose track is current and whose delayed seek has not fired yet (armed-seek.ts).
+    const landingSeek = useRef<ArmedSeek | null>(null);
     // Wall-clock until which local player events are treated as hub-driven
     // (not user-initiated) — prevents do:load side effects from being
     // misinterpreted as "user started new local playback".
@@ -1271,6 +1273,11 @@ export const useHub = () => {
                 }
                 case 'seek':
                     withdrawStartupSeek();
+                    seekOverArmedSeeks(
+                        (msg.positionMs ?? 0) / 1000,
+                        pendingSeek.current,
+                        landingSeek.current,
+                    );
                     mediaSeekToTimestamp((msg.positionMs ?? 0) / 1000);
                     break;
                 case 'setRepeat':
@@ -2078,17 +2085,20 @@ export const useHub = () => {
     usePlayerEvents(
         {
             onCurrentSongChange: (properties) => {
-                const pending = pendingSeek.current;
-                if (pending && Date.now() - pending.armedAt > PENDING_SEEK_TTL) {
-                    // Its target track never became current (superseded load, queue
-                    // changed under us) — drop it before it ambushes an unrelated song.
-                    pendingSeek.current = null;
-                } else if (pending && properties.index === pending.index) {
-                    pendingSeek.current = null;
+                const { keep, land: pending } = armedSeekOnTrack(
+                    pendingSeek.current,
+                    properties.index,
+                    Date.now(),
+                    PENDING_SEEK_TTL,
+                );
+                pendingSeek.current = keep;
+                if (pending) {
+                    landingSeek.current = pending;
                     hubDrivenUntil.current = Date.now() + 2000;
                     // Small delay so the engine finishes loading the new source
                     // before the seek (same approach as use-queue-restore).
                     setTimeout(() => {
+                        if (landingSeek.current === pending) landingSeek.current = null;
                         mediaSeekToTimestamp(pending.sec);
                         if (pending.pause) {
                             // A load that raced its pause can still start playback
