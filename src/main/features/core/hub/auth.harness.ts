@@ -536,7 +536,7 @@ test('cast bridge hello carries bridgedBy', async () => {
     );
     assert.deepEqual(frame.auth, { deviceSecret: SECRET }, "the bridging device's own secret");
     assert.ok(!('token' in frame), 'no shared token beside a secret');
-    assert.deepEqual(frame.device.caps, ['receiver', 'loadAck', 'idleVolume']);
+    assert.deepEqual(frame.device.caps, ['receiver', 'loadAck', 'transferAckV2', 'idleVolume']);
     assert.deepEqual(
         castHelloFrame({
             bridgedBy: 'x',
@@ -548,7 +548,7 @@ test('cast bridge hello carries bridgedBy', async () => {
         {
             device: {
                 bridgedBy: 'x',
-                caps: ['receiver', 'loadAck'],
+                caps: ['receiver', 'loadAck', 'transferAckV2'],
                 id: 'cast-g',
                 kind: 'group',
                 name: 'All',

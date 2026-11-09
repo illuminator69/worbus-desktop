@@ -209,6 +209,16 @@ class CastDeviceBridge {
     private readonly loader = createCastLoader<import('castv2-client').CastPlayer>({
         ensureCast: () => this.ensureCast(),
         log: (level, message) => log[level](`[cast-bridge] ${this.friendlyName}: ${message}`),
+        pauseLanded: (player) => {
+            log.warn(
+                `[cast-bridge] ${this.friendlyName}: a load nobody wants any more landed - pausing it`,
+            );
+            try {
+                player.pause(noop);
+            } catch (pauseError) {
+                log.warn(`[cast-bridge] ${this.friendlyName}: that pause failed`, pauseError);
+            }
+        },
         sendLoaded: (frame) => this.send(frame),
         teardown: () => this.teardownCast(),
     });
@@ -1104,6 +1114,8 @@ class CastDeviceBridge {
                     // late ticker/status report of 0 racing the hub's device
                     // switch is what reset transfers to the beginning.
                     this.releasing = true;
+                    // B-106: a load still out for this speaker must not start it after this.
+                    this.loader.release();
                     this.stopTicker();
                     await this.capturePosition();
                     this.playing = false;
@@ -1114,6 +1126,8 @@ class CastDeviceBridge {
                         index: this.index,
                         positionMs: this.lastPositionMs,
                         t: 'released',
+                        // §7.2 (`transferAckV2`): the handoff this release belongs to.
+                        transferId: msg.transferId,
                     });
                     // PAUSE, not STOP. Releasing means "stop making sound", and pause does
                     // that — while STOP ends the media session and takes the receiver app

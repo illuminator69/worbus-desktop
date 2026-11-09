@@ -32,7 +32,12 @@ export const castHelloFrame = ({ bridgedBy, castId, credential, kind, name }: Ca
         // slider in every picker. Not a group: a group's receiver listens on a port of its own,
         // which this bridge does not read from the record, and the level would be set on the
         // group's leader instead.
-        caps: kind === 'group' ? ['receiver', 'loadAck'] : ['receiver', 'loadAck', 'idleVolume'],
+        // `transferAckV2` (§7.2, B-106): `loaded` and `released` echo the directive's
+        // `transferId`, so the hub matches an answer to the transfer it belongs to.
+        caps:
+            kind === 'group'
+                ? ['receiver', 'loadAck', 'transferAckV2']
+                : ['receiver', 'loadAck', 'transferAckV2', 'idleVolume'],
         id: `cast-${castId}`,
         // `kind` tells a cast row from the others in a picker, and a speaker from a TV. Left out
         // when the record did not say (JSON drops undefined).
