@@ -106,7 +106,13 @@ export const closeLoad = (exp: LoadExpectation, look: PlayerLook): void => {
 };
 
 /**
- * The position a report carries: the player's (`playerMs`), whatever load is still waiting.
+ * The position a report carries (B-111). While a load waits for its outcome the player is still
+ * being positioned: setQueue's restore seek and the armed seek land 100-150 ms after the new
+ * track, and until then the timestamp store holds the outgoing track's offset, or 0. Since a pause
+ * applied mid-load ends before the load and lets the hub accept the report after it, that offset
+ * would be stored for the new track. So while a load waits, a report says where the load is
+ * putting the player (its `sec`, re-aimed by any later seek or jump); once it has ended, the
+ * player's own position (`playerMs`).
  */
-export const reportedPositionMs = (_exp: LoadExpectation | null, playerMs: number): number =>
-    playerMs;
+export const reportedPositionMs = (exp: LoadExpectation | null, playerMs: number): number =>
+    exp ? Math.round(exp.sec * 1000) : playerMs;
