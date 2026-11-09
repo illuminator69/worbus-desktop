@@ -5,6 +5,7 @@ import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
 import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
+import { createDirectiveRunner } from '/@/renderer/features/hub/utils/directive-runner';
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
@@ -1428,38 +1429,31 @@ export const useHub = () => {
      * correlation for that. Serializing costs nothing (the hub sends one directive at a time in
      * the normal case) and makes "last directive wins" actually true.
      */
-    const directiveChain = useRef<Promise<void>>(Promise.resolve());
+    const directiveRunner = useRef(
+        createDirectiveRunner<any, DoExit>({
+            fallback: 'echo',
+            onError: (msg, e) => console.error('[hub] directive failed', msg?.cmd, e),
+        }),
+    );
     const runDirective = useCallback(
         (msg: any): Promise<void> => {
             // I-031: the connection this directive arrived on. It may still be waiting in the
             // chain, or for a load's outcome, when the socket has dropped and come back; the
             // hub forgot it at that `welcome`, and it must not move the new connection's count.
             const conn = doEcho.current.conn;
-            const next = directiveChain.current
-                .then(async () => {
-                    let exit: DoExit = 'echo';
-                    try {
-                        exit = await handleDo(msg);
-                    } finally {
-                        // The directive has ended, so its number is applied whichever way it
-                        // went (a throw included), and the hub is owed a report read from the
-                        // player AFTER it: until one arrives carrying this number, the hub
-                        // drops what this device reports.
-                        const moved = echoSettled(doEcho.current, msg?.seq, conn);
-                        if (moved) {
-                            doEcho.current = moved;
-                            if (exit !== 'silent') {
-                                report(exit === 'echo' ? undefined : exit, true);
-                            }
-                        }
+            return directiveRunner.current(msg, handleDo, (exit) => {
+                // The directive has ended, so its number is applied whichever way it
+                // went (a throw included), and the hub is owed a report read from the
+                // player AFTER it: until one arrives carrying this number, the hub
+                // drops what this device reports.
+                const moved = echoSettled(doEcho.current, msg?.seq, conn);
+                if (moved) {
+                    doEcho.current = moved;
+                    if (exit !== 'silent') {
+                        report(exit === 'echo' ? undefined : exit, true);
                     }
-                })
-                .catch((e) => {
-                    // One bad directive must not break the chain for every later one.
-                    console.error('[hub] directive failed', msg?.cmd, e);
-                });
-            directiveChain.current = next;
-            return next;
+                }
+            });
         },
         [handleDo, report],
     );
