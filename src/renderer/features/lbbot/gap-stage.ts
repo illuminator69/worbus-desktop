@@ -198,9 +198,9 @@ export const gapStage = (input: GapInput): GapStage => {
     }
     const missing = missingTracks(gap);
     // The result row holds from the landing the box saw during the visit, else from this device's
-    // ledger settle: the ledger settles a gap only after a 90 s grace from its start, so a short
-    // fill's record went complete well before it, and holding from the settle folded the box away
-    // and brought the row back a minute later (walk finding, R11 Task 4).
+    // ledger settle, which lags the landing by a poll (until B-233 by a 90 s grace from its start:
+    // a short fill's record went complete well before it, and holding from the settle folded the
+    // box away and brought the row back a minute later; walk finding, R11 Task 4).
     const settled = fill?.settled && fill.outcome === 'done' ? fill : null;
     const heldFrom = input.landedAt > 0 ? input.landedAt : (settled?.finishedAt ?? 0);
     if (heldFrom > 0 && gapFillLanded(gap, fill)) {

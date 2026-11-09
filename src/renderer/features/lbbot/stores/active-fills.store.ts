@@ -146,6 +146,9 @@ export interface ActiveGap {
     stalledPlacement?: boolean;
     startedAt: number;
     state?: string;
+    /** B-233: the source task the action that started this watch answered with (`auto`,
+     *  `search`), so a read naming it counts whenever it was sent (gap-watch.ts). */
+    taskId?: string;
     total?: number;
 }
 
@@ -429,6 +432,8 @@ export const useActiveFillsStore = create<ActiveFillsState>()(
                                 settled: false,
                                 startedAt: Date.now(),
                                 state: undefined,
+                                // Never an earlier action's: only this one's answer names its task.
+                                taskId: meta?.taskId,
                             },
                         },
                     })),

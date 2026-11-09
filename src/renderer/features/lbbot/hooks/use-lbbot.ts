@@ -14,6 +14,7 @@ import type {
     LbBotFillState,
     LbBotFillStatus,
     LbBotGap,
+    LbBotGapAction,
     LbBotGapSource,
     LbBotListeningPeriod,
     LbBotListeningStatus,
@@ -2985,14 +2986,31 @@ const NO_CLIENT: LbBotResult<boolean> = {
     status: 0,
 };
 
-export const searchGapSources = (groupId: string, force = false): Promise<LbBotResult<boolean>> =>
+export const searchGapSources = (groupId: string, force = false): Promise<LbBotGapAction> =>
     lbBot ? lbBot.gapSearch(groupId, force).then(withRefusal) : Promise.resolve(NO_CLIENT);
 
-export const autoFillGap = (groupId: string): Promise<LbBotResult<boolean>> =>
+export const autoFillGap = (groupId: string): Promise<LbBotGapAction> =>
     lbBot ? lbBot.gapAuto(groupId).then(withRefusal) : Promise.resolve(NO_CLIENT);
 
-export const fetchGapSource = (groupId: string, sourceId: number): Promise<LbBotResult<boolean>> =>
+export const fetchGapSource = (groupId: string, sourceId: number): Promise<LbBotGapAction> =>
     lbBot ? lbBot.gapFetch(groupId, sourceId).then(withRefusal) : Promise.resolve(NO_CLIENT);
+
+/**
+ * B-233: a gap action was answered `ok`: watch the fill it started from that answer. The watch
+ * starts now, after the answer arrived, so a read sent before it does not count; it keeps the
+ * task the answer named (search, auto); and the group the answer carried (fetch) is its first
+ * read (gap-watch.ts).
+ */
+export const startGapWatch = (
+    groupId: string,
+    meta: { album?: string; artist?: string },
+    answer?: Pick<LbBotGapAction, 'gap' | 'taskId'>,
+): void => {
+    useActiveFillsStore
+        .getState()
+        .actions.startGap(groupId, { ...meta, taskId: answer?.taskId || undefined });
+    if (answer?.gap) applyGapSummary(groupId, answer.gap);
+};
 
 export const cancelGapFill = (groupId: string): Promise<LbBotResult<boolean>> =>
     lbBot ? lbBot.gapCancel(groupId).then(withRefusal) : Promise.resolve(NO_CLIENT);
@@ -3039,7 +3057,7 @@ export const retryFill = async (
     const { actions, fills } = useActiveFillsStore.getState();
     if (row.isGap) {
         const result = await searchGapSources(row.key, true);
-        if (result.ok) actions.startGap(row.key);
+        if (result.ok) startGapWatch(row.key, {}, result);
         return result.ok;
     }
     const fill = fills[row.key];

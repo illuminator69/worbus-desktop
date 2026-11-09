@@ -44,6 +44,7 @@ import {
     gapsByAlbumId,
     rescanGapAlbum,
     searchGapSources,
+    startGapWatch,
     useAlbumOverrideControls,
     useGapSourceFiles,
     useHubSupports,
@@ -67,7 +68,12 @@ import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Button } from '/@/shared/components/button/button';
 import { Icon } from '/@/shared/components/icon/icon';
 import { Album } from '/@/shared/types/domain-types';
-import { LbBotGapSource, LbBotGapTrackState, LbBotResult } from '/@/shared/types/lbbot-types';
+import {
+    LbBotGapAction,
+    LbBotGapSource,
+    LbBotGapTrackState,
+    LbBotResult,
+} from '/@/shared/types/lbbot-types';
 
 /*
  * navi-connect R11 (B-223): the gaps box on the owned album page, after Worbus for Android's `GapBox`, which
@@ -247,7 +253,7 @@ const GapBox = ({
     };
 
     const active = useActiveGap(groupId);
-    const { dismiss, startGap } = useActiveFillsActions();
+    const { dismiss } = useActiveFillsActions();
     const fill: GapFillRow | null = active
         ? {
               done: active.done ?? 0,
@@ -288,7 +294,7 @@ const GapBox = ({
     const busy = gapIsBusy(gap);
 
     // When the box saw a fill land during this visit: the result row holds from here (the ledger's
-    // settle lags a short fill by up to its 90 s grace, walk finding R11 Task 4).
+    // settle lags the landing by a poll; before B-233 by up to a 90 s grace, walk finding R11 Task 4).
     const [landedAt, setLandedAt] = useState(0);
     // The box saw the record not landed during this visit and has not noted its landing yet. The
     // render between the landing and the note (a tick) counts it as landing now, so the transfer
@@ -423,10 +429,14 @@ const GapBox = ({
         setSearchAsked(true);
         setPicked(null);
         try {
-            const ok = await act(() => searchGapSources(groupId, (gap?.sources.length ?? 0) > 0));
+            let answer: LbBotGapAction | undefined;
+            const ok = await act(async () => {
+                answer = await searchGapSources(groupId, (gap?.sources.length ?? 0) > 0);
+                return answer;
+            });
             // A search makes the ledger row too, as Worbus for Android's does: waiting for a pick is worth
             // listing, and a search that ends with nothing is worth announcing.
-            if (ok) startGap(groupId, { album: gap?.album, artist: gap?.artist });
+            if (ok) startGapWatch(groupId, { album: gap?.album, artist: gap?.artist }, answer);
             await refetch();
         } finally {
             setSearchAsked(false);
@@ -464,7 +474,7 @@ const GapBox = ({
                 });
                 return;
             }
-            startGap(groupId, { album: gap?.album, artist: gap?.artist });
+            startGapWatch(groupId, { album: gap?.album, artist: gap?.artist }, result);
             setCommitted(true);
             setFetched(source);
             setView('tracks');
@@ -473,16 +483,21 @@ const GapBox = ({
         }
     };
 
-    const auto = () =>
+    const auto = () => {
+        let answer: LbBotGapAction | undefined;
         void act(
-            () => autoFillGap(groupId),
+            async () => {
+                answer = await autoFillGap(groupId);
+                return answer;
+            },
             () => {
-                startGap(groupId, { album: gap?.album, artist: gap?.artist });
+                startGapWatch(groupId, { album: gap?.album, artist: gap?.artist }, answer);
                 setCommitted(true);
                 setFetched(null);
                 setView('tracks');
             },
         );
+    };
 
     const cancel = () =>
         void act(

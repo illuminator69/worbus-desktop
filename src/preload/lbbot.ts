@@ -14,6 +14,7 @@ import type {
     LbBotFillStatus,
     LbBotFreshFeed,
     LbBotGap,
+    LbBotGapAction,
     LbBotGapSource,
     LbBotIndexKeys,
     LbBotIndexPage,
@@ -275,16 +276,16 @@ const gapSourceFiles = (
 ): Promise<LbBotResult<LbBotSourceFiles>> =>
     ipcRenderer.invoke('lbbot-gap-source-files', { groupId, sourceIndex });
 
-const gapSearch = (groupId: string, force = false): Promise<LbBotResult<boolean>> =>
+const gapSearch = (groupId: string, force = false): Promise<LbBotGapAction> =>
     ipcRenderer.invoke('lbbot-gap-search', { force, groupId });
 
-const gapAuto = (groupId: string): Promise<LbBotResult<boolean>> =>
+const gapAuto = (groupId: string): Promise<LbBotGapAction> =>
     ipcRenderer.invoke('lbbot-gap-auto', { groupId });
 
-const gapFetch = (groupId: string, sourceId: number): Promise<LbBotResult<boolean>> =>
+const gapFetch = (groupId: string, sourceId: number): Promise<LbBotGapAction> =>
     ipcRenderer.invoke('lbbot-gap-fetch', { groupId, sourceId });
 
-const gapCancel = (groupId: string): Promise<LbBotResult<boolean>> =>
+const gapCancel = (groupId: string): Promise<LbBotGapAction> =>
     ipcRenderer.invoke('lbbot-gap-cancel', { groupId });
 
 const gapRescan = (groupId: string): Promise<LbBotResult<boolean>> =>

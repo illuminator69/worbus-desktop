@@ -3,6 +3,19 @@ import type { LbBotGap } from '/@/shared/types/lbbot-types';
 /**
  * navi-connect: when the ledger's gap watch (`use-lbbot.ts applyGapSummary`) settles, out of the
  * hook so a harness can replay a fill (B-233). Pure.
+ *
+ * The watch settles on the first read that counts and says the fill has ended, with no grace.
+ * It used to refuse to settle for a flat 90 s after it started, on the reading that "the POST
+ * returns before lb-bot's worker has written anything, so a group just asked to fill still looks
+ * idle". lb-bot does not work that way (the phase A sources lane read it, RESULTS § B-233):
+ *   - `fetch` enqueues before it answers, and its answer's `gap` (read under lb-bot's lock after
+ *     the enqueue) is already `downloading`, or terminal. The watch starts from it.
+ *   - `auto` and `search` answer `task_id`, and lb-bot registers that task (`running`) before it
+ *     answers, so every later read's `sourceTask` is that task (or a newer one) and `gapIsBusy`
+ *     holds the watch while it runs. Once it ends, `status` decides.
+ *   - The one read that can speak of the attempt before is one SENT before the action's answer
+ *     arrived (a 5 s poll in flight across the tap). Told apart by request order, not a clock.
+ * A short fill that failed 6 s in showed "Couldn't get these tracks" only after 96 s (B-233).
  */
 
 /** What the watch keeps that these rules read (`ActiveGap`'s fields). */
@@ -13,14 +26,6 @@ export interface GapWatch {
     /** The source task an `auto` or `search` answered with (`task_id`). */
     taskId?: string;
 }
-
-/**
- * How long a fresh gap watch refuses to settle, whatever the group says.
- *
- * The POST returns before lb-bot's worker has written anything, so a group
- * that has just been asked to fill still looks idle.
- */
-const GAP_SETTLE_GRACE_MS = 90 * 1000;
 
 /**
  * Is anything still happening to this gap?
@@ -53,8 +58,13 @@ export const gapIsBusy = (gap: LbBotGap | null | undefined): boolean => {
     return gap.tracks.some((track) => track.state === 'downloading' || track.state === 'queued');
 };
 
-/** Whether a read of the group (sent at `sentAt`) speaks for the fill the watch follows. */
-export const gapReadCounts = (_watch: GapWatch, _gap: LbBotGap, _sentAt: number): boolean => true;
+/**
+ * Whether a read of the group (sent at `sentAt`) speaks for the fill the watch follows: it was
+ * sent after the action's answer arrived (`startedAt`), or it names the watch's own task, which
+ * lb-bot registered before it answered.
+ */
+export const gapReadCounts = (watch: GapWatch, gap: LbBotGap, sentAt: number): boolean =>
+    sentAt >= watch.startedAt || (!!watch.taskId && gap.sourceTask?.id === watch.taskId);
 
 /**
  * What the watch does with a read that counts: keep waiting, settle on what the group says
@@ -69,9 +79,8 @@ export const gapWatchVerdict = (
     if (!busy && at.now - (watch.lastProgressAt ?? watch.startedAt) > at.timeoutMs) {
         return 'gaveUp';
     }
-    // Never inside the startup grace, and never while `gapIsBusy` (which reads
-    // `sourceTask`, not `status`) - this API looks idle before it is busy.
-    if (at.now - watch.startedAt < GAP_SETTLE_GRACE_MS || busy) return 'wait';
-    return 'settle';
+    // Never while `gapIsBusy`, which reads `sourceTask`, not `status`: a search's group reads
+    // `picking` with no sources while the task runs.
+    return busy ? 'wait' : 'settle';
 };
 

@@ -23,6 +23,7 @@ import type {
     LbBotFreshFeed,
     LbBotFreshRelease,
     LbBotGap,
+    LbBotGapAction,
     LbBotGapSource,
     LbBotGapStatus,
     LbBotGapTask,
@@ -2342,19 +2343,24 @@ ipcMain.handle(
 
 /** The gap writes. Each answers with a task id the clients discard — `sourceTask`
  *  on the gap detail is how a running search is watched. */
-const gapAction = async (route: string, body: Json): Promise<LbBotResult<boolean>> => {
+const gapAction = async (route: string, body: Json): Promise<LbBotGapAction> => {
     const result = await request('POST', route, { body });
     // lb-bot's `code` rides along (R12, B-238): the box decides from it whether the refusal says
     // the cards are stale, never from the sentence.
     if (!result.ok) return failed(result.status, result.error, false, { code: result.code });
     const ok = result.data?.ok !== false;
     const code = ok ? '' : str(result.data?.code);
+    // B-233: what the gap watch starts from (LbBotGapAction).
+    const gap = ok && result.data?.gap && typeof result.data.gap === 'object' ? result.data.gap : null;
+    const taskId = ok ? str(result.data?.task_id) : '';
     return {
         ...(code ? { code } : {}),
         data: ok,
         error: ok ? '' : str(result.data?.error) || 'lb-bot refused the request.',
+        ...(gap ? { gap: toGap(gap as Json, str(body.group_id)) } : {}),
         ok,
         status: result.status,
+        ...(taskId ? { taskId } : {}),
     };
 };
 
