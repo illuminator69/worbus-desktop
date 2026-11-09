@@ -4,7 +4,7 @@ import { mock, test } from 'node:test';
 import type { LoadAnswer } from './cast-load.ts';
 
 import { castHelloFrame } from './cast-hello.ts';
-import { createCastLoader } from './cast-load.ts';
+import { ACK_RESERVE_MS, createCastLoader } from './cast-load.ts';
 
 /**
  * B-106:  node --test src/main/features/core/cast/cast-load.harness.ts
@@ -25,7 +25,7 @@ import { createCastLoader } from './cast-load.ts';
  */
 
 const BUDGET_MS = 10_000;
-const RESERVE_MS = 1500;
+const RESERVE_MS = ACK_RESERVE_MS;
 
 interface Speaker {
     /** The media the speaker is playing, by the label of the LOAD that put it there. */
@@ -195,4 +195,22 @@ test('aLoadWithNoBudgetKeepsTheOldTimings', async () => {
         frames.map((f) => f.frame.ok),
         [true],
     );
+});
+
+// Review finding 3: the reserve was 1.5 s, copied from the renderer, which checks its proof on a
+// 100 ms poll. The bridge answers from the LOAD's own callback: one WebSocket frame on the LAN, the
+// same few ms the hub's `do:load` took to arrive (its clock started before that trip). A cold
+// speaker (LAUNCH + LOAD) that took 9 s used to be answered `ok:true` in time; with 1.5 s kept back
+// it was refused at 8.5 s and its LOAD paused when it landed.
+test('aColdSpeakerThatStartsAt9sIsAnsweredOk', async () => {
+    const { counts, frames, loader, sender, speaker } = setup([{ ms: 9000 }]);
+    void loader.hubLoad({ timeoutMs: BUDGET_MS, transferId: 't7' }, sender('load'));
+    await advance(12_000);
+    assert.deepEqual(
+        frames.map((f) => f.frame),
+        [{ error: undefined, ok: true, t: 'loaded', transferId: 't7' }],
+    );
+    assert.ok(frames[0].at < BUDGET_MS, 'inside the hub budget');
+    assert.equal(speaker.playing, 'load');
+    assert.equal(counts.pauses, 0);
 });
