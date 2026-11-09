@@ -27,6 +27,7 @@ import {
     gapPolls,
     gapProgress,
     gapReadGaveUp,
+    gapRowsOwed,
     gapStage,
     gapStageFamily,
     type GapView,
@@ -279,7 +280,8 @@ const GapBox = ({
         refetch,
     } = useLbBotGap(groupId, true, (current, since) =>
         gapPolls({
-            answered: !!current,
+            // Rows a summary did not carry are owed by a read (B-377): keep asking for them.
+            answered: !!current && !gapRowsOwed(current),
             busy: gapIsBusy(current),
             committed,
             failingSince: since,

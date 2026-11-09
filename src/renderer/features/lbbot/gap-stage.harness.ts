@@ -13,6 +13,7 @@ import {
     gapPolls,
     gapReadGaveUp,
     type GapRecord,
+    gapRowsOwed,
     gapStage,
     gapViewOnAsk,
     heldTracks,
@@ -294,6 +295,15 @@ test('B-377: a finished search whose rows have not arrived waits for them, never
         status: 'picking',
     } as Partial<GapRecord>);
     assert.deepEqual(gapStage(input({ gap: owed, view: 'sources' })), { kind: 'searching' });
+});
+
+test('B-377: rows are owed only while lb-bot counts sources the record does not list', () => {
+    assert.equal(gapRowsOwed({ sources: [], sourcesTotal: 3 }), true);
+    assert.equal(gapRowsOwed({ sources: [], sourcesTotal: 0 }), false, 'nothing found: an answer');
+    const done = gap({ sourceTask: task('complete'), status: 'picking' });
+    assert.equal(gapRowsOwed(done), false);
+    // Nothing found really says so.
+    assert.equal(gapStage(input({ gap: done, view: 'sources' })).kind, 'noSources');
 });
 
 test('aFailedFillKeepsTheBoxOpenUntilTheSourcesAreAskedAgain', () => {

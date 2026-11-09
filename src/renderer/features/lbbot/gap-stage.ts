@@ -74,6 +74,7 @@ export type GapRecord = Pick<
     | 'noSourceReason'
     | 'present'
     | 'sources'
+    | 'sourcesTotal'
     | 'sourceTask'
     | 'stalledPlacement'
     | 'status'
@@ -184,6 +185,14 @@ export const gapStepState = (gap: Pick<LbBotGap, 'tracks'>): string => {
 export const gapReason = (gap: GapRecord): string =>
     gapFailReason(gap) || gap.sourceTask?.error || '';
 
+/**
+ * B-377: lb-bot found sources this record does not list. The ledger's `/lb/fills` summary is the
+ * gap view with its source rows dropped (`sourcesTotal` kept), and it is written over the cache as
+ * a search ends; the full read with the rows follows. Until then the empty list is not an answer.
+ */
+export const gapRowsOwed = (gap: Pick<GapRecord, 'sources' | 'sourcesTotal'>): boolean =>
+    gap.sources.length === 0 && (gap.sourcesTotal ?? 0) > 0;
+
 export const gapStage = (input: GapInput): GapStage => {
     const { fill, gap } = input;
     if (!gap) {
@@ -247,7 +256,8 @@ export const gapStage = (input: GapInput): GapStage => {
         };
     }
     if (input.view === 'sources') {
-        if (searching) return { kind: 'searching' };
+        // The rows of a finished search still on their way: still the search's, not "none".
+        if (searching || gapRowsOwed(gap)) return { kind: 'searching' };
         if (gap.sources.length > 0) {
             return {
                 kind: 'choosing',
