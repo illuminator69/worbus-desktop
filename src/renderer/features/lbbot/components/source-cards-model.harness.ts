@@ -136,6 +136,9 @@ test('a refusal says the list is stale by its code, else by its status, never by
     // lb-bot's /api/gaps/<id>/fetch: the card's index is out of the kept list, or there is none.
     assert.equal(refusalSaysListIsStale({ code: 'bad_source', status: 400 }), true);
     assert.equal(refusalSaysListIsStale({ code: 'no_sources', status: 400 }), true);
+    // Phase A (B-360): lb-bot addresses a source by its folder's id and refuses one today's list
+    // does not hold with 409 `stale_source`: a newer search replaced the card's list.
+    assert.equal(refusalSaysListIsStale({ code: 'stale_source', status: 409 }), true);
     // Other reasons with a code: Search again would not help.
     assert.equal(refusalSaysListIsStale({ code: 'nothing_to_fetch', status: 400 }), false);
     assert.equal(refusalSaysListIsStale({ code: 'not_found', status: 410 }), false);
