@@ -3,7 +3,12 @@ import test from 'node:test';
 
 import type { ArmedSeek } from './armed-seek.ts';
 
-import { armedSeekOnTrack, seekOverArmedSeeks } from './armed-seek.ts';
+import {
+    armedSeekOnTrack,
+    armedSeeksAfterRowMove,
+    landingSeekFires,
+    seekOverArmedSeeks,
+} from './armed-seek.ts';
 
 /**
  * B-111 (review finding 1):  node --test src/renderer/features/hub/utils/armed-seek.harness.ts
@@ -45,4 +50,28 @@ test('anArmedSeekLandsOnItsTrackOnlyAndExpires', () => {
     assert.deepEqual(armedSeekOnTrack(waiting, 1, 50, TTL), { keep: waiting, land: null });
     assert.deepEqual(armedSeekOnTrack(waiting, 2, TTL + 1, TTL), { keep: null, land: null });
     seekOverArmedSeeks(30, null, null); // nothing armed: nothing to move
+});
+
+// Second review, finding 1: a `jump` (or a queueChanged that replaces the playing track) inside
+// the 150 ms after a transfer's track became current. The landing seek still fired, onto the
+// jumped-to track, at the transfer's offset: Next pressed at once started the next track at 2:00.
+// The row moved, so the seeks armed for the load's row go, and the timer that finds its seek gone
+// does nothing.
+test('aJumpWhileTheArmedSeekLandsCancelsIt', () => {
+    const { keep, land } = armedSeekOnTrack(armed(120), 2, 50, TTL);
+    assert.ok(land);
+    const after = armedSeeksAfterRowMove(keep, land);
+    assert.deepEqual(after, { landing: null, waiting: null }, 'the load seek outlived the jump');
+    assert.equal(landingSeekFires(after.landing, land), false, 'it landed on the jumped-to track');
+});
+
+test('aJumpBeforeTheTrackArrivesDropsTheArmedSeek', () => {
+    const after = armedSeeksAfterRowMove(armed(120), null);
+    assert.equal(after.waiting, null);
+});
+
+test('aLandingSeekNobodyCancelledFires', () => {
+    const { land } = armedSeekOnTrack(armed(120), 2, 50, TTL);
+    assert.ok(land);
+    assert.equal(landingSeekFires(land, land), true);
 });

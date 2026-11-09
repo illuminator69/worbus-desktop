@@ -8,6 +8,8 @@ import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
 import {
     type ArmedSeek,
     armedSeekOnTrack,
+    armedSeeksAfterRowMove,
+    landingSeekFires,
     seekOverArmedSeeks,
 } from '/@/renderer/features/hub/utils/armed-seek';
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
@@ -1074,10 +1076,14 @@ export const useHub = () => {
                     mediaStop({ reset: true });
                     clearQueue();
                     break;
-                case 'jump':
+                case 'jump': {
                     notePlayRequest('hub'); // B-058: a controller asked for this play
+                    const kept = armedSeeksAfterRowMove(pendingSeek.current, landingSeek.current);
+                    pendingSeek.current = kept.waiting;
+                    landingSeek.current = kept.landing;
                     mediaPlayByIndex(msg.index);
                     break;
+                }
                 case 'load': {
                     // The hub places the playhead from here on: the startup seek to where
                     // this device was when it closed must not take it back on first play.
@@ -1241,6 +1247,9 @@ export const useHub = () => {
                     // The playing track is gone (removed from under us). Its replacement has
                     // to be loaded for real — from the top, since there is no position to
                     // carry across. PROTOCOL §5.2: don't START playback if we were paused.
+                    const kept = armedSeeksAfterRowMove(pendingSeek.current, landingSeek.current);
+                    pendingSeek.current = kept.waiting;
+                    landingSeek.current = kept.landing;
                     setQueue(songs, nextIndex, 0, wasPlaying);
                     // I-031: setQueue leaves the timestamp store where the removed track was
                     // until its restore seeks to 0 some 100 ms on, and the report that follows
@@ -2103,7 +2112,9 @@ export const useHub = () => {
                     // Small delay so the engine finishes loading the new source
                     // before the seek (same approach as use-queue-restore).
                     setTimeout(() => {
+                        const fires = landingSeekFires(landingSeek.current, pending);
                         if (landingSeek.current === pending) landingSeek.current = null;
+                        if (!fires) return;
                         mediaSeekToTimestamp(pending.sec);
                         if (pending.pause) {
                             // A load that raced its pause can still start playback

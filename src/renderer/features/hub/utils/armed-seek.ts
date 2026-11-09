@@ -46,3 +46,15 @@ export const seekOverArmedSeeks = (
     if (waiting) waiting.sec = sec;
     if (landing) landing.sec = sec;
 };
+
+/**
+ * A `jump`, or a `queueChanged` that replaced the playing track: what stays armed (`waiting`) and
+ * landing. Kept as they were.
+ */
+export const armedSeeksAfterRowMove = (
+    waiting: ArmedSeek | null,
+    landing: ArmedSeek | null,
+): { landing: ArmedSeek | null; waiting: ArmedSeek | null } => ({ landing, waiting });
+
+/** The landing timer for `pending` fired (`current`: use-hub's landingSeek now): whether it seeks. */
+export const landingSeekFires = (_current: ArmedSeek | null, _pending: ArmedSeek): boolean => true;
