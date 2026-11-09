@@ -144,10 +144,12 @@ export const discographyChips = (
 };
 
 /**
- * Whether lb-bot can scan this artist: its discography read (`useLbBotDiscography`'s `data`)
- * stands for an answer.
+ * Whether lb-bot can scan this artist: its discography read (`useLbBotDiscography`'s `data`) is an
+ * answer. `undefined` is lb-bot not configured, and `null` is main's answer when the read failed
+ * (unreachable or erroring); `LbBotIndexButton` hides on both, so the line must too
+ * (navi-connect/CLAUDE.md §7: fail-soft, the page looks exactly as without lb-bot).
  */
-export const lbBotCanScan = (discography: unknown): boolean => discography !== undefined;
+export const lbBotCanScan = (discography: unknown): boolean => !!discography;
 
 /**
  * What the artist page's Discography line shows: its chips and row; its header and "Show all" over
