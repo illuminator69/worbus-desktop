@@ -20,7 +20,10 @@ import type { LbBotGap } from '/@/shared/types/lbbot-types';
 
 /** What the watch keeps that these rules read (`ActiveGap`'s fields). */
 export interface GapWatch {
+    /** When it settled (`settleGap`), for a settled watch. */
+    finishedAt?: number;
     lastProgressAt?: number;
+    settled?: boolean;
     /** When the action's answer arrived and the watch was started (`startGap`). */
     startedAt: number;
     /** The source task an `auto` or `search` answered with (`task_id`). */

@@ -111,3 +111,13 @@ test('aWatchWithNoProgressStillGivesUpAfterTheTimeout', () => {
         'gaveUp',
     );
 });
+
+test('aReadSentBeforeACancelsAnswerDoesNotReopenTheWatch', () => {
+    // VM walk (B-233): Cancel request settles the watch `cancelled`, and a settled watch re-opens on
+    // a busy read (a fill started from another device). A read sent before the cancel's answer
+    // arrived still shows the transfer the user just cancelled; it re-opened the watch as running.
+    const watch = { finishedAt: 5000, settled: true, startedAt: 1000 };
+    const downloading = gap({ status: 'downloading' });
+    assert.equal(gapReadCounts(watch, downloading, 4900), false, 'a stale read undid the cancel');
+    assert.equal(gapReadCounts(watch, downloading, 5100), true, 'restarted elsewhere: re-opens');
+});
