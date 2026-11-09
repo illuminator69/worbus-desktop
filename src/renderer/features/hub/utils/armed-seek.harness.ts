@@ -58,15 +58,15 @@ test('anArmedSeekLandsOnItsTrackOnlyAndExpires', () => {
 // The row moved, so the seeks armed for the load's row go, and the timer that finds its seek gone
 // does nothing.
 test('aJumpWhileTheArmedSeekLandsCancelsIt', () => {
-    const { keep, land } = armedSeekOnTrack(armed(120), 2, 50, TTL);
+    const { land } = armedSeekOnTrack(armed(120), 2, 50, TTL);
     assert.ok(land);
-    const after = armedSeeksAfterRowMove(keep, land);
+    const after = armedSeeksAfterRowMove();
     assert.deepEqual(after, { landing: null, waiting: null }, 'the load seek outlived the jump');
     assert.equal(landingSeekFires(after.landing, land), false, 'it landed on the jumped-to track');
 });
 
 test('aJumpBeforeTheTrackArrivesDropsTheArmedSeek', () => {
-    const after = armedSeeksAfterRowMove(armed(120), null);
+    const after = armedSeeksAfterRowMove();
     assert.equal(after.waiting, null);
 });
 

@@ -49,12 +49,18 @@ export const seekOverArmedSeeks = (
 
 /**
  * A `jump`, or a `queueChanged` that replaced the playing track: what stays armed (`waiting`) and
- * landing. Kept as they were.
+ * landing. Nothing (B-111): both were the position of the row the load named, and the player is
+ * leaving that row. Since a jump no longer waits behind the load's proof, it can land inside the
+ * 150 ms before the landing seek fires, which then put the jumped-to track at the load's offset.
  */
-export const armedSeeksAfterRowMove = (
-    waiting: ArmedSeek | null,
-    landing: ArmedSeek | null,
-): { landing: ArmedSeek | null; waiting: ArmedSeek | null } => ({ landing, waiting });
+export const armedSeeksAfterRowMove = (): {
+    landing: ArmedSeek | null;
+    waiting: ArmedSeek | null;
+} => ({ landing: null, waiting: null });
 
-/** The landing timer for `pending` fired (`current`: use-hub's landingSeek now): whether it seeks. */
-export const landingSeekFires = (_current: ArmedSeek | null, _pending: ArmedSeek): boolean => true;
+/**
+ * The landing timer for `pending` fired (`current`: use-hub's landingSeek now): it seeks only while
+ * `pending` is still the landing seek, i.e. nothing cancelled it since it was scheduled.
+ */
+export const landingSeekFires = (current: ArmedSeek | null, pending: ArmedSeek): boolean =>
+    current === pending;

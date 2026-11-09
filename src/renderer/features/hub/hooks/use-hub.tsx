@@ -1078,7 +1078,7 @@ export const useHub = () => {
                     break;
                 case 'jump': {
                     notePlayRequest('hub'); // B-058: a controller asked for this play
-                    const kept = armedSeeksAfterRowMove(pendingSeek.current, landingSeek.current);
+                    const kept = armedSeeksAfterRowMove();
                     pendingSeek.current = kept.waiting;
                     landingSeek.current = kept.landing;
                     mediaPlayByIndex(msg.index);
@@ -1247,7 +1247,7 @@ export const useHub = () => {
                     // The playing track is gone (removed from under us). Its replacement has
                     // to be loaded for real — from the top, since there is no position to
                     // carry across. PROTOCOL §5.2: don't START playback if we were paused.
-                    const kept = armedSeeksAfterRowMove(pendingSeek.current, landingSeek.current);
+                    const kept = armedSeeksAfterRowMove();
                     pendingSeek.current = kept.waiting;
                     landingSeek.current = kept.landing;
                     setQueue(songs, nextIndex, 0, wasPlaying);
