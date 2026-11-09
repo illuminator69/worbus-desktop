@@ -1273,6 +1273,9 @@ export const useHub = () => {
                 }
                 case 'seek':
                     withdrawStartupSeek();
+                    // B-111: a load's armed seek still to land would put the player back at the
+                    // load's offset after this one; it lands here instead. (setQueue's own
+                    // restore seek, 100 ms in, fires before the armed one at 150 ms.)
                     seekOverArmedSeeks(
                         (msg.positionMs ?? 0) / 1000,
                         pendingSeek.current,

@@ -34,12 +34,15 @@ export const armedSeekOnTrack = (
 
 /**
  * A `do:seek` applied while seeks are armed or landing (`waiting`: the armed one; `landing`: one
- * whose track is current and whose seek has not fired yet).
+ * whose track is current and whose seek has not fired yet). B-111: the hub's later seek is the
+ * newer word on the offset, so both now land there. Left alone, the armed seek landed after it and
+ * put the player back at the load's offset. The play state (`pause`) is not the seek's to change.
  */
 export const seekOverArmedSeeks = (
-    _sec: number,
-    _waiting: ArmedSeek | null,
-    _landing: ArmedSeek | null,
+    sec: number,
+    waiting: ArmedSeek | null,
+    landing: ArmedSeek | null,
 ): void => {
-    // Nothing: the seek is applied to the player, and the armed one lands where it was aimed.
+    if (waiting) waiting.sec = sec;
+    if (landing) landing.sec = sec;
 };
