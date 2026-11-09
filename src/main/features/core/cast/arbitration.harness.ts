@@ -48,7 +48,11 @@ test('aBlipOfTheMainSocketDoesNotFreeTheSpeaker', () => {
     // 60 s later the main socket drops: scheduleReconnect forgets the registry and emits it.
     registry.connectionEnded();
     const during = input(registry.current(), { hubConnected: false, now: 60_000 });
-    assert.equal(reevaluateClaims(during), false, 'reevaluate must not claim on a forgotten registry');
+    assert.equal(
+        reevaluateClaims(during),
+        false,
+        'reevaluate must not claim on a forgotten registry',
+    );
     assert.notEqual(claimStep({ ...during, now: 61_000 }), 'connect', 'the claim timer neither');
 
     // The main socket is open again, its welcome not yet read.
@@ -68,10 +72,19 @@ test('aColdStartWaitsForTheFirstRegistryHoweverLongItTakes', () => {
     // waited 10 s and then claimed on nothing; since P3 a bridge cannot dial without the main
     // socket's live address anyway, so the bound bought nothing but the steal.
     const registry = createDeviceRegistry();
-    assert.notEqual(claimStep(input(registry.current(), { hubConnected: false, now: 2_000 })), 'connect');
-    assert.notEqual(claimStep(input(registry.current(), { hubConnected: false, now: 15_000 })), 'connect');
+    assert.notEqual(
+        claimStep(input(registry.current(), { hubConnected: false, now: 2_000 })),
+        'connect',
+    );
+    assert.notEqual(
+        claimStep(input(registry.current(), { hubConnected: false, now: 15_000 })),
+        'connect',
+    );
     // Open, welcome not read yet.
-    assert.notEqual(claimStep(input(registry.current(), { hubConnected: true, now: 15_000 })), 'connect');
+    assert.notEqual(
+        claimStep(input(registry.current(), { hubConnected: true, now: 15_000 })),
+        'connect',
+    );
 });
 
 test('aReleasedSpeakerIsClaimed', () => {

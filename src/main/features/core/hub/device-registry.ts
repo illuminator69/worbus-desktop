@@ -9,14 +9,6 @@
  * it from the phone's bridge.
  */
 
-/** Shape of a hub `DeviceInfo` row (PROTOCOL §3.2) — only the fields we arbitrate on. */
-export interface HubDeviceInfo {
-    bridgedBy?: null | string;
-    id: string;
-    online: boolean;
-    reachable?: boolean | null;
-}
-
 export interface DeviceRegistry {
     /** The connection it came from ended (a drop, a stop) or is being replaced. */
     connectionEnded: () => void;
@@ -24,6 +16,14 @@ export interface DeviceRegistry {
     current: () => HubDeviceInfo[] | null;
     /** A frame from the current connection; true when it carried the registry. */
     snoop: (msg: unknown) => boolean;
+}
+
+/** Shape of a hub `DeviceInfo` row (PROTOCOL §3.2) — only the fields we arbitrate on. */
+export interface HubDeviceInfo {
+    bridgedBy?: null | string;
+    id: string;
+    online: boolean;
+    reachable?: boolean | null;
 }
 
 export const createDeviceRegistry = (): DeviceRegistry => {
@@ -34,7 +34,7 @@ export const createDeviceRegistry = (): DeviceRegistry => {
         },
         current: () => rows,
         snoop: (msg) => {
-            const m = msg as { devices?: unknown; t?: unknown } | null;
+            const m = msg as null | { devices?: unknown; t?: unknown };
             if (m?.t !== 'welcome' && m?.t !== 'devices') return false;
             if (!Array.isArray(m.devices)) return false;
             rows = m.devices as HubDeviceInfo[];

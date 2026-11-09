@@ -153,6 +153,9 @@ class CastDeviceBridge {
     /** B-047: the last reason maybeAdopt skipped, so a skip is logged once, not per frame. */
     private adoptSkipLogged = '';
 
+    /** B-107: the last claim found no registry; the next `devices` event re-runs the claim. */
+    private awaitingRegistry = false;
+
     private backoffMs = INITIAL_BACKOFF_MS;
 
     private backoffResetTimer: NodeJS.Timeout | null = null;
@@ -170,9 +173,6 @@ class CastDeviceBridge {
      * shared `teardownCast()` — so a losing attempt destroyed the winning attempt's live session.
      */
     private castSetup: null | Promise<import('castv2-client').CastPlayer> = null;
-
-    /** B-107: the last claim found no registry; the next `devices` event re-runs the claim. */
-    private awaitingRegistry = false;
 
     private claimTimer: NodeJS.Timeout | null = null;
 
@@ -195,16 +195,6 @@ class CastDeviceBridge {
 
     private lastPositionMs = 0;
 
-    /**
-     * The load currently in progress, so a second command can wait for it rather than race it.
-     *
-     * `castSetup` already stops two loads from building two sessions; this stops them issuing two
-     * LOADs into one. The pair matters because the second LOAD wins, and a `do:play` arriving
-     * mid-transfer carries a `lastPositionMs` that is older than the position the transfer asked
-     * for — so the race silently rewound playback.
-     */
-    private loadInFlight: null | Promise<boolean> = null;
-
     /** B-106: the load procedure, its deadline and its answer to the hub (cast-load.ts). */
     private readonly loader = createCastLoader<import('castv2-client').CastPlayer>({
         ensureCast: () => this.ensureCast(),
@@ -222,6 +212,16 @@ class CastDeviceBridge {
         sendLoaded: (frame) => this.send(frame),
         teardown: () => this.teardownCast(),
     });
+
+    /**
+     * The load currently in progress, so a second command can wait for it rather than race it.
+     *
+     * `castSetup` already stops two loads from building two sessions; this stops them issuing two
+     * LOADs into one. The pair matters because the second LOAD wins, and a `do:play` arriving
+     * mid-transfer carries a `lastPositionMs` that is older than the position the transfer asked
+     * for — so the race silently rewound playback.
+     */
+    private loadInFlight: null | Promise<boolean> = null;
 
     /** Worbus P2: the receiver app session this bridge launched or joined. */
     private ownAppSessionId: null | string = null;
@@ -593,6 +593,24 @@ class CastDeviceBridge {
     }
 
     /**
+     * Is another client already bridging this speaker? PROTOCOL §12.2 step 1.
+     *
+     * Read off the MAIN hub client's registry, not this bridge's own socket: the bridge
+     * socket *is* the device being claimed, so by the time it could read `devices` the
+     * claim has already happened and the hub has already evicted somebody. That
+     * chicken-and-egg is why the desktop bridge used to register unconditionally while
+     * Worbus for Android implemented the full rule — the two then took turns every second.
+     */
+    private arbitrationInput(): ArbitrationInput {
+        return {
+            castHubId: this.hubDeviceId,
+            registry: getHubDevices(),
+            // Our own previous socket doesn't count as a competitor.
+            selfHubId: getHubDeviceId(),
+        };
+    }
+
+    /**
      * Build a session: reuse a proven one, otherwise launch, retrying a cancelled launch.
      *
      * Only ever called through [ensureCast], which guarantees one at a time.
@@ -772,24 +790,6 @@ class CastDeviceBridge {
             `[cast-bridge] ${this.friendlyName}: claimed the idle active slot ` +
                 `(index=${this.index}, ${this.lastPositionMs}ms)`,
         );
-    }
-
-    /**
-     * Is another client already bridging this speaker? PROTOCOL §12.2 step 1.
-     *
-     * Read off the MAIN hub client's registry, not this bridge's own socket: the bridge
-     * socket *is* the device being claimed, so by the time it could read `devices` the
-     * claim has already happened and the hub has already evicted somebody. That
-     * chicken-and-egg is why the desktop bridge used to register unconditionally while
-     * Worbus for Android implemented the full rule — the two then took turns every second.
-     */
-    private arbitrationInput(): ArbitrationInput {
-        return {
-            castHubId: this.hubDeviceId,
-            registry: getHubDevices(),
-            // Our own previous socket doesn't count as a competitor.
-            selfHubId: getHubDeviceId(),
-        };
     }
 
     /**
@@ -1327,19 +1327,23 @@ class CastDeviceBridge {
             streamType: 'BUFFERED',
         };
         return (target, answer) => {
-            target.load(media, { autoplay: play, currentTime: positionMs / 1000 }, (err, status) => {
-                if (!err) {
-                    log.info(
-                        `[cast-bridge] ${this.friendlyName}: load ok → ` +
-                            `${status?.playerState ?? 'no status'}`,
-                    );
-                    // Worbus P2: the media session this LOAD started is this bridge's.
-                    if (typeof status?.mediaSessionId === 'number') {
-                        this.ownMediaSessionId = status.mediaSessionId;
+            target.load(
+                media,
+                { autoplay: play, currentTime: positionMs / 1000 },
+                (err, status) => {
+                    if (!err) {
+                        log.info(
+                            `[cast-bridge] ${this.friendlyName}: load ok → ` +
+                                `${status?.playerState ?? 'no status'}`,
+                        );
+                        // Worbus P2: the media session this LOAD started is this bridge's.
+                        if (typeof status?.mediaSessionId === 'number') {
+                            this.ownMediaSessionId = status.mediaSessionId;
+                        }
                     }
-                }
-                answer(err);
-            });
+                    answer(err);
+                },
+            );
         };
     }
 

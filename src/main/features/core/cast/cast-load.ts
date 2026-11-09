@@ -22,9 +22,6 @@
  * a transfer's LOAD is out replaces that LOAD, and its outcome answers the transfer.
  */
 
-/** The speaker's answer to one LOAD: no error means it took the media. */
-export type LoadAnswer = (err?: Error | null) => void;
-
 export interface CastLoadDeps<P> {
     /** A live receiver session, building one if needed (index.ts `ensureCast`). */
     ensureCast: () => Promise<P>;
@@ -37,11 +34,14 @@ export interface CastLoadDeps<P> {
     teardown: () => void;
 }
 
-/** Sends LOAD for the current track to `player`; `answer` is called once the speaker replies. */
-export type SendLoad<P> = (player: P, answer: LoadAnswer) => void;
+/** The speaker's answer to one LOAD: no error means it took the media. */
+export type LoadAnswer = (err?: Error | null) => void;
 
 /** How a load ended: the speaker took it, it could not, or nobody wants its answer any more. */
 export type LoadResult = 'abandoned' | 'failed' | 'ok';
+
+/** Sends LOAD for the current track to `player`; `answer` is called once the speaker replies. */
+export type SendLoad<P> = (player: P, answer: LoadAnswer) => void;
 
 export const LOAD_ANSWER_MS = 10_000;
 export const RETRY_BREATHE_MS = 1200;
@@ -54,19 +54,19 @@ export interface CastLoader<P> {
         directive: { timeoutMs?: unknown; transferId?: unknown },
         sendLoad: null | SendLoad<P>,
     ) => Promise<LoadResult>;
-    /** A load this bridge starts itself (a jump, a reload after a failed seek or play). */
-    reload: (sendLoad: SendLoad<P>) => Promise<LoadResult>;
     /** `do:release`: the session is leaving this speaker. */
     release: () => void;
+    /** A load this bridge starts itself (a jump, a reload after a failed seek or play). */
+    reload: (sendLoad: SendLoad<P>) => Promise<LoadResult>;
 }
-
-type EndReason = 'deadline' | 'released' | 'replaced';
 
 interface Attempt {
     ended: EndReason | null;
     /** Called once when it ends; each wait inside the attempt registers one. */
     onEnd: Set<() => void>;
 }
+
+type EndReason = 'deadline' | 'released' | 'replaced';
 
 interface PendingAnswer {
     timer: null | ReturnType<typeof setTimeout>;
@@ -173,18 +173,12 @@ export const createCastLoader = <P>(deps: CastLoadDeps<P>): CastLoader<P> => {
                     // Breathe before retrying: a failed connect kicks off an mDNS re-query, and
                     // if the device has moved this is the window in which its new address lands
                     // (updateHost). Retrying instantly would just dial the stale one again.
-                    await within(
-                        attempt,
-                        new Promise((r) => setTimeout(r, RETRY_BREATHE_MS)),
-                    );
+                    await within(attempt, new Promise((r) => setTimeout(r, RETRY_BREATHE_MS)));
                     const freshPlayer = await within(attempt, deps.ensureCast());
                     await within(attempt, loadOnce(attempt, freshPlayer, sendLoad));
                 } catch (retryError) {
                     if (retryError instanceof LoadAbandoned) throw retryError;
-                    deps.log(
-                        'error',
-                        `giving up on this load (${(retryError as Error).message})`,
-                    );
+                    deps.log('error', `giving up on this load (${(retryError as Error).message})`);
                     deps.teardown();
                     return 'failed';
                 }

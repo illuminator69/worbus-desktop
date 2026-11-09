@@ -5,19 +5,11 @@ import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
 import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
+import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     createDirectiveRunner,
     type Handled,
 } from '/@/renderer/features/hub/utils/directive-runner';
-import {
-    closeLoad,
-    expectLoad,
-    type LoadExpectation,
-    loadProven,
-    type PlayerLook,
-    reaimLoad,
-} from '/@/renderer/features/hub/utils/load-outcome';
-import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     DoExit,
     echoDisconnected,
@@ -44,6 +36,14 @@ import {
     silentSignIn,
     upgradeFromToken,
 } from '/@/renderer/features/hub/utils/hub-signin-actions';
+import {
+    closeLoad,
+    expectLoad,
+    type LoadExpectation,
+    loadProven,
+    type PlayerLook,
+    reaimLoad,
+} from '/@/renderer/features/hub/utils/load-outcome';
 import {
     adoptClaimDelay,
     GuardWindow,
@@ -1167,7 +1167,12 @@ export const useHub = () => {
                         if (!outcome.ok) {
                             // A later play or pause set the play state: say so, touch nothing.
                             if (exp.overridden) {
-                                hub?.send({ error: outcome.error, ok: false, t: 'loaded', transferId });
+                                hub?.send({
+                                    error: outcome.error,
+                                    ok: false,
+                                    t: 'loaded',
+                                    transferId,
+                                });
                                 return 'silent';
                             }
                             return refuse(outcome.error);

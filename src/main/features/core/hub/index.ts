@@ -452,6 +452,13 @@ function emitStatus(status: 'disconnected' | 'oldServer' | 'signedOut'): void {
     getMainWindow()?.webContents.send('hub-message', JSON.stringify({ t: status }));
 }
 
+/** The registry is unknown from here (device-registry.ts); the cast bridges hear it at once. */
+function forgetRegistry(): void {
+    if (registry.current() === null) return;
+    registry.connectionEnded();
+    hubEvents.emit('devices', null);
+}
+
 /**
  * Look at the link now, instead of when the backoff or the heartbeat gets round to it.
  *
@@ -572,13 +579,6 @@ function scheduleReconnect(socket: undefined | WebSocket, gen: number): void {
         reconnectTimer = undefined;
         connect();
     }, delay);
-}
-
-/** The registry is unknown from here (device-registry.ts); the cast bridges hear it at once. */
-function forgetRegistry(): void {
-    if (registry.current() === null) return;
-    registry.connectionEnded();
-    hubEvents.emit('devices', null);
 }
 
 function send(obj: unknown): void {

@@ -20,11 +20,11 @@ import { getDirectPlayProfiles } from './direct-play-profiles.ts';
  */
 
 const PLAYABLE = new Set([
+    'audio/flac',
+    'audio/mp4; codecs="mp4a.40.2"',
     'audio/mpeg',
     'audio/ogg; codecs="opus"',
-    'audio/flac',
     'audio/wav',
-    'audio/mp4; codecs="mp4a.40.2"',
 ]);
 
 let constructed = 0;

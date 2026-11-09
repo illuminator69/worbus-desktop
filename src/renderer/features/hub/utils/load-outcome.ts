@@ -49,7 +49,10 @@ export const expectLoad = (index: number, sec: number, wantPause: boolean): Load
 });
 
 /** Has the load been established? `onTarget` says which way it is still short, for the error. */
-export const loadProven = (exp: LoadExpectation, look: PlayerLook): { ok: true } | { ok: false; onTarget: boolean } => {
+export const loadProven = (
+    exp: LoadExpectation,
+    look: PlayerLook,
+): { ok: false; onTarget: boolean } | { ok: true } => {
     // The hub's index is a row of the queue, and with shuffle on the store's index is a position
     // in the shuffled order: either counts (I-031).
     const onTarget = look.storeIndex === exp.index || look.rowIndex === exp.index;
