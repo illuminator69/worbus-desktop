@@ -23,7 +23,6 @@ import { Platform } from '/@/shared/types/types';
 const RAIL_ICON_NAMES: Record<string, 'activity' | 'attention' | 'library'> = {
     activity: 'activity',
     library: 'library',
-    needsAttention: 'attention',
 };
 
 export const CollapsedSidebar = () => {

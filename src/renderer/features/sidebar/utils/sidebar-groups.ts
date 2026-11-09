@@ -8,14 +8,14 @@
 export interface SidebarContext {
     /**
      * Worbus P2: the signed-in user is an admin (`hub.store.user`). Absent (every caller before
-     * P2, an older hub) is today's behaviour: shown. Needs attention and Library Matches are
-     * admin surfaces; Activity already follows `downloadsShown`.
+     * P2, an older hub) is today's behaviour: shown. The attention badge and Library Matches are
+     * admin surfaces; Activity follows `downloadsShown` (B-374).
      */
     admin?: boolean;
     attentionCount: number;
     /**
      * Worbus P1: lb-bot can download (its mode is not "off"; unknown = an older peer = true).
-     * While false there is no Activity, and Needs attention shows only with failed ledger rows.
+     * While false, Activity shows only for an admin with failed ledger rows.
      */
     downloadsShown: boolean;
     lbBotAvailable: boolean;
@@ -98,20 +98,19 @@ export const sidebarGroups = (
     if (lb) main.push({ id: 'fresh', label: 'Fresh', route: routes.fresh });
 
     const you: SidebarEntry[] = [];
-    // Downloading off: nothing new is fetched, so Activity goes; Needs attention stays only for
-    // the failures an earlier "on" period left in the ledger (Worbus for desktop's page is that ledger).
+    // B-374: one entry for the one page (/downloads, its Needs attention section first). The
+    // attention count is an admin's, so it is their badge. Downloading off: nothing new is
+    // fetched, so Activity stays only for an admin while the ledger holds failures from an
+    // earlier "on" period, which would otherwise be unreachable.
     const admin = ctx.admin !== false;
-    if (lb && admin && (ctx.downloadsShown || ctx.attentionCount > 0)) {
+    const attention = admin && ctx.attentionCount > 0;
+    if (lb && (ctx.downloadsShown || attention)) {
         you.push({
-            id: 'needsAttention',
-            label: 'Needs attention',
+            id: 'activity',
+            label: 'Activity',
             route: routes.activity,
-            selectedRoute: '',
-            ...(ctx.attentionCount > 0 ? { badge: ctx.attentionCount } : {}),
+            ...(attention ? { badge: ctx.attentionCount } : {}),
         });
-    }
-    if (lb && ctx.downloadsShown) {
-        you.push({ id: 'activity', label: 'Activity', route: routes.activity });
     }
     // The Wishlist in both modes: while off it is where a missing album is kept for later.
     if (lb && ctx.wishlistSupported) {

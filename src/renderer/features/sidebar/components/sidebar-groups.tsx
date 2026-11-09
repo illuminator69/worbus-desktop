@@ -60,7 +60,6 @@ const LABEL_KEYS: Record<string, string> = {
     libraryMatches: 'page.sidebar.libraryMatches',
     libraryTools: 'page.sidebar.libraryTools',
     listening: 'page.sidebar.listening',
-    needsAttention: 'page.sidebar.needsAttention',
     'Now Playing': 'page.sidebar.nowPlaying',
     Playlists: 'page.sidebar.playlists',
     Radio: 'page.sidebar.radio',
@@ -77,7 +76,6 @@ const LABEL_KEYS: Record<string, string> = {
 const ICON_NAMES: Record<string, 'activity' | 'attention' | 'library'> = {
     activity: 'activity',
     library: 'library',
-    needsAttention: 'attention',
 };
 
 /**
