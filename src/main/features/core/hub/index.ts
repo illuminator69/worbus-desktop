@@ -227,6 +227,9 @@ function connect(): void {
     // the Server tab says "Not signed in" and its Sign in starts the transport again.
     if (!hubAuth.mayConnect(recordBases())) return;
     const gen = ++generation;
+    // B-107: the registry describes the connection this attempt replaces (a kick leaves the old
+    // socket to close as a superseded one, which clears nothing).
+    forgetRegistry();
     choosing = gen;
     void activeAddress.choose().then((url) => {
         if (gen !== generation) return;
@@ -556,12 +559,11 @@ function scheduleReconnect(socket: undefined | WebSocket, gen: number): void {
     // The server this connection spoke to is gone until the next welcome says otherwise.
     clearServerVersion();
     // The registry we snooped belongs to a connection that no longer exists. Cast
-    // arbitration reads it to decide whether a speaker is already bridged (§12.2), and an
-    // empty list is the "unknown, do not claim yet" state — which is the truth here. Left
+    // arbitration reads it to decide whether a speaker is already bridged (§12.2): left
     // stale, it would let the bridge claim a speaker on the strength of a device list
-    // that could be minutes old.
-    registry.connectionEnded();
-    hubEvents.emit('devices', registry.current());
+    // that could be minutes old; emptied, it read as "nobody bridges it" (B-107). It is
+    // unknown until the next connection's welcome.
+    forgetRegistry();
     if (!shouldRun || reconnectTimer) return;
     const jitter = Math.random() * 0.3 * backoffMs;
     const delay = backoffMs + jitter;
@@ -570,6 +572,13 @@ function scheduleReconnect(socket: undefined | WebSocket, gen: number): void {
         reconnectTimer = undefined;
         connect();
     }, delay);
+}
+
+/** The registry is unknown from here (device-registry.ts); the cast bridges hear it at once. */
+function forgetRegistry(): void {
+    if (registry.current() === null) return;
+    registry.connectionEnded();
+    hubEvents.emit('devices', null);
 }
 
 function send(obj: unknown): void {
@@ -608,7 +617,7 @@ function stop(): void {
     choosing = 0;
     const closing = ws;
     ws = undefined;
-    registry.connectionEnded();
+    forgetRegistry();
     clearServerVersion();
     activeAddress.reset();
     if (closing) emitServer();
@@ -881,10 +890,10 @@ function settingsEvent(): { credential: number; enabled: boolean; url: string } 
 export const hubEvents = new EventEmitter();
 
 /**
- * Last device registry the hub broadcast. Empty until the first `welcome`, which the
- * cast bridge treats as "unknown, don't claim yet" rather than "nobody is bridging".
+ * The device registry the hub last sent on the current connection; null (unknown) until its
+ * `welcome`, and again from the moment it ends. The cast bridge never claims on null (B-107).
  */
-export const getHubDevices = (): HubDeviceInfo[] => registry.current();
+export const getHubDevices = (): HubDeviceInfo[] | null => registry.current();
 
 /**
  * Whether the hub is switched on and where. The credential is `hubAuth`'s, never read here.

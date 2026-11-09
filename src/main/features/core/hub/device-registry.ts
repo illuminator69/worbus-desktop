@@ -1,6 +1,12 @@
 /**
  * The hub's device registry as the main hub client snoops it (PROTOCOL §3.2), for the cast
  * bridge's arbitration (§12.2). Out of index.ts so a harness can drive it (B-107). Pure.
+ *
+ * It belongs to one connection: `null` ("unknown") from the moment that connection ends or a new
+ * one is started until the new one's first `welcome` / `devices` frame. Unknown is not empty: an
+ * empty list is the hub saying nobody is there; `null` is this desktop not knowing. B-107: when a
+ * drop emptied the list instead, the cast bridge read "nobody is bridging this speaker" and took
+ * it from the phone's bridge.
  */
 
 /** Shape of a hub `DeviceInfo` row (PROTOCOL §3.2) — only the fields we arbitrate on. */
@@ -12,18 +18,19 @@ export interface HubDeviceInfo {
 }
 
 export interface DeviceRegistry {
-    /** The connection it came from ended (a drop, a stop). */
+    /** The connection it came from ended (a drop, a stop) or is being replaced. */
     connectionEnded: () => void;
-    current: () => HubDeviceInfo[];
+    /** The current connection's registry; null while it has not delivered one. */
+    current: () => HubDeviceInfo[] | null;
     /** A frame from the current connection; true when it carried the registry. */
     snoop: (msg: unknown) => boolean;
 }
 
 export const createDeviceRegistry = (): DeviceRegistry => {
-    let rows: HubDeviceInfo[] = [];
+    let rows: HubDeviceInfo[] | null = null;
     return {
         connectionEnded: () => {
-            rows = [];
+            rows = null;
         },
         current: () => rows,
         snoop: (msg) => {

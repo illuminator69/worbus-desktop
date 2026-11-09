@@ -25,7 +25,6 @@ import {
     getHubDevices,
     hubAuth,
     hubEvents,
-    isHubConnected,
 } from '../hub';
 import { type ArbitrationInput, claimStep, reevaluateClaims } from './arbitration';
 import { castHelloFrame } from './cast-hello';
@@ -171,9 +170,10 @@ class CastDeviceBridge {
      */
     private castSetup: null | Promise<import('castv2-client').CastPlayer> = null;
 
-    private claimTimer: NodeJS.Timeout | null = null;
+    /** B-107: the last claim found no registry; the next `devices` event re-runs the claim. */
+    private awaitingRegistry = false;
 
-    private readonly createdAt = Date.now();
+    private claimTimer: NodeJS.Timeout | null = null;
 
     private destroyed = false;
 
@@ -314,7 +314,15 @@ class CastDeviceBridge {
      * is what frees the speaker, and nothing else would ever tell us.
      */
     reevaluate(): void {
-        if (this.destroyed || this.ws || !this.standingDown) return;
+        if (this.destroyed || this.ws) return;
+        if (this.awaitingRegistry) {
+            // B-107: the claim timer found no registry; this is the next one (or still none).
+            if (getHubDevices() === null) return;
+            this.awaitingRegistry = false;
+            this.scheduleClaim();
+            return;
+        }
+        if (!this.standingDown) return;
         if (!reevaluateClaims(this.arbitrationInput())) return;
         log.info(`[cast-bridge] ${this.friendlyName}: speaker was released — claiming it`);
         this.standingDown = false;
@@ -759,9 +767,6 @@ class CastDeviceBridge {
     private arbitrationInput(): ArbitrationInput {
         return {
             castHubId: this.hubDeviceId,
-            createdAt: this.createdAt,
-            hubConnected: isHubConnected(),
-            now: Date.now(),
             registry: getHubDevices(),
             // Our own previous socket doesn't count as a competitor.
             selfHubId: getHubDeviceId(),
@@ -1685,8 +1690,10 @@ class CastDeviceBridge {
             if (this.destroyed || this.ws) return;
             if (Date.now() < this.standDownUntil) return;
             const step = claimStep(this.arbitrationInput());
-            if (step === 'check-again-soon') {
-                this.scheduleClaim(1000);
+            if (step === 'await-registry') {
+                // The main hub client has no registry from its current connection: unknown is
+                // not "free" (B-107). Its next `devices` event runs reevaluate, which comes back.
+                this.awaitingRegistry = true;
                 return;
             }
             if (step === 'stand-down') {
