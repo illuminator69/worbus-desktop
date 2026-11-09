@@ -136,3 +136,20 @@ export const refusalUnder = <R extends { sourceKey: string }>(
     refusal: null | R,
     source: Pick<LbBotGapSource, 'folder' | 'peer'>,
 ): null | R => (refusal && refusal.sourceKey === sourceKey(source) ? refusal : null);
+
+/**
+ * A folder's listing as `useGapSourceFiles` keeps it: lb-bot's answer, and the source list
+ * (`sourcesFoundAt`) the card was read from when it was asked.
+ */
+export interface KeptListing<R extends { ok: boolean }> {
+    listAt: number;
+    result: R;
+}
+
+/**
+ * Whether a chosen card's listing is asked of lb-bot: never once it has an answer.
+ */
+export const listingNeedsAsking = (
+    kept: KeptListing<{ ok: boolean }> | undefined,
+    _listAt: number,
+): boolean => !kept;

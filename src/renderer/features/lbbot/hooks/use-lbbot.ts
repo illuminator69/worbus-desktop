@@ -66,6 +66,8 @@ import { noteScanStarted } from '/@/renderer/features/discography/hooks/scan-ses
 import { allows, userAfterRefusal } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     isSourceVerified,
+    type KeptListing,
+    listingNeedsAsking,
     sourceKey,
 } from '/@/renderer/features/lbbot/components/source-cards-model';
 import { gapProgress } from '/@/renderer/features/lbbot/gap-stage';
@@ -2952,21 +2954,25 @@ export const useLbBotGap = (
  * index (review minor 11): after Search again an index names another folder,
  * whose card must not show the previous one's files.
  */
-export const useGapSourceFiles = (groupId: null | string) => {
-    const [files, setFiles] = useState<Record<string, LbBotResult<LbBotSourceFiles>>>({});
+export const useGapSourceFiles = (groupId: null | string, listAt: number) => {
+    const [files, setFiles] = useState<Record<string, KeptListing<LbBotResult<LbBotSourceFiles>>>>(
+        {},
+    );
     const [loading, setLoading] = useState<Record<string, boolean>>({});
 
     /** A card chosen opens its listing, fetched once and kept. */
     const open = useCallback(
         async (source: LbBotGapSource) => {
             const key = sourceKey(source);
-            if (files[key] || loading[key] || !lbBot || !groupId) return;
+            if (!listingNeedsAsking(files[key], listAt) || loading[key] || !lbBot || !groupId) {
+                return;
+            }
             setLoading((prev) => ({ ...prev, [key]: true }));
             const result = await lbBot.gapSourceFiles(groupId, source.id);
-            setFiles((prev) => ({ ...prev, [key]: result }));
+            setFiles((prev) => ({ ...prev, [key]: { listAt, result } }));
             setLoading((prev) => ({ ...prev, [key]: false }));
         },
-        [files, groupId, loading],
+        [files, groupId, listAt, loading],
     );
 
     /** What a chosen card shows: its listing, its loading, or why it could not be read; null
@@ -2974,7 +2980,7 @@ export const useGapSourceFiles = (groupId: null | string) => {
     const view = useCallback(
         (source: LbBotGapSource) => {
             const key = sourceKey(source);
-            const result = files[key];
+            const result = files[key]?.result;
             if (!result && !loading[key]) return null;
             return {
                 error: result && !result.ok ? result.error : '',

@@ -7,6 +7,7 @@ import {
     initialGapSelection,
     initialSelection,
     isSafeSource,
+    listingNeedsAsking,
     refusalSaysListIsStale,
     refusalUnder,
     shownSelection,
@@ -159,4 +160,16 @@ test('a refusal stays with the folder it was asked for, not with its place in th
     assert.equal(refusalUnder(refused, source({ folder: 'B', id: 0, peer: 'q' })), null);
     assert.equal(refusalUnder(refused, source({ folder: 'A', id: 3, peer: 'p' })), refused);
     assert.equal(refusalUnder(null, source({ folder: 'A', id: 0, peer: 'p' })), null);
+});
+
+test('a folder refused as stale is asked again once a newer list holds it', () => {
+    // Phase A (B-360): a card read from list A, opened after a search replaced it, is answered 409
+    // stale_source. Its folder can come back in list B under the same id (ids are folder
+    // identities), and opening it there must ask lb-bot again, not show A's refusal forever.
+    const refused = { listAt: 100, result: { ok: false } };
+    assert.equal(listingNeedsAsking(undefined, 100), true, 'never asked');
+    assert.equal(listingNeedsAsking(refused, 100), false, 'the same list: its answer stands');
+    assert.equal(listingNeedsAsking(refused, 200), true, 'a newer list: ask again');
+    const listed = { listAt: 100, result: { ok: true } };
+    assert.equal(listingNeedsAsking(listed, 200), false, 'a listing is the folder, kept');
 });

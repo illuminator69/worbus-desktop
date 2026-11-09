@@ -282,7 +282,7 @@ const GapBox = ({
         }),
     );
     const readGaveUp = gapReadGaveUp(failingSince, readAt);
-    const sourceFiles = useGapSourceFiles(groupId);
+    const sourceFiles = useGapSourceFiles(groupId, gap?.sourcesFoundAt ?? 0);
     const webUrl = useLbBotWebUrl();
     const albumControls = useAlbumOverrideControls();
     const busy = gapIsBusy(gap);
