@@ -24,6 +24,7 @@ import {
     withFound,
 } from './addresses';
 import { createHubAuth } from './auth';
+import { createDeviceRegistry, type HubDeviceInfo } from './device-registry';
 import {
     findHomeAddress,
     homeBesideNavidrome,
@@ -181,15 +182,10 @@ let credentialGeneration = 0;
 
 let ws: undefined | WebSocket;
 
-/** Shape of a hub `DeviceInfo` row (PROTOCOL §3.2) — only the fields we arbitrate on. */
-export interface HubDeviceInfo {
-    bridgedBy?: null | string;
-    id: string;
-    online: boolean;
-    reachable?: boolean | null;
-}
+export type { HubDeviceInfo } from './device-registry';
 
-let knownDevices: HubDeviceInfo[] = [];
+/** The registry snooped off this connection (device-registry.ts). */
+const registry = createDeviceRegistry();
 let reconnectTimer: NodeJS.Timeout | undefined;
 let backoffMs = INITIAL_BACKOFF_MS;
 let shouldRun = false;
@@ -375,12 +371,7 @@ function dial(url: string, gen: number): void {
             if (msg?.t === 'welcome') noteWelcomeServer(url, msg.server);
             // P4: `welcome.server.version`, for Export diagnostics' header.
             if (msg?.t === 'welcome') noteServerVersion(msg.server);
-            if (msg?.t === 'welcome' || msg?.t === 'devices') {
-                if (Array.isArray(msg.devices)) {
-                    knownDevices = msg.devices;
-                    hubEvents.emit('devices', knownDevices);
-                }
-            }
+            if (registry.snoop(msg)) hubEvents.emit('devices', registry.current());
         } catch {
             /* not our problem — the renderer owns protocol semantics */
         }
@@ -569,8 +560,8 @@ function scheduleReconnect(socket: undefined | WebSocket, gen: number): void {
     // empty list is the "unknown, do not claim yet" state — which is the truth here. Left
     // stale, it would let the bridge claim a speaker on the strength of a device list
     // that could be minutes old.
-    knownDevices = [];
-    hubEvents.emit('devices', knownDevices);
+    registry.connectionEnded();
+    hubEvents.emit('devices', registry.current());
     if (!shouldRun || reconnectTimer) return;
     const jitter = Math.random() * 0.3 * backoffMs;
     const delay = backoffMs + jitter;
@@ -617,7 +608,7 @@ function stop(): void {
     choosing = 0;
     const closing = ws;
     ws = undefined;
-    knownDevices = [];
+    registry.connectionEnded();
     clearServerVersion();
     activeAddress.reset();
     if (closing) emitServer();
@@ -893,7 +884,7 @@ export const hubEvents = new EventEmitter();
  * Last device registry the hub broadcast. Empty until the first `welcome`, which the
  * cast bridge treats as "unknown, don't claim yet" rather than "nobody is bridging".
  */
-export const getHubDevices = (): HubDeviceInfo[] => knownDevices;
+export const getHubDevices = (): HubDeviceInfo[] => registry.current();
 
 /**
  * Whether the hub is switched on and where. The credential is `hubAuth`'s, never read here.

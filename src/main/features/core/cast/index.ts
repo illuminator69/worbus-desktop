@@ -27,6 +27,7 @@ import {
     hubEvents,
     isHubConnected,
 } from '../hub';
+import { type ArbitrationInput, claimStep, reevaluateClaims } from './arbitration';
 import { castHelloFrame } from './cast-hello';
 import {
     adoptable,
@@ -89,11 +90,6 @@ const REFUSED_CODES = new Set([4001, 4005]);
 // registry and both claim. A random pause before claiming, then a re-check, settles
 // that without exchanging a single frame.
 const CLAIM_JITTER_MS = 3000;
-// An empty registry is ambiguous: nobody is bridging this speaker, OR the main hub
-// client hasn't delivered `welcome` yet. Claiming during that window is how the desktop
-// would steal a speaker Worbus for Android was already serving on every single launch. Wait for the
-// registry, but not forever — a hub that never connects must not disable casting.
-const REGISTRY_WAIT_MS = 10_000;
 // How long a hub connection must survive before it counts as "working" and the
 // reconnect backoff resets. Resetting it in `open` meant a socket that was accepted
 // and immediately evicted looked like a success every time, so the exponential backoff
@@ -319,7 +315,7 @@ class CastDeviceBridge {
      */
     reevaluate(): void {
         if (this.destroyed || this.ws || !this.standingDown) return;
-        if (this.claimedElsewhere()) return;
+        if (!reevaluateClaims(this.arbitrationInput())) return;
         log.info(`[cast-bridge] ${this.friendlyName}: speaker was released — claiming it`);
         this.standingDown = false;
         this.scheduleClaim();
@@ -760,11 +756,16 @@ class CastDeviceBridge {
      * chicken-and-egg is why the desktop bridge used to register unconditionally while
      * Worbus for Android implemented the full rule — the two then took turns every second.
      */
-    private claimedElsewhere(): boolean {
-        const row = getHubDevices().find((d) => d.id === this.hubDeviceId);
-        if (!row || !row.online) return false;
-        // Our own previous socket doesn't count as a competitor.
-        return row.bridgedBy !== getHubDeviceId();
+    private arbitrationInput(): ArbitrationInput {
+        return {
+            castHubId: this.hubDeviceId,
+            createdAt: this.createdAt,
+            hubConnected: isHubConnected(),
+            now: Date.now(),
+            registry: getHubDevices(),
+            // Our own previous socket doesn't count as a competitor.
+            selfHubId: getHubDeviceId(),
+        };
     }
 
     /**
@@ -1683,12 +1684,12 @@ class CastDeviceBridge {
             this.claimTimer = null;
             if (this.destroyed || this.ws) return;
             if (Date.now() < this.standDownUntil) return;
-            // Don't decide on a registry we haven't been given yet (see REGISTRY_WAIT_MS).
-            if (!isHubConnected() && Date.now() - this.createdAt < REGISTRY_WAIT_MS) {
+            const step = claimStep(this.arbitrationInput());
+            if (step === 'check-again-soon') {
                 this.scheduleClaim(1000);
                 return;
             }
-            if (this.claimedElsewhere()) {
+            if (step === 'stand-down') {
                 if (!this.standingDown) {
                     log.info(
                         `[cast-bridge] ${this.friendlyName}: already bridged by another ` +
