@@ -493,8 +493,15 @@ test('searchAgainNeverShowsTheFinishedSearchsLine', () => {
     // showed the previous, finished task's "ranking 3 peer(s)...". Only a task still searching
     // speaks; until the new one arrives the box says its own "Searching".
     const task = (status: string, current: string) => ({ current, status }) as LbBotGapTask;
-    assert.equal(searchProgressLine(task('complete', 'ranking 3 peer(s)...')), '', 'old line shown');
+    assert.equal(
+        searchProgressLine(task('complete', 'ranking 3 peer(s)...')),
+        '',
+        'old line shown',
+    );
     assert.equal(searchProgressLine(task('error', 'ranking 3 peer(s)...')), '');
-    assert.equal(searchProgressLine(task('running', '0 peer(s), 0 file(s)')), '0 peer(s), 0 file(s)');
+    assert.equal(
+        searchProgressLine(task('running', '0 peer(s), 0 file(s)')),
+        '0 peer(s), 0 file(s)',
+    );
     assert.equal(searchProgressLine(null), '');
 });
