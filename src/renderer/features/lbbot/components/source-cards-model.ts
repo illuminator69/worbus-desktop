@@ -147,9 +147,13 @@ export interface KeptListing<R extends { ok: boolean }> {
 }
 
 /**
- * Whether a chosen card's listing is asked of lb-bot: never once it has an answer.
+ * Whether a chosen card's listing is asked of lb-bot: when it never was, or when what is kept is
+ * a refusal about an earlier list. A listing describes the folder and is kept (cards are keyed by
+ * folder). A refusal describes the list the card came from: `stale_source` (B-360) says lb-bot's
+ * list no longer holds the folder, and the folder can come back in a later search under the same
+ * id, where asking again is the only way to see its files.
  */
 export const listingNeedsAsking = (
     kept: KeptListing<{ ok: boolean }> | undefined,
-    _listAt: number,
-): boolean => !kept;
+    listAt: number,
+): boolean => !kept || (!kept.result.ok && kept.listAt !== listAt);
