@@ -45,8 +45,15 @@ export type SendLoad<P> = (player: P, answer: LoadAnswer) => void;
 
 export const LOAD_ANSWER_MS = 10_000;
 export const RETRY_BREATHE_MS = 1200;
-/** Time kept back from the hub's budget for the answer's own trip (as the renderer's). */
-export const ACK_RESERVE_MS = 1500;
+/**
+ * Time kept back from the hub's budget for the answer's own trip. The hub's clock starts just
+ * after it writes `do:load` (hub.py `_settle_load_ack`), so this covers that frame's trip here,
+ * the `loaded` frame's trip back, and this process's event loop: the answer is sent from the
+ * LOAD's own callback, not found by a poll. Two WebSocket frames on the LAN take milliseconds;
+ * 500 ms is that with a wide margin. (The renderer keeps 1.5 s: it finds its outcome on a 100 ms
+ * poll of the player.) Unmeasured against a cold speaker: a walk must confirm it.
+ */
+export const ACK_RESERVE_MS = 500;
 
 export interface CastLoader<P> {
     /** A load of the hub's `do:load`; answers it with `loaded`. `null`: nothing to load. */

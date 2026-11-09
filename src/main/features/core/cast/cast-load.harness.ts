@@ -130,8 +130,8 @@ test('aSpeakerThatNeverAnswersIsAnsweredForInsideTheBudget', async () => {
 });
 
 test('aLoadThatLandsAfterTheDeadlineIsUndone', async () => {
-    // The speaker takes the LOAD at 9 s: after the deadline, before the hub's 10 s.
-    const { counts, frames, loader, sender, speaker } = setup([{ ms: 9_000 }]);
+    // The speaker takes the LOAD at 9.7 s: after the deadline, before the hub's 10 s.
+    const { counts, frames, loader, sender, speaker } = setup([{ ms: 9_700 }]);
     void loader.hubLoad({ timeoutMs: BUDGET_MS, transferId: 't7' }, sender('load'));
     await advance(12_000);
     assert.equal(frames.length, 1);
