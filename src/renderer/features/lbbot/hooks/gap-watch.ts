@@ -64,10 +64,14 @@ export const gapIsBusy = (gap: LbBotGap | null | undefined): boolean => {
 /**
  * Whether a read of the group (sent at `sentAt`) speaks for the fill the watch follows: it was
  * sent after the action's answer arrived (`startedAt`), or it names the watch's own task, which
- * lb-bot registered before it answered.
+ * lb-bot registered before it answered. A settled watch (a Cancel's answer settles it) re-opens
+ * only on a read sent after it settled: one in flight across the Cancel still shows the transfer
+ * the user just cancelled.
  */
-export const gapReadCounts = (watch: GapWatch, gap: LbBotGap, sentAt: number): boolean =>
-    sentAt >= watch.startedAt || (!!watch.taskId && gap.sourceTask?.id === watch.taskId);
+export const gapReadCounts = (watch: GapWatch, gap: LbBotGap, sentAt: number): boolean => {
+    if (watch.settled) return sentAt >= (watch.finishedAt ?? 0);
+    return sentAt >= watch.startedAt || (!!watch.taskId && gap.sourceTask?.id === watch.taskId);
+};
 
 /**
  * What the watch does with a read that counts: keep waiting, settle on what the group says
