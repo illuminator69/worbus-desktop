@@ -153,8 +153,12 @@ class CastDeviceBridge {
     /** B-047: the last reason maybeAdopt skipped, so a skip is logged once, not per frame. */
     private adoptSkipLogged = '';
 
-    /** B-107: the last claim found no registry; the next `devices` event re-runs the claim. */
-    private awaitingRegistry = false;
+    /**
+     * B-107: the last claim found no registry, and the next `devices` event re-runs it with the
+     * delay it was asked for (a reconnect asks for none, a new bridge for the jitter); null when
+     * no claim is waiting for one.
+     */
+    private awaitingRegistry: null | { delayMs: number | undefined } = null;
 
     private backoffMs = INITIAL_BACKOFF_MS;
 
@@ -337,8 +341,9 @@ class CastDeviceBridge {
         if (this.awaitingRegistry) {
             // B-107: the claim timer found no registry; this is the next one (or still none).
             if (getHubDevices() === null) return;
-            this.awaitingRegistry = false;
-            this.scheduleClaim();
+            const { delayMs } = this.awaitingRegistry;
+            this.awaitingRegistry = null;
+            this.scheduleClaim(delayMs);
             return;
         }
         if (!this.standingDown) return;
@@ -1688,7 +1693,7 @@ class CastDeviceBridge {
             if (step === 'await-registry') {
                 // The main hub client has no registry from its current connection: unknown is
                 // not "free" (B-107). Its next `devices` event runs reevaluate, which comes back.
-                this.awaitingRegistry = true;
+                this.awaitingRegistry = { delayMs };
                 return;
             }
             if (step === 'stand-down') {
