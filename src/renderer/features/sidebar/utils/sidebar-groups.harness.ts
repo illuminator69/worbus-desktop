@@ -90,21 +90,22 @@ test('noLbBotLeavesHomeLibrarySavedQueuesAndSettings', () => {
     assert.equal(group(groups, 'app')!.entries[0].route, '/settings');
 });
 
-test('lbBotAddsFreshNeedsAttentionActivity', () => {
+// B-374 (the owner's ruling, 2026-11-09): Needs attention and Activity were two entries for one
+// page (/downloads, Needs attention its first section). One entry now, Activity, which carries
+// the attention badge (admins only) and is selected on its page like any other.
+test('lbBotAddsFreshAndOneActivityEntry', () => {
     const { groups } = sidebarGroups(ctx({ lbBotAvailable: true }));
     assert.deepEqual(shape(groups), [
         'main: home, library, fresh',
-        'you: needsAttention, activity',
+        'you: activity',
         'listening: savedQueues',
         'app: settings',
     ]);
     const you = group(groups, 'you')!;
     assert.equal(you.label, 'You');
-    const [attention, activity] = you.entries;
-    assert.equal(attention.route, '/downloads');
-    assert.equal(attention.selectedRoute, '');
+    const [activity] = you.entries;
     assert.equal(activity.route, '/downloads');
-    assert.equal(activity.selectedRoute, undefined);
+    assert.equal(activity.selectedRoute, undefined, 'selected on its page, as any entry');
     assert.equal(group(groups, 'main')!.entries[2].route, '/fresh');
 });
 
@@ -116,8 +117,8 @@ test('theBadgeAppearsOnlyAboveZero', () => {
         sidebarGroups(ctx({ attentionCount: 2, lbBotAvailable: true })).groups,
         'you',
     )!;
+    assert.deepEqual(ids(two.entries), ['activity']);
     assert.equal(two.entries[0].badge, 2);
-    assert.equal(two.entries[1].badge, undefined);
     // Without lb-bot there is no row to carry it, whatever the count says.
     assert.equal(group(sidebarGroups(ctx({ attentionCount: 3 })).groups, 'you'), undefined);
 });
@@ -294,7 +295,7 @@ test('sidebar_off_keeps_attention_only_with_failures', () => {
         ctx({ attentionCount: 2, downloadsShown: downloadsShown('off'), lbBotAvailable: true }),
     );
     const you = group(groups, 'you')!;
-    assert.deepEqual(ids(you.entries), ['needsAttention']);
+    assert.deepEqual(ids(you.entries), ['activity'], 'the failures stay reachable');
     assert.equal(you.entries[0].badge, 2);
     assert.equal(you.entries[0].route, '/downloads');
 });
@@ -306,7 +307,7 @@ test('sidebar_on_unchanged', () => {
         );
         const before = sidebarGroups(ctx({ attentionCount, lbBotAvailable: true }));
         assert.deepEqual(on, before);
-        assert.deepEqual(ids(group(on.groups, 'you')!.entries), ['needsAttention', 'activity']);
+        assert.deepEqual(ids(group(on.groups, 'you')!.entries), ['activity']);
     }
 });
 
@@ -316,7 +317,7 @@ test('sidebar_unknown_unchanged', () => {
     );
     assert.deepEqual(shape(unknown.groups), [
         'main: home, library, fresh',
-        'you: needsAttention, activity',
+        'you: activity',
         'listening: savedQueues',
         'app: settings',
     ]);
@@ -338,7 +339,7 @@ test('wishlist_in_sidebar_both_modes', () => {
     }
     // On: after Needs attention and Activity.
     const on = sidebarGroups(ctx({ lbBotAvailable: true, wishlistSupported: true })).groups;
-    assert.deepEqual(ids(group(on, 'you')!.entries), ['needsAttention', 'activity', 'wishlist']);
+    assert.deepEqual(ids(group(on, 'you')!.entries), ['activity', 'wishlist']);
     // Off with no failures: the Wishlist alone.
     const off = sidebarGroups(
         ctx({ downloadsShown: false, lbBotAvailable: true, wishlistSupported: true }),
@@ -352,4 +353,17 @@ test('wishlist_absent_when_route_unsupported', () => {
     // And without lb-bot, whatever the hub advertises.
     const down = sidebarGroups(ctx({ wishlistSupported: true }));
     assert.equal(group(down.groups, 'you'), undefined);
+});
+
+test('the attention badge is an admin one; Activity itself follows downloads', () => {
+    const member = (patch: Partial<SidebarContext>) =>
+        group(
+            sidebarGroups(ctx({ admin: false, attentionCount: 2, lbBotAvailable: true, ...patch }))
+                .groups,
+            'you',
+        );
+    const on = member({ downloadsShown: true })!;
+    assert.deepEqual(ids(on.entries), ['activity']);
+    assert.equal('badge' in on.entries[0], false, 'no admin badge for a member');
+    assert.equal(member({ downloadsShown: false }), undefined, 'off: the failures are an admin matter');
 });

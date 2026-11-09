@@ -245,7 +245,7 @@ test('older hub without user is as today', () => {
         assert.equal(allows(today, gate as never), true, gate);
     // The sidebar with no admin field (every caller before P2) is the same as admin.
     assert.deepEqual(sidebar(undefined), sidebar(true));
-    assert.ok(sidebar(undefined).includes('needsAttention'));
+    assert.ok(sidebar(undefined).includes('activity'));
     assert.ok(sidebar(undefined).includes('libraryMatches'));
     assert.equal(
         userAfterRefusal(null, 'admin_only'),
