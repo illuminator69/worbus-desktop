@@ -2351,7 +2351,8 @@ const gapAction = async (route: string, body: Json): Promise<LbBotGapAction> => 
     const ok = result.data?.ok !== false;
     const code = ok ? '' : str(result.data?.code);
     // B-233: what the gap watch starts from (LbBotGapAction).
-    const gap = ok && result.data?.gap && typeof result.data.gap === 'object' ? result.data.gap : null;
+    const gap =
+        ok && result.data?.gap && typeof result.data.gap === 'object' ? result.data.gap : null;
     const taskId = ok ? str(result.data?.task_id) : '';
     return {
         ...(code ? { code } : {}),

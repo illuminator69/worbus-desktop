@@ -123,8 +123,8 @@ export const reportedPositionMs = (exp: LoadExpectation | null, playerMs: number
  * not start and nothing later set the play state, so use-hub refuses it (failedLoadExit).
  */
 export type LoadEnding =
-    | { exit: 'echo' | 'silent'; kind: 'superseded' }
     | { exit: 'echo' | 'silent'; kind: 'answered'; ok: boolean }
+    | { exit: 'echo' | 'silent'; kind: 'superseded' }
     | { kind: 'refuse' };
 
 export const loadEnding = (

@@ -5,6 +5,11 @@ import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
 import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
+import {
+    type ArmedSeek,
+    armedSeekOnTrack,
+    seekOverArmedSeeks,
+} from '/@/renderer/features/hub/utils/armed-seek';
 import { useServerKey } from '/@/renderer/features/hub/utils/current-server-key';
 import {
     createDirectiveRunner,
@@ -36,11 +41,6 @@ import {
     silentSignIn,
     upgradeFromToken,
 } from '/@/renderer/features/hub/utils/hub-signin-actions';
-import {
-    type ArmedSeek,
-    armedSeekOnTrack,
-    seekOverArmedSeeks,
-} from '/@/renderer/features/hub/utils/armed-seek';
 import {
     closeLoad,
     expectLoad,
@@ -557,17 +557,20 @@ export const useHub = () => {
     // `echo`: the report that follows `applied` moving. It is not gated on being the active
     // device: the hub decides who is, it has just sent this device a directive, and it reads
     // `applied` from every report.
-    const report = useCallback((overrides?: Record<string, unknown>, echo = false) => {
-        if (!hub || (!echo && !isActive())) return;
-        const player = readPlayer();
-        hub.send({
-            ...player,
-            applied: doEcho.current.applied,
-            positionMs: reportedPositionMs(livePendingLoad(), player.positionMs),
-            t: 'report',
-            ...overrides,
-        });
-    }, [livePendingLoad]);
+    const report = useCallback(
+        (overrides?: Record<string, unknown>, echo = false) => {
+            if (!hub || (!echo && !isActive())) return;
+            const player = readPlayer();
+            hub.send({
+                ...player,
+                applied: doEcho.current.applied,
+                positionMs: reportedPositionMs(livePendingLoad(), player.positionMs),
+                t: 'report',
+                ...overrides,
+            });
+        },
+        [livePendingLoad],
+    );
 
     // I-033: tell the hub this device's volume, so its row in every picker shows the level it
     // is really at - set here, by the OS (MPRIS), by a DLNA renderer or by a `do:setVolume`

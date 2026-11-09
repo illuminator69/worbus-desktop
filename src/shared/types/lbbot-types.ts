@@ -65,6 +65,15 @@ export interface LbBotDownloadResult {
 }
 
 /**
+ * A gap action's answer (`/lb/gap/search|auto|fetch|cancel`). B-233: what the ledger's gap watch
+ * starts from. `gap`: the group as lb-bot holds it right after the action (fetch and cancel read it
+ * under its lock after the enqueue or cancel; an `auto` for a fill already running answers it too).
+ * `taskId`: the source task a search or an auto started, which `/lb/gap`'s `sourceTask.id` names
+ * from the moment the POST returns.
+ */
+export type LbBotGapAction = LbBotResult<boolean> & { gap?: LbBotGap; taskId?: string };
+
+/**
  * One artist of lb-bot's library index as the change feed ships it — the whole
  * artist, every row, because a client only ever replaces an artist wholesale
  * (PLAN-lbbot-index-mirror-2026-09-23 §1: "artist-level replace"). `rows` are
@@ -160,15 +169,6 @@ export type LbBotQuality = 'flac-16-44' | 'flac-any' | 'highest-bitrate' | 'pref
  * on the Worbus for Android side, where the real cause was a hub that hadn't been restarted
  * and was 404ing every new route.
  */
-/**
- * A gap action's answer (`/lb/gap/search|auto|fetch|cancel`). B-233: what the ledger's gap watch
- * starts from. `gap`: the group as lb-bot holds it right after the action (fetch and cancel read it
- * under its lock after the enqueue or cancel; an `auto` for a fill already running answers it too).
- * `taskId`: the source task a search or an auto started, which `/lb/gap`'s `sourceTask.id` names
- * from the moment the POST returns.
- */
-export type LbBotGapAction = LbBotResult<boolean> & { gap?: LbBotGap; taskId?: string };
-
 export interface LbBotResult<T> {
     /** lb-bot's own machine-readable reason (`unknown_mbid`, `no_override`,
      *  `busy`), when a failure body carried one. Absent on a hub-minted failure. */

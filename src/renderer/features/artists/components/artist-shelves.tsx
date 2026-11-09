@@ -15,8 +15,8 @@ import {
     type DiscographyChip,
     discographyChips,
     discographyLine,
-    lbBotCanScan,
     kindLines,
+    lbBotCanScan,
 } from '/@/renderer/features/discography/artist-shelves';
 import {
     getItemsPerRow,

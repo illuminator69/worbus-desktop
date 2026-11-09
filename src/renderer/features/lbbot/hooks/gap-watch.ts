@@ -83,4 +83,3 @@ export const gapWatchVerdict = (
     // `picking` with no sources while the task runs.
     return busy ? 'wait' : 'settle';
 };
-

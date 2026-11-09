@@ -91,7 +91,7 @@ test('aReadNamingTheWatchsOwnTaskCountsWhenEverItWasSent', () => {
 
 test('aSearchThatFoundSourcesSettlesAsYourMoveAtOnce', () => {
     const watch = { startedAt: 1000, taskId: 'k1' };
-    const picking = gap({ sourceTask: task(), sourcesTotal: 4, status: 'picking' });
+    const picking = gap({ sourcesTotal: 4, sourceTask: task(), status: 'picking' });
     assert.equal(gapWatchVerdict(watch, picking, { now: 9000, timeoutMs: TIMEOUT }), 'settle');
 });
 

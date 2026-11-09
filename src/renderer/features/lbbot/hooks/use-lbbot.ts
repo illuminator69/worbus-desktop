@@ -73,15 +73,15 @@ import {
 } from '/@/renderer/features/lbbot/components/source-cards-model';
 import { gapProgress } from '/@/renderer/features/lbbot/gap-stage';
 import {
-    gapIsBusy,
-    gapReadCounts,
-    gapWatchVerdict,
-} from '/@/renderer/features/lbbot/hooks/gap-watch';
-import {
     gapFailReason,
     gapSettleOutcome,
     mergeGapSummary,
 } from '/@/renderer/features/lbbot/hooks/fill-announce-logic';
+import {
+    gapIsBusy,
+    gapReadCounts,
+    gapWatchVerdict,
+} from '/@/renderer/features/lbbot/hooks/gap-watch';
 import {
     getIndexMirrorSnapshot,
     getMirrorArtistByNdId,
@@ -2258,11 +2258,7 @@ export const applyGapSummary = (
     // and Navidrome's own list both have to be re-read or the album double-lists.
     if (gap.status === 'complete' && watch.state !== 'complete') registry.refresh?.(undefined);
 
-    const verdict = gapWatchVerdict(
-        watch,
-        gap,
-        { now, timeoutMs: WATCH_TIMEOUT_MS },
-    );
+    const verdict = gapWatchVerdict(watch, gap, { now, timeoutMs: WATCH_TIMEOUT_MS });
     if (verdict === 'gaveUp') {
         actions.settleGap(groupId, { outcome: 'gaveUp', state: gap.status });
         return;
