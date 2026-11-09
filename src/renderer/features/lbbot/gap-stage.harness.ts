@@ -59,6 +59,7 @@ const gap = (over: Partial<GapRecord> = {}): GapRecord => {
         mp3WouldHelp: false,
         noSourceReason: '',
         sources: [],
+        sourcesTotal: 0,
         sourceTask: null,
         stalledPlacement: false,
         status: 'ready',
@@ -281,6 +282,18 @@ test('aSearchThatEndedWithNothingSaysSoWithLbBotsReason', () => {
         mp3WouldHelp: true,
         reason: 'No FLAC',
     });
+});
+
+test('B-377: a finished search whose rows have not arrived waits for them, never "No sources"', () => {
+    // The ledger's /lb/fills summary is the gap view without its source rows (sourcesTotal kept);
+    // applyGapSummary writes it over the cache as the search ends, and the full read with the
+    // rows lands ~100 ms later. Read as an answer, that frame said "No sources found".
+    const owed = gap({
+        sourcesTotal: 3,
+        sourceTask: task('complete'),
+        status: 'picking',
+    } as Partial<GapRecord>);
+    assert.deepEqual(gapStage(input({ gap: owed, view: 'sources' })), { kind: 'searching' });
 });
 
 test('aFailedFillKeepsTheBoxOpenUntilTheSourcesAreAskedAgain', () => {
