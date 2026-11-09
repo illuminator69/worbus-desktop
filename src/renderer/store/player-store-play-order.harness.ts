@@ -86,7 +86,10 @@ const { Play, PlayerShuffle } = (await import('/@/shared/types/types' as string)
 const store = () => usePlayerStoreBase.getState();
 
 const songs = (n: number, prefix = 's') =>
-    Array.from({ length: n }, (_, i) => ({ id: `${prefix}${i}`, name: `${prefix}${i}` })) as never[];
+    Array.from({ length: n }, (_, i) => ({
+        id: `${prefix}${i}`,
+        name: `${prefix}${i}`,
+    })) as never[];
 
 /** A queue of `n` songs s0..s(n-1), shuffle on, playing row `row` (with play order `order`). */
 const shuffledQueue = (n: number, row: number, order: number[]) => {
@@ -123,18 +126,12 @@ test('Play next keeps the batch in the order given, right after the playing row'
     shuffledQueue(8, 3, [5, 1, 3, 7, 0, 2, 6, 4]);
     store().addToQueueByType(songs(6, 'n'), Play.NEXT as never);
     assert.equal(playing(), 's3');
-    assert.deepEqual(playIds().slice(0, 9), [
-        's5',
-        's1',
-        's3',
-        'n0',
-        'n1',
-        'n2',
-        'n3',
-        'n4',
-        'n5',
-    ]);
-    assert.deepEqual(playIds().slice(9), ['s7', 's0', 's2', 's6', 's4'], 'the rest keep their order');
+    assert.deepEqual(playIds().slice(0, 9), ['s5', 's1', 's3', 'n0', 'n1', 'n2', 'n3', 'n4', 'n5']);
+    assert.deepEqual(
+        playIds().slice(9),
+        ['s7', 's0', 's2', 's6', 's4'],
+        'the rest keep their order',
+    );
 });
 
 test('Add to queue lands at the end of play order, in the order given', () => {
@@ -201,4 +198,62 @@ test('a load with shuffle off turns shuffle off and plays its row', () => {
     });
     assert.equal(store().player.shuffle, PlayerShuffle.NONE);
     assert.equal(playing(), 'z2');
+});
+
+test('Play next with the playing row last in the queue still plays next (not at the end)', () => {
+    shuffledQueue(4, 3, [3, 0, 1, 2]);
+    store().addToQueueByType(songs(2, 'n'), Play.NEXT as never);
+    assert.deepEqual(playIds(), ['s3', 'n0', 'n1', 's0', 's1', 's2']);
+});
+
+test('a move keeps every row in its play position; Move to next plays them next', () => {
+    shuffledQueue(6, 2, [4, 2, 0, 5, 1, 3]);
+    const items = () => store().getQueueOrder().items;
+    store().moveSelectedToTop([items().find((item) => item.id === 's5')!]);
+    assert.equal(playing(), 's2');
+    assert.deepEqual(playIds(), ['s4', 's2', 's0', 's5', 's1', 's3']);
+    store().moveSelectedToNext([items().find((item) => item.id === 's3')!]);
+    assert.equal(playing(), 's2');
+    assert.deepEqual(playIds(), ['s4', 's2', 's3', 's0', 's5', 's1']);
+});
+
+test('shuffle off keeps the playing song and plays on in queue order', () => {
+    shuffledQueue(6, 2, [4, 2, 0, 5, 1, 3]);
+    store().toggleShuffle();
+    assert.equal(store().player.shuffle, PlayerShuffle.NONE);
+    assert.equal(playing(), 's2');
+    assert.equal(store().player.index, 2);
+    store().toggleShuffle();
+    assert.equal(playing(), 's2');
+    assert.equal(store().queue.shuffled[0], 2, 'on again: the playing row first');
+});
+
+test('a re-shuffle keeps the playing song (was: a new order under the same position)', () => {
+    shuffledQueue(30, 9, [...Array(30).keys()].reverse());
+    store().shuffle();
+    assert.equal(playing(), 's9');
+    assert.equal(store().queue.shuffled[0], 9);
+});
+
+test("setShuffle adopts a hub's order and keeps the playing song", () => {
+    shuffledQueue(5, 1, [0, 1, 2, 3, 4]);
+    store().setShuffle(PlayerShuffle.TRACK as never, [3, 1, 4, 0, 2]);
+    assert.deepEqual([...store().queue.shuffled], [3, 1, 4, 0, 2]);
+    assert.equal(playing(), 's1');
+    store().setShuffle(PlayerShuffle.TRACK as never, [0, 1]);
+    assert.equal(store().queue.shuffled[0], 1, 'not a permutation: the playing row first');
+});
+
+test('an older hub (no order): a queueChanged insert keeps the kept rows in play order', () => {
+    shuffledQueue(4, 1, [2, 1, 3, 0]);
+    // The hub inserted 'h' after s1 (row 2) and appended 't'; the queue resends whole.
+    const next = [
+        ...songs(2),
+        { id: 'h', name: 'h' },
+        ...songs(4).slice(2),
+        { id: 't', name: 't' },
+    ];
+    store().reconcileQueue(next as never[], 1);
+    assert.equal(playing(), 's1');
+    assert.deepEqual(playIds(), ['s2', 's1', 'h', 's3', 's0', 't']);
 });
