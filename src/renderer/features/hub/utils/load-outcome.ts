@@ -132,8 +132,9 @@ export const loadEnding = (
     exp: Pick<LoadExpectation, 'overridden'>,
 ): LoadEnding => {
     // A superseded load has no standing to answer: a newer directive owns the player, and the
-    // hub has already cancelled this attempt's waiter.
-    if (outcome.error === 'superseded') return { exit: 'echo', kind: 'superseded' };
+    // hub has already cancelled this attempt's waiter. Nor to report: a release that superseded it
+    // has said its last word (`released`), and a newer load reports when it ends.
+    if (outcome.error === 'superseded') return { exit: 'silent', kind: 'superseded' };
     if (outcome.ok) return { exit: 'echo', kind: 'answered', ok: true };
     // A later play or pause set the play state: say so, touch nothing.
     if (exp.overridden) return { exit: 'silent', kind: 'answered', ok: false };
