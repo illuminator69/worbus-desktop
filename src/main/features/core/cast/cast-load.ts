@@ -95,6 +95,9 @@ const budgetOf = (timeoutMs: unknown): null | number => {
 export const createCastLoader = <P>(deps: CastLoadDeps<P>): CastLoader<P> => {
     let current: Attempt | null = null;
     let pending: null | PendingAnswer = null;
+    /** The last `do:release`'s id. A stale one is harmless: the hub ignores a `released` it is
+     *  not waiting on from a device that is no longer active, and discards a mismatched id. */
+    let releaseId: string | undefined;
 
     const end = (attempt: Attempt | null, reason: EndReason) => {
         if (!attempt || attempt.ended) return;
@@ -238,8 +241,9 @@ export const createCastLoader = <P>(deps: CastLoadDeps<P>): CastLoader<P> => {
             }
             return settle(await run(sendLoad));
         },
-        lastReleaseId: () => undefined,
-        release: () => {
+        lastReleaseId: () => releaseId,
+        release: (transferId) => {
+            releaseId = typeof transferId === 'string' ? transferId : undefined;
             dropPending();
             end(current, 'released');
         },
