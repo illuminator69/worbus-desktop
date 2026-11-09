@@ -23,8 +23,9 @@ and the two are kept in step.
 
 ![An artist page with its missing albums](https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-2.png)
 
-**Downloads are reviewed, not fired blind:** pick the edition, check it against the canonical
-MusicBrainz tracklist, choose a quality, then look at real Soulseek sources ranked by coverage.
+**Finding a missing album is reviewed, not fired blind:** pick the edition, check it against the
+canonical MusicBrainz tracklist, choose a quality, then see where to find it, ranked by coverage.
+Downloading is optional and off until you set it up.
 
 ![A missing album's page, its tracklist and Find sources, before sources are fetched](https://raw.githubusercontent.com/illuminator69/worbus/main/docs/screenshots/0.6/desktop-3.png)
 
