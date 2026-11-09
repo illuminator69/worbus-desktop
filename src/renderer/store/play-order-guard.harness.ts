@@ -60,8 +60,7 @@ const rawReads = (path: string): string[] => {
             isPlayer(node.initializer) &&
             ts.isObjectBindingPattern(node.name) &&
             node.name.elements.some(
-                (element) =>
-                    (element.propertyName ?? element.name).getText(file) === 'index',
+                (element) => (element.propertyName ?? element.name).getText(file) === 'index',
             )
         ) {
             hits.push(where(node));

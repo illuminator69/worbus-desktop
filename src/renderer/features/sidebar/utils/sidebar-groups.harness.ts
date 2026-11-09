@@ -365,5 +365,9 @@ test('the attention badge is an admin one; Activity itself follows downloads', (
     const on = member({ downloadsShown: true })!;
     assert.deepEqual(ids(on.entries), ['activity']);
     assert.equal('badge' in on.entries[0], false, 'no admin badge for a member');
-    assert.equal(member({ downloadsShown: false }), undefined, 'off: the failures are an admin matter');
+    assert.equal(
+        member({ downloadsShown: false }),
+        undefined,
+        'off: the failures are an admin matter',
+    );
 });
