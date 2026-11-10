@@ -25,6 +25,7 @@ import {
     failedLoadExit,
     NO_ECHO,
 } from '/@/renderer/features/hub/utils/do-echo';
+import { createHubDrivenWindow } from '/@/renderer/features/hub/utils/hub-driven-window';
 import { hubFailureMessage } from '/@/renderer/features/hub/utils/hub-failure';
 import { currentNavidromeUrls } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import {
@@ -465,7 +466,8 @@ export const useHub = () => {
     // Wall-clock until which local player events are treated as hub-driven
     // (not user-initiated) — prevents do:load side effects from being
     // misinterpreted as "user started new local playback".
-    const hubDrivenUntil = useRef(0);
+    // (hub-driven-window.ts; the initial value is built every render and kept only on the first.)
+    const hubDriven = useRef(createHubDrivenWindow({ now: () => Date.now() }));
     // The window in which local playback is force-paused after adopting an orphaned (no active
     // device) session — see the onPlayerProgress watchdog. B-058: a play somebody asks for inside
     // it closes it (isGuardOpen), so the watchdog pauses only audio nobody asked for.
@@ -543,7 +545,7 @@ export const useHub = () => {
                     : null,
             });
             if (flip) {
-                hubDrivenUntil.current = Math.max(hubDrivenUntil.current, now + 1000);
+                hubDriven.current.hold(1000);
                 // I-031: the PLAYING written here lasts until the next line and nobody asked
                 // for it, so the status handler does not report it. The hub's 2 s window after
                 // a play or pause used to swallow that report; a hub that goes by `applied`
@@ -581,14 +583,14 @@ export const useHub = () => {
     );
 
     const reconcileRemoteActive = useCallback(() => {
-        if (isRemoteActiveNow() && playing.current && Date.now() >= hubDrivenUntil.current) {
+        if (isRemoteActiveNow() && playing.current && !hubDriven.current.isOpen()) {
             mediaPause();
             // Auto-resume starts the audio engine asynchronously, so a single
             // pause can lose the race and the audio keeps going. Re-assert it
             // shortly after; the onPlayerProgress watchdog below is the ongoing
             // safety net if even this is beaten.
             setTimeout(() => {
-                if (isRemoteActiveNow() && Date.now() >= hubDrivenUntil.current) {
+                if (isRemoteActiveNow() && !hubDriven.current.isOpen()) {
                     hardPause('remote active, 150 ms re-check');
                 }
             }, 150);
@@ -813,7 +815,7 @@ export const useHub = () => {
         // A do:load fires onCurrentSongChange → publishQueue while we're now the
         // active device; without this gate we'd echo an act:setQueue back to the
         // hub carrying the PREVIOUS track's position, overwriting the resume point.
-        if (Date.now() < hubDrivenUntil.current) return;
+        if (hubDriven.current.isOpen()) return;
         // Not until the hub has told us what the session IS (`welcome` sets myId). The
         // persisted queue rehydrates a moment after launch and fires this — publishing it
         // then overwrote the live session with our stale copy at index 0 / position 0 AND
@@ -941,11 +943,11 @@ export const useHub = () => {
     // Spotify semantics: if the user starts playback locally while another
     // device is active, the music belongs to the session — send the local
     // queue to the hub (which loads it on the ACTIVE remote device) and keep
-    // local audio silent. Hub-driven events are exempt via hubDrivenUntil.
+    // local audio silent. Hub-driven events are exempt via the hub-driven window.
     const lastRoutedAt = useRef(0);
     const routeLocalPlayToRemote = useCallback(() => {
         if (!hub || !playing.current) return;
-        if (Date.now() < hubDrivenUntil.current) return;
+        if (hubDriven.current.isOpen()) return;
         if (Date.now() - lastRoutedAt.current < 1000) return;
         const remoteActive =
             myId.current !== null && activeId.current !== null && activeId.current !== myId.current;
@@ -1126,7 +1128,7 @@ export const useHub = () => {
             // user actions (window covers async engine events). Every directive that
             // comes through here is about the session; `setVolume` is not, and does not
             // (applyVolume).
-            hubDrivenUntil.current = Date.now() + 2000;
+            hubDriven.current.hold(2000);
             // B-111: a load still waiting for its outcome now waits for what this directive
             // makes of it (load-outcome.ts).
             const waitingLoad = livePendingLoad();
@@ -1229,7 +1231,7 @@ export const useHub = () => {
                         // Re-arm the hub-driven window: resolveSongs fans out one
                         // getSongDetail per track and can outlast the original 2 s, after
                         // which setQueue's own events read as a fresh user action.
-                        hubDrivenUntil.current = Date.now() + 2000;
+                        hubDriven.current.hold(2000);
                         pendingSeek.current = {
                             armedAt: Date.now(),
                             index: msg.index ?? 0,
@@ -1274,7 +1276,7 @@ export const useHub = () => {
                     mediaPause();
                     break;
                 case 'play':
-                    // B-058: a controller asked for this play. hubDrivenUntil cannot shield it from
+                    // B-058: a controller asked for this play. the hub-driven window cannot shield it from
                     // a paused load's re-check, which always runs inside that window.
                     notePlayRequest('hub');
                     mediaPlay();
@@ -1293,7 +1295,7 @@ export const useHub = () => {
                     // need a round trip.
                     const songs = await resolveSongs(msg.tracks, heldSongs());
                     if (!songs.length) break;
-                    hubDrivenUntil.current = Date.now() + 2000;
+                    hubDriven.current.hold(2000);
                     // W1: a controller's edit, with the play order the hub patched by the same
                     // rule (a playOrder hub only). Adopted as sent, and not echoed back.
                     const adopt = adoptOf(msg);
@@ -1496,7 +1498,7 @@ export const useHub = () => {
                 // B-058: a play requested since the adopt closes its window here too.
                 const weAreTheLiveReceiver =
                     playing.current &&
-                    Date.now() >= hubDrivenUntil.current &&
+                    !hubDriven.current.isOpen() &&
                     !isGuardOpen(adoptPauseGuard.current, Date.now(), lastPlayRequest()) &&
                     Date.now() - lastHardPauseAt.current >= 2000;
                 if (weAreTheLiveReceiver) {
@@ -1530,7 +1532,7 @@ export const useHub = () => {
                     return; // genuinely in sync
                 }
                 logAdopt('align', session, targetIndex, found);
-                hubDrivenUntil.current = Date.now() + 2000;
+                hubDriven.current.hold(2000);
                 lastQueueSig.current = '';
                 // Loaded PAUSED outright, as the branch below does. mediaPlayByIndex STARTS the
                 // engine, asynchronously, so the pause after it could land first and the track
@@ -1554,7 +1556,7 @@ export const useHub = () => {
             const songs = await resolveSongs(hubTracks);
             if (!songs.length) return;
             logAdopt('load', session, targetIndex, found);
-            hubDrivenUntil.current = Date.now() + 2000;
+            hubDriven.current.hold(2000);
             // Seek is armed for onCurrentSongChange (a source reload loses an immediate
             // seek); `pause: true` re-asserts the paused state after the async load.
             pendingSeek.current = {
@@ -1592,7 +1594,7 @@ export const useHub = () => {
      *
      * They used to be fired off as independent promises, so a `load` or `queueChanged` that spent
      * a second resolving songs could still be running when the next seek, pause or release
-     * arrived — and then finish last, replacing the queue, re-arming `hubDrivenUntil` and arming a
+     * arrived — and then finish last, replacing the queue, re-arming the hub-driven window and arming a
      * stale pending seek on top of newer intent. One mutable `pendingSeek` was never enough
      * correlation for that. Serializing costs nothing (the hub sends one directive at a time in
      * the normal case) and makes "last directive wins" actually true.
@@ -2064,7 +2066,7 @@ export const useHub = () => {
                 // reconnect republishes cleanly.
                 doEcho.current = echoDisconnected(doEcho.current);
                 activeId.current = null;
-                hubDrivenUntil.current = 0;
+                hubDriven.current.close();
                 lastQueueSig.current = '';
                 // A volume report waiting for its turn has nowhere to go; `welcome` sends one.
                 if (volumeReportTimer.current !== null) {
@@ -2198,7 +2200,7 @@ export const useHub = () => {
     // without this, a top-up never reaches the hub until the track advances, and
     // a transfer taken mid-track hands the next device a stale (pre-top-up)
     // queue. publishQueue itself is idempotent (dedupes by signature) and gated
-    // (hubDrivenUntil / active-or-none), so this can't echo hub-driven loads.
+    // (the hub-driven window / active-or-none), so this can't echo hub-driven loads.
     useEffect(() => {
         if (!hub) return undefined;
         return usePlayerStoreBase.subscribe(
@@ -2226,7 +2228,7 @@ export const useHub = () => {
                 pendingSeek.current = keep;
                 if (pending) {
                     landingSeek.current = pending;
-                    hubDrivenUntil.current = Date.now() + 2000;
+                    hubDriven.current.hold(2000);
                     // Small delay so the engine finishes loading the new source
                     // before the seek (same approach as use-queue-restore).
                     setTimeout(() => {
@@ -2264,7 +2266,7 @@ export const useHub = () => {
                 // ...but NOT when a hub-driven load is positioning us (a pending seek, or
                 // inside the hub-driven window) — there the hub's own offset is the truth
                 // and reporting 0 would rewind the session it just handed us.
-                const fromTheTop = !pendingSeek.current && Date.now() >= hubDrivenUntil.current;
+                const fromTheTop = !pendingSeek.current && !hubDriven.current.isOpen();
                 if (fromTheTop) positionMs.current = 0;
                 report(fromTheTop ? { positionMs: 0 } : undefined);
             },
@@ -2286,7 +2288,7 @@ export const useHub = () => {
                 // (and keep) playing past the one-shot reconcile, so re-pause any
                 // local playback that's still progressing. Fires only while local
                 // audio actually advances, so it self-stops once truly paused.
-                if (isRemoteActiveNow() && rolling && Date.now() >= hubDrivenUntil.current) {
+                if (isRemoteActiveNow() && rolling && !hubDriven.current.isOpen()) {
                     hardPause('remote active, progress watchdog');
                     return;
                 }
@@ -2339,7 +2341,7 @@ export const useHub = () => {
                 const claimWhenWindowLapses = () => {
                     const claimInMs = adoptClaimDelay({
                         adopt: adoptPauseGuard.current,
-                        hubDrivenUntil: hubDrivenUntil.current,
+                        hubDrivenUntil: hubDriven.current.until(),
                         now: Date.now(),
                         orphaned: activeId.current === null,
                         playing: playing.current,

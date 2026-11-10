@@ -31,8 +31,7 @@ const sources = (dir: string): string[] =>
     });
 
 /** `x.player.index`, `player.index`, and `const { index } = x.player`. */
-const rawReads = (path: string): string[] => {
-    const text = readFileSync(path, 'utf8');
+const rawReads = (path: string, text = readFileSync(path, 'utf8')): string[] => {
     const file = ts.createSourceFile(
         path,
         text,
@@ -71,14 +70,41 @@ const rawReads = (path: string): string[] => {
     return hits;
 };
 
+const readsIn = (code: string): string[] => rawReads(join(RENDERER, 'probe.ts'), code);
+
 test('no raw player.index read outside src/renderer/store', () => {
     const reads = sources(RENDERER)
         .filter((path) => !path.startsWith(STORE))
-        .flatMap(rawReads);
+        .flatMap((path) => rawReads(path));
     assert.deepEqual(reads, [], `raw player.index reads:\n${reads.join('\n')}`);
 });
 
 test('the walker finds each form it guards (a guard that sees nothing proves nothing)', () => {
     const probe = join(STORE, 'player.store.ts');
     assert.ok(rawReads(probe).length > 10, 'the store itself reads its own field');
+});
+
+test('the walker sees every way to the field, aliases included (review 2026-11-10)', () => {
+    const probe = [
+        's.player.index;',
+        's.player?.index;',
+        "s.player['index'];",
+        'const { index } = s.player;',
+        'const { player } = s; player.index;',
+        'const p = s.player;',
+        'const { player: { index: i } } = s;',
+        'const { player: q } = s;',
+    ];
+    for (const line of probe) {
+        assert.equal(readsIn(line).length, 1, line);
+    }
+    // Other fields of the player slice, and `index` elsewhere, are not reads of it.
+    for (const line of [
+        's.player.status;',
+        'const { player } = s; player.volume;',
+        's.queue.index;',
+        'row.index;',
+    ]) {
+        assert.equal(readsIn(line).length, 0, line);
+    }
 });

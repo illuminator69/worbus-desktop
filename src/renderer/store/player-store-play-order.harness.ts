@@ -257,3 +257,44 @@ test('an older hub (no order): a queueChanged insert keeps the kept rows in play
     assert.equal(playing(), 's1');
     assert.deepEqual(playIds(), ['s2', 's1', 'h', 's3', 's0', 't']);
 });
+
+// Review fixes (2026-11-10): the end of the play order and an empty one.
+const { PlayerRepeat, PlayerStatus } = (await import('/@/shared/types/types' as string)) as {
+    PlayerRepeat: Record<string, string>;
+    PlayerStatus: Record<string, string>;
+};
+
+test('removing the playing row with nothing after it stops on the last row, paused', () => {
+    store().clearQueue();
+    store().setShuffle(PlayerShuffle.NONE as never);
+    store().setRepeat(PlayerRepeat.NONE as never);
+    store().setQueue(songs(4), 3, 0, true);
+    store().clearSelected([store().getCurrentSong()!]);
+    assert.equal(playing(), 's2', 'the last row left');
+    assert.equal(store().player.status, PlayerStatus.PAUSED, 'not a replay of a played song');
+});
+
+test('under repeat all, removing the last playing row wraps to the first in play order', () => {
+    shuffledQueue(5, 2, [0, 1, 3, 4, 2]);
+    store().setRepeat(PlayerRepeat.ALL as never);
+    usePlayerStoreBase.setState((state) => {
+        state.player.status = PlayerStatus.PLAYING as never;
+    });
+    store().clearSelected([store().getCurrentSong()!]);
+    assert.equal(playing(), 's0', 'order[0] comes after the last position');
+    assert.equal(store().player.status, PlayerStatus.PLAYING);
+    store().setRepeat(PlayerRepeat.NONE as never);
+});
+
+test('Add to queue on an empty queue under shuffle shuffles it (as a new queue)', () => {
+    store().clearQueue();
+    store().setShuffle(PlayerShuffle.TRACK as never);
+    store().addToQueueByType(songs(20), Play.LAST as never);
+    const order = [...store().queue.shuffled];
+    assert.deepEqual(
+        [...order].sort((a, b) => a - b),
+        [...Array(20).keys()],
+    );
+    assert.notDeepEqual(order, [...Array(20).keys()], 'not the identity');
+    store().setShuffle(PlayerShuffle.NONE as never);
+});

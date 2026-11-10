@@ -306,6 +306,17 @@ test('B-377: rows are owed only while lb-bot counts sources the record does not 
     assert.equal(gapStage(input({ gap: done, view: 'sources' })).kind, 'noSources');
 });
 
+test('B-377: rows still owed when the reads give up end in "cannot be reached", not searching', () => {
+    const owed = gap({
+        sourcesTotal: 3,
+        sourceTask: task('complete'),
+        status: 'picking',
+    } as Partial<GapRecord>);
+    assert.deepEqual(gapStage(input({ gap: owed, readGaveUp: true, view: 'sources' })), {
+        kind: 'unreachable',
+    });
+});
+
 test('aFailedFillKeepsTheBoxOpenUntilTheSourcesAreAskedAgain', () => {
     // Review Focus 3: the box stays open saying why, in lb-bot's words.
     const failed = gap({ failDetail: 'The download itself failed', status: 'failed' });
