@@ -68,13 +68,19 @@ export const normalizeArtistName = (value: string): string =>
  * AC/DC would hand back a wrong album, which is the failure this file exists to
  * stop.
  */
+/**
+ * B-313: `&`, `+`, `,`, `;`, `•` (with or without spaces), `feat.`, `featuring`, `with`, `vs.`,
+ * `x` as whole words, and a hyphen with whitespace on BOTH sides ("Lana Del Rey - Nikki Lane").
+ * Never an unspaced hyphen (Jay-Z, Run-DMC) and never `/` (AC/DC). The bullet and the spaced
+ * hyphen are the hub's (`_ARTIST_SEP_RE`, B-176/Q-120); Worbus for Android's rule is the same.
+ */
+export const CREDIT_SEPARATORS =
+    /\s+-\s+|\s*(?:&|\+|,|;|•|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i;
+
 const creditedActs = (value: string): string[] => {
     const whole = normalizeArtistName(value);
     if (!whole) return [];
-    const parts = (value || '')
-        .split(/\s*(?:&|\+|,|;|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i)
-        .map(normalizeArtistName)
-        .filter(Boolean);
+    const parts = (value || '').split(CREDIT_SEPARATORS).map(normalizeArtistName).filter(Boolean);
     // A credit that is ENTIRELY separator tokens splits to nothing - an act
     // actually named "X" is the real case. Falling back to the whole string
     // keeps that artist matchable instead of silently never matching.
