@@ -11,7 +11,6 @@ import {
     Copy,
     hubLink,
     isHubConfigured,
-    normaliseHubAddress,
     notSetView,
     serverStatus,
     serverStatusSentence,
@@ -31,7 +30,7 @@ import {
     stopLooking,
 } from '/@/renderer/features/hub/utils/hub-finder-actions';
 import {
-    signInToFound,
+    chooseServer,
     signInWithCurrentServer,
     signOutOfServer,
 } from '/@/renderer/features/hub/utils/hub-signin-actions';
@@ -307,7 +306,13 @@ export const WorbusServerSettings = memo(() => {
                     <Button
                         aria-label={say(row.action)}
                         loading={signingIn && row.kind === 'server'}
-                        onClick={() => void signInToFound(row.found, row.address)}
+                        onClick={() =>
+                            void chooseServer({
+                                address: row.address,
+                                found: row.found,
+                                kind: 'found',
+                            })
+                        }
                         variant={row.kind === 'server' ? 'filled' : 'default'}
                     >
                         {say(row.action)}
@@ -354,11 +359,8 @@ export const WorbusServerSettings = memo(() => {
                 <TextInput
                     aria-label="Server address"
                     onBlur={() => {
-                        const url = normaliseHubAddress(address);
-                        if (url !== settings.url) setSettings({ hub: { url } });
-                        setAddress(
-                            addressFieldValue(url, isHubConfigured({ ...settings, signedIn, url })),
-                        );
+                        // B-330: a typed address is chosen the way a found tap chooses one.
+                        void chooseServer({ kind: 'typed', raw: address });
                     }}
                     onChange={(e) => setAddress(e.currentTarget.value)}
                     placeholder="ws://192.168.1.10:4790"

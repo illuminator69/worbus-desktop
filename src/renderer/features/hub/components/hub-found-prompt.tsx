@@ -1,7 +1,7 @@
 import { closeAllModals, openModal } from '@mantine/modals';
 
 import i18n from '/@/i18n/i18n';
-import { signInToFound } from '/@/renderer/features/hub/utils/hub-signin-actions';
+import { chooseServer } from '/@/renderer/features/hub/utils/hub-signin-actions';
 import { tapAddress } from '/@/renderer/features/settings/components/server/server-status';
 import { ConfirmModal } from '/@/shared/components/modal/modal';
 import { Stack } from '/@/shared/components/stack/stack';
@@ -49,7 +49,7 @@ export const openFoundPrompt = (opts: {
                 onConfirm={() => {
                     answered = true;
                     closeAllModals();
-                    void signInToFound(found, address);
+                    void chooseServer({ address, found, kind: 'found' });
                 }}
             >
                 <Stack gap="xs">

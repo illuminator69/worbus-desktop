@@ -14,7 +14,7 @@ import {
     createServerRecordStore,
 } from '../../../../../main/features/core/hub/addresses.ts';
 import { EMPTY_HUB_SERVER_RECORD } from '../../../../../shared/utils/hub-addresses.ts';
-import { createFoundTap } from '../../../hub/utils/hub-found-tap.ts';
+import { createChooseServer } from '../../../hub/utils/hub-found-tap.ts';
 import {
     dismissKey,
     notSetView,
@@ -148,7 +148,7 @@ test('not_set_rows_for_each_finder_state', () => {
 
 test('sign_in_tap_saves_found_sets_url_and_enables', async () => {
     const calls: string[] = [];
-    const tap = createFoundTap({
+    const choose = createChooseServer({
         edit: async (op) => {
             calls.push(`edit ${JSON.stringify(op)}`);
         },
@@ -158,6 +158,7 @@ test('sign_in_tap_saves_found_sets_url_and_enables', async () => {
         },
         stopLooking: () => calls.push('stopLooking'),
     });
+    const tap = (f: HubFound, address: string) => choose({ address, found: f, kind: 'found' });
     const found = server(ID_A, ['wss://hub.example.com', 'ws://192.168.1.20:4790']);
     await tap(found, 'ws://192.168.1.20:4790');
     assert.deepEqual(calls, [
@@ -197,7 +198,7 @@ test('sign_in_tap_saves_found_sets_url_and_enables', async () => {
         ['found wss://hub.example.com', 'found ws://192.168.1.20:4790'],
     );
     // Wired: the Server tab's row and the prompt both go through it.
-    assert.match(read('../../../hub/utils/hub-signin-actions.ts'), /createFoundTap\(\{/);
+    assert.match(read('../../../hub/utils/hub-signin-actions.ts'), /createChooseServer\(\{/);
 });
 
 test('sheet_once_per_server', () => {

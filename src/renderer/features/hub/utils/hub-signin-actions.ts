@@ -1,7 +1,7 @@
 import isElectron from 'is-electron';
 
 import { hasTypedToken } from '/@/renderer/features/hub/utils/hub-credential';
-import { createFoundTap } from '/@/renderer/features/hub/utils/hub-found-tap';
+import { createChooseServer } from '/@/renderer/features/hub/utils/hub-found-tap';
 import { flushQueryPersister } from '/@/renderer/lib/app-query-persister';
 import { queryClient } from '/@/renderer/lib/react-query';
 import { useAuthStore, useHubStore, useSettingsStore } from '/@/renderer/store';
@@ -242,11 +242,12 @@ export const reconcileSignIn = async (): Promise<void> => {
 };
 
 /**
- * Worbus P3 (design §6.4): a found server's "Sign in as <name>" (or an older one's "Use this
- * address"), on the Server tab and in the post-sign-in prompt: one tap saves its addresses as
- * found, sets `hub.url` to the tapped one, turns Connect on and signs in.
+ * Worbus P3 (design §6.4), B-330: choosing a server while none is set - a found server's "Sign in
+ * as <name>" (or an older one's "Use this address"), on the Server tab and in the post-sign-in
+ * prompt, and an address typed after "Type an address". One rule for all of them: the address is
+ * saved, `hub.url` set to it, Connect turned on and the device signed in.
  */
-export const signInToFound = createFoundTap({
+export const chooseServer = createChooseServer({
     edit: (edit) => hub?.serverEdit(edit) ?? Promise.resolve(null),
     setHub: (patch) => useSettingsStore.getState().actions.setSettings({ hub: patch }),
     signIn: () => signInWithCurrentServer(),
