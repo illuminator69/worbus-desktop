@@ -12,6 +12,14 @@ const CAP_VIDEO_OUT = 1;
 const CAP_AUDIO_OUT = 4;
 const CAP_MULTIZONE_GROUP = 32;
 
+/** A `_googlecast._tcp` service as bonjour-service hands it over. */
+export interface CastService {
+    addresses?: string[];
+    name: string;
+    port?: number;
+    txt?: Record<string, string>;
+}
+
 /**
  * The kind of a receiver from its `ca` bits: a speaker group, else something with a picture (a
  * TV), else something with sound only (a speaker). Undefined when the record has no usable
@@ -39,6 +47,23 @@ export function receiverLevel(volume: unknown): null | number {
     if (muted === true) return 0;
     if (typeof level !== 'number' || !Number.isFinite(level)) return null;
     return Math.min(100, Math.max(0, Math.round(level * 100)));
+}
+
+/** The device a service names, or null when it has no address to dial. */
+export function serviceToDevice(
+    service: CastService,
+): null | { host: string; id: string; kind: CastKind | undefined; name: string } {
+    const txt = (service.txt ?? {}) as Record<string, string>;
+    const host =
+        service.addresses?.find((address) => address.includes('.')) ?? service.addresses?.[0];
+    if (!host) return null;
+    return {
+        host,
+        id: txt.id || service.name,
+        // `ca`: the capability bits - a group, a TV or a speaker (receiver-info.ts).
+        kind: castKind(txt.ca),
+        name: txt.fn || service.name,
+    };
 }
 
 // Not `&`: that works on 32 bits, and the record is a decimal string of whatever the device sent.

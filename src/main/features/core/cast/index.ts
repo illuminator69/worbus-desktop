@@ -8,11 +8,6 @@ interface CastBrowser {
     update(): void;
 }
 
-interface CastService {
-    addresses?: string[];
-    name: string;
-    txt?: Record<string, string>;
-}
 import { Client, DefaultMediaReceiver } from 'castv2-client';
 import { ipcMain } from 'electron';
 import net from 'net';
@@ -37,7 +32,7 @@ import {
     takeoverStep,
 } from './foreign-session';
 import { logSafeStreamId } from './log-id';
-import { CastKind, castKind, receiverLevel } from './receiver-info';
+import { CastKind, type CastService, receiverLevel, serviceToDevice } from './receiver-info';
 
 import { levelReportStep, NO_LEVEL_REPORT } from '/@/shared/utils/level-report';
 
@@ -2024,22 +2019,6 @@ function requeryCastDevices(): void {
     } catch {
         /* discovery is best-effort */
     }
-}
-
-function serviceToDevice(
-    service: CastService,
-): null | { host: string; id: string; kind: CastKind | undefined; name: string } {
-    const txt = (service.txt ?? {}) as Record<string, string>;
-    const host =
-        service.addresses?.find((address) => address.includes('.')) ?? service.addresses?.[0];
-    if (!host) return null;
-    return {
-        host,
-        id: txt.id || service.name,
-        // `ca`: the capability bits - a group, a TV or a speaker (receiver-info.ts).
-        kind: castKind(txt.ca),
-        name: txt.fn || service.name,
-    };
 }
 
 function startBridging(): void {

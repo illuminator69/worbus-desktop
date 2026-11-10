@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { castKind, receiverLevel } from './receiver-info.ts';
+import { castKind, receiverLevel, serviceToDevice } from './receiver-info.ts';
 
 /** node --test src/main/features/core/cast/receiver-info.harness.ts */
 
@@ -65,4 +66,29 @@ test('a status without a level reports nothing', () => {
     assert.equal(receiverLevel({ muted: false }), null);
     assert.equal(receiverLevel({ level: '0.5' }), null);
     assert.equal(receiverLevel({ level: Number.NaN }), null);
+});
+
+/**
+ * B-115 (desktop half): a Cast device advertises the port it listens on in its mDNS SRV record.
+ * A speaker group's leader advertises the group on a port of its own (not 8009), so a bridge that
+ * always dials 8009 drives the leader alone. The bridge must dial the advertised port. No real
+ * device: the services are written out by hand.
+ */
+test('the_device_keeps_the_port_it_advertises', () => {
+    const group = serviceToDevice({
+        addresses: ['192.168.1.40'],
+        name: 'Downstairs',
+        port: 32123,
+        txt: { ca: SPEAKER_GROUP, fn: 'Downstairs', id: 'g1' },
+    });
+    assert.equal(group?.port, 32123);
+    // A record with no port (never seen; bonjour-service always sets one) dials Cast's own.
+    const plain = serviceToDevice({ addresses: ['192.168.1.41'], name: 'Kitchen', txt: {} });
+    assert.equal(plain?.port, 8009);
+});
+
+test('the_bridge_dials_and_probes_that_port', () => {
+    const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /client\.connect\(this\.host,/, 'castv2 dials the host on 8009');
+    assert.doesNotMatch(src, /socket\.connect\(CAST_PORT, /, 'the probe dials 8009');
 });
