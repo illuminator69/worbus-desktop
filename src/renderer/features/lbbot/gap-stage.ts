@@ -256,8 +256,11 @@ export const gapStage = (input: GapInput): GapStage => {
         };
     }
     if (input.view === 'sources') {
-        // The rows of a finished search still on their way: still the search's, not "none".
-        if (searching || gapRowsOwed(gap)) return { kind: 'searching' };
+        if (searching) return { kind: 'searching' };
+        // The rows of a finished search still on their way: still the search's, not "none";
+        // when every read since has failed, the same answer as any failed read.
+        if (gapRowsOwed(gap))
+            return input.readGaveUp ? { kind: 'unreachable' } : { kind: 'searching' };
         if (gap.sources.length > 0) {
             return {
                 kind: 'choosing',
