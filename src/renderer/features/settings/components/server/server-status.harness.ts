@@ -579,3 +579,17 @@ test('aSocketThatOpenedIsConnectingUntilItsWelcomeNeverUnreachable', () => {
     assert.equal(hubLink({ ...away, enabled: false, opening: true }), 'off');
     assert.match(read('./worbus-server-settings.tsx'), /opening: activeAddress !== null,/);
 });
+
+/**
+ * B-326: after an address change the line read "Connected to <new address>" for two frames. Main
+ * stops the old socket and says so at once (`hub-server`, no active address), but the renderer's
+ * `connected` flag is cleared only by the old socket's close, later; and the sentence fell back to
+ * the typed address. `connected` names no address: it holds only while main reports the socket
+ * it belongs to.
+ */
+test('aConnectedFlagWithNoLiveSocketIsNotConnected', () => {
+    const changing = { ...on, attemptAt: NOW - 10, connected: true, opening: false };
+    assert.equal(hubLink(changing), 'connecting');
+    assert.equal(hubLink({ ...changing, opening: true }), 'connected');
+    assert.equal(hubLink({ ...changing, attemptAt: NOW - 60_000 }), 'unreachable');
+});
