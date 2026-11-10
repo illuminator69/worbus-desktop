@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { StationResult } from '../../../../shared/types/station-types.ts';
@@ -25,10 +26,16 @@ const failed = (extra: Partial<StationResult<unknown>>): StationResult<unknown> 
 });
 
 test('the_hubs_busy_503_does_not_latch_auto_dj', () => {
-    assert.equal(
-        latchesAutoDj({ ...failed({ fallback: true }), busy: true } as StationResult<unknown>),
-        false,
+    assert.equal(latchesAutoDj(failed({ busy: true, fallback: true })), false);
+});
+
+test('main_carries_the_hubs_busy_word_to_the_renderer', () => {
+    // The rule can only see `busy` if main's one station request copies it off the hub's body.
+    const main = readFileSync(
+        new URL('../../../../main/features/core/station/index.ts', import.meta.url),
+        'utf8',
     );
+    assert.match(main, /busy: json\?\.busy === true \|\| undefined/);
 });
 
 test('no_tier_answered_latches_auto_dj', () => {

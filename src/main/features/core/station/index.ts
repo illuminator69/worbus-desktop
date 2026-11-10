@@ -214,6 +214,7 @@ const request = async <T>(
         // Path and status only: a seed or a track id is listening data, not a diagnostic.
         log.warn(`[station] ${method} ${path} -> ${res.status}`);
         return failed(res.status, str(json?.error) || `Request failed (${res.status})`, {
+            busy: json?.busy === true || undefined,
             code: str(json?.code) || undefined,
             fallback: json?.fallback === true || undefined,
             stationId: str(json?.stationId) || undefined,

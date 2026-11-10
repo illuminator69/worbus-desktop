@@ -101,9 +101,11 @@ export type StationOrigin = 'continue' | 'radio';
  * Every station call's result. `status` 0 means the request never got an HTTP answer (no hub
  * configured, unreachable, timed out). `code` is the hub's machine-readable reason
  * (`bad_seed`, `seed_unknown`, `session_bound`, `station_unknown`, ...). `fallback` is the 503
- * that says no tier is usable. `stationId` rides on a 409 `session_bound`.
+ * that says no tier is usable; with `busy` it is the hub's own pool that is full (B-268), which says
+ * nothing about the engine. `stationId` rides on a 409 `session_bound`.
  */
 export interface StationResult<T> {
+    busy?: boolean;
     code?: string;
     data: null | T;
     error: string;

@@ -74,6 +74,9 @@ const noteFallback = <T>(result: StationResult<T>, route: string): StationResult
     if (latchesAutoDj(result)) {
         logger.warn('Station engine unavailable, using Auto DJ', { route, status: result.status });
         useStationStore.getState().actions.latchFallback();
+    } else if (!result.ok && result.busy) {
+        // B-268: the hub's own pool was full; this one request falls back, autoplay stays.
+        logger.info('Station engine busy, not switching to Auto DJ', { route });
     }
     return result;
 };

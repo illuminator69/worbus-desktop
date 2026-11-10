@@ -24,10 +24,14 @@ import type {
 // tracks played become the seed.
 
 /**
- * Whether a station answer switches autoplay over to Auto DJ for the latch's minute (B-268).
+ * Whether a station answer switches autoplay over to Auto DJ for the latch's minute (B-268). Only
+ * the engine saying it cannot serve does (PROTOCOL §18: `503 {fallback: true}`, no tier answered or
+ * stations disabled). The hub's own full pool (`fallback: true, busy: true`, §18.4) says nothing
+ * about AudioMuse, and neither does a 503 without `fallback` (not the engine's answer): that one
+ * request falls back, autoplay stays on the station.
  */
 export const latchesAutoDj = <T>(result: StationResult<T>): boolean =>
-    !result.ok && (result.status === 503 || result.fallback === true);
+    !result.ok && result.fallback === true && result.busy !== true;
 
 /** Top up when fewer than this many tracks remain after the current one, in play order. */
 export const LOOKAHEAD_MIN = 2;
