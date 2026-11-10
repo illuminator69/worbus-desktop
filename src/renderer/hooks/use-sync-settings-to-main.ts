@@ -1,146 +1,46 @@
 import isElectron from 'is-electron';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 
-import i18n from '/@/i18n/i18n';
-import { openRestartRequiredToast } from '/@/renderer/features/settings/restart-toast';
 import { useSettingsStore } from '/@/renderer/store/settings.store';
 import { logger } from '/@/renderer/utils/logger';
-// Synchronizes settings from the renderer store to the main process electron store
-// on app initialization. If there are differences, it updates the main store and shows
-// a restart required toast.
+import { MIRRORED_SETTINGS, mirroredPatchFrom } from '/@/shared/utils/main-settings';
+
+/**
+ * B-328: at launch the renderer's copy of the settings main owns (`shared/utils/main-settings.ts`)
+ * is made to say what main holds. Main started with its own values and acts on them, so the
+ * renderer adopts them; it no longer pushes its copy over main's and asks for a restart. A
+ * setting the person changes is written to both by its control; a settings import writes main's
+ * copy too.
+ */
+let adopted = false;
+
 export const useSyncSettingsToMain = () => {
-    const hasRunRef = useRef(false);
-
     useEffect(() => {
-        if (hasRunRef.current) {
-            return;
-        }
+        // Once per launch (a remount, or StrictMode's second run, asks nothing again).
+        if (adopted) return;
+        adopted = true;
+        if (!isElectron() || !window.api.localSettings) return;
+        const localSettings = window.api.localSettings;
 
-        if (!isElectron() || !window.api.localSettings) {
-            hasRunRef.current = true;
-            return;
-        }
-
-        // Wait some before checking for differences to ensure the store is hydrated from localStorage
-        const timeoutId = setTimeout(() => {
-            if (hasRunRef.current) {
-                return;
+        // The settings store hydrates from localStorage synchronously at creation, so it is read
+        // as it is now; main's values are asked for once.
+        void (async () => {
+            const mainValues: Record<string, unknown> = {};
+            for (const { key } of MIRRORED_SETTINGS) {
+                mainValues[key] = await localSettings.get(key);
             }
-
-            const settingsFromStore = useSettingsStore.getState();
-
-            const settings = {
-                font: settingsFromStore.font,
-                general: settingsFromStore.general,
-                hotkeys: settingsFromStore.hotkeys,
-                lyrics: settingsFromStore.lyrics,
-                playback: settingsFromStore.playback,
-                window: settingsFromStore.window,
-            };
-
-            hasRunRef.current = true;
-
-            const localSettings = window.api.localSettings;
-
-            const settingsMappings: Array<{
-                mainStoreKey: string;
-                rendererValue: any;
-            }> = [
-                {
-                    mainStoreKey: 'lyrics',
-                    rendererValue: settings.lyrics.sources,
-                },
-                {
-                    mainStoreKey: 'window_window_bar_style',
-                    rendererValue: settings.window.windowBarStyle,
-                },
-                {
-                    mainStoreKey: 'window_start_minimized',
-                    rendererValue: settings.window.startMinimized,
-                },
-                {
-                    mainStoreKey: 'window_exit_to_tray',
-                    rendererValue: settings.window.exitToTray,
-                },
-                {
-                    mainStoreKey: 'window_minimize_to_tray',
-                    rendererValue: settings.window.minimizeToTray,
-                },
-                // For some reason after the application is updated, the release channel from the
-                // renderer is always set to the latest channel. This causes an infinite update loop
-                // {
-                //     mainStoreKey: 'release_channel',
-                //     rendererValue: settings.window.releaseChannel,
-                // },
-                {
-                    mainStoreKey: 'window_enable_tray',
-                    rendererValue: settings.window.tray,
-                },
-                {
-                    mainStoreKey: 'password_store',
-                    rendererValue: settings.general.passwordStore,
-                },
-                {
-                    mainStoreKey: 'mediaSession',
-                    rendererValue: settings.playback.mediaSession,
-                },
-                {
-                    mainStoreKey: 'playbackType',
-                    rendererValue: settings.playback.type,
-                },
-                {
-                    mainStoreKey: 'global_media_hotkeys',
-                    rendererValue: settings.hotkeys.globalMediaHotkeys,
-                },
-                {
-                    mainStoreKey: 'enableNeteaseTranslation',
-                    rendererValue: settings.lyrics.enableNeteaseTranslation,
-                },
-                {
-                    mainStoreKey: 'local_font_path',
-                    rendererValue: settings.font.custom,
-                },
-            ];
-
-            // Compare and sync each setting
-            (async () => {
-                let hasDifferences = false;
-
-                for (const mapping of settingsMappings) {
-                    const mainValue = await localSettings.get(mapping.mainStoreKey);
-                    const rendererValue = mapping.rendererValue;
-
-                    const mainValueNormalized = mainValue === undefined ? null : mainValue;
-                    const rendererValueNormalized =
-                        rendererValue === undefined ? null : rendererValue;
-
-                    if (
-                        JSON.stringify(mainValueNormalized) !==
-                        JSON.stringify(rendererValueNormalized)
-                    ) {
-                        hasDifferences = true;
-                        logger.warn(
-                            'Differences found between renderer and main process settings',
-                            {
-                                mainStoreKey: mapping.mainStoreKey,
-                                mainValue: mainValueNormalized,
-                                rendererValue: rendererValueNormalized,
-                            },
-                        );
-                        localSettings.set(mapping.mainStoreKey, rendererValue);
-                    }
-                }
-
-                // Show restart toast if there were differences
-                if (hasDifferences) {
-                    openRestartRequiredToast(i18n.t('error.settingsSyncError'));
-                }
-            })();
-        }, 5000);
-
-        return () => {
-            clearTimeout(timeoutId);
-        };
-        // Only run once on mount
+            const patch = mirroredPatchFrom(
+                useSettingsStore.getState() as unknown as Record<string, unknown>,
+                mainValues,
+            );
+            const groups = Object.keys(patch);
+            if (groups.length === 0) return;
+            logger.info('Renderer settings adopted from the main process', {
+                keys: groups.flatMap((group) =>
+                    Object.keys(patch[group]).map((f) => `${group}.${f}`),
+                ),
+            });
+            useSettingsStore.getState().actions.setSettings(patch as never);
+        })();
     }, []);
 };

@@ -461,7 +461,7 @@ test('secret not in plain prefs', async () => {
     // And the generic settings IPC cannot read the slot out of electron-store.
     const ipc = read('../settings/index.ts');
     assert.equal(
-        (ipc.match(/if \(isMainOnlyKey\(data\.property\)\) return/g) ?? []).length,
+        (ipc.match(/if \(!rendererMayUse\(data\.property\)\) return/g) ?? []).length,
         3,
         'settings-get, settings-set and settings-set-sync each refuse the hubAuth slots',
     );

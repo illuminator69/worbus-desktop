@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { ZodError } from 'zod';
 
 import { DiffVisualiser } from '/@/renderer/components/settings-diff-visualiser/settings-diff-visualiser';
+import { writeMirroredToMain } from '/@/renderer/features/settings/utils/write-mirrored';
 import {
     keepCurrentSecrets,
     migrateSettings,
@@ -92,7 +93,13 @@ export const ExportImportSettingsModal = () => {
 
     const onImportClick = useCallback(() => {
         if (selectedSettingsFile) {
+            const before = useSettingsStore.getState();
             setSettings(selectedSettingsFile);
+            // B-328: the settings main owns go to main's copy too, not only to this one.
+            writeMirroredToMain(
+                before as unknown as Record<string, unknown>,
+                useSettingsStore.getState() as unknown as Record<string, unknown>,
+            );
             setCurrentScreen(SCREENS.IMPORT_COMPLETE);
         }
     }, [selectedSettingsFile, setSettings]);

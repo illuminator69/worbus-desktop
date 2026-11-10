@@ -18,6 +18,7 @@ import path from 'path';
 import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
 import { migratedFrom } from '/@/main/migrate-from-feishin';
+import { rendererMayUse } from '/@/shared/utils/main-settings';
 import { type SavedPassword } from '/@/shared/utils/saved-password';
 
 const getFrame = () => {
@@ -128,21 +129,20 @@ export const store = new Store<any>({
     migrations: SETTINGS_MIGRATIONS,
 });
 
-/**
- * Worbus P2: keys main keeps to itself. `hubAuth.*` holds the device secret's ciphertext and its
- * marker; the renderer has no business reading or replacing either through the generic settings
- * channel (hub/auth.ts).
+/*
+ * B-324: the generic settings channel serves the renderer only the keys it uses
+ * (`shared/utils/main-settings.ts`: the settings main owns for it, and the few it keeps in main
+ * alone). Everything else is main's: the saved passwords (`server`), `hubAuth.*` (Worbus P2: the
+ * device secret's ciphertext and marker, hub/auth.ts), `theme`, `bounds`, the device id.
  */
-const isMainOnlyKey = (property: unknown): boolean =>
-    typeof property !== 'string' || property === 'hubAuth' || property.startsWith('hubAuth.');
 
 ipcMain.handle('settings-get', (_event, data: { property: string }) => {
-    if (isMainOnlyKey(data.property)) return undefined;
+    if (!rendererMayUse(data.property)) return undefined;
     return store.get(`${data.property}`);
 });
 
 ipcMain.on('settings-set', (__event, data: { property: string; value: any }) => {
-    if (isMainOnlyKey(data.property)) return;
+    if (!rendererMayUse(data.property)) return;
     if (data.value === undefined) {
         store.delete(data.property);
     } else {
@@ -151,7 +151,7 @@ ipcMain.on('settings-set', (__event, data: { property: string; value: any }) => 
 });
 
 ipcMain.handle('settings-set-sync', (__event, data: { property: string; value: any }) => {
-    if (isMainOnlyKey(data.property)) return;
+    if (!rendererMayUse(data.property)) return;
     if (data.value === null) {
         store.delete(data.property);
     } else {
