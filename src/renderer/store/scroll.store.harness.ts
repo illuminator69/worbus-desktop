@@ -62,7 +62,7 @@ test('aStatelessEntryGetsAKeyOfItsOwnAndKeepsItsOffset', () => {
     const { getOffset, setOffset } = useScrollStore.getState();
     setOffset(key, 700);
     // Back to it later: react-router reads the key from the entry's state.
-    const onPop = (entry.state as { key?: string } | null)?.key ?? 'default';
+    const onPop = (entry.state as null | { key?: string })?.key ?? 'default';
     assert.equal(getOffset(onPop), 700);
     // The same entry keeps the same key; a second stateless entry gets another.
     assert.equal(entryKeyFor('default', entry, mint), key);
@@ -75,6 +75,9 @@ test('theStampKeepsTheRoutersOwnState', () => {
     assert.deepEqual(entry.state, { idx: 4, key, usr: { from: 'x' } });
     // An entry the router keyed is left alone.
     const keyed = fakeHistory({ idx: 1, key: 'abc', usr: null });
-    assert.equal(entryKeyFor('abc', keyed, () => 'k2'), 'abc');
+    assert.equal(
+        entryKeyFor('abc', keyed, () => 'k2'),
+        'abc',
+    );
     assert.deepEqual(keyed.state, { idx: 1, key: 'abc', usr: null });
 });

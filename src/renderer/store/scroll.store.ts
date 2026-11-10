@@ -16,13 +16,28 @@ export interface EntryHistory {
 }
 
 /**
- * B-315: the key this history entry's scroll offset (and chip) is kept under.
+ * B-315: the key this history entry's scroll offset (and chip) is kept under. The router's own
+ * key when it gave one. An entry it did not create (a hash assigned from code, `location.replace`,
+ * the first entry of a session) reads back as "default": B-208 kept nothing under that, so such an
+ * entry had no identity and Back to it landed at the top. It gets one stamped into its own
+ * history state, beside the router's `idx` and `usr`; react-router reads `history.state.key` back
+ * as `location.key` when the entry is popped to, so it keeps its offset like any other.
  */
 export const entryKeyFor = (
     locationKey: string,
-    _history: EntryHistory,
-    _mint: () => string,
-): string => locationKey;
+    history: EntryHistory,
+    mint: () => string,
+): string => {
+    if (hasEntryIdentity(locationKey)) return locationKey;
+    const state = (history.state ?? {}) as Record<string, unknown>;
+    if (typeof state.key === 'string' && hasEntryIdentity(state.key)) return state.key;
+    const key = mint();
+    history.replaceState({ ...state, key }, '');
+    return key;
+};
+
+/** A key in react-router's own form (`createKey`: base36, 8 characters). */
+export const mintEntryKey = (): string => Math.random().toString(36).substring(2, 10);
 
 type ScrollState = {
     getOffset: (key: string) => number | undefined;

@@ -1,6 +1,6 @@
 import { CSSProperties, type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { generatePath, Link, useLocation } from 'react-router';
+import { generatePath, Link } from 'react-router';
 
 import styles from './artist-shelves.module.css';
 
@@ -33,6 +33,7 @@ import { useDiscographyItems } from '/@/renderer/features/discography/hooks/use-
 import { type ReleaseKind } from '/@/renderer/features/discography/release-kind';
 import { type ArrivalProps, useArrival } from '/@/renderer/features/motion/use-arrival';
 import { useContainerQuery } from '/@/renderer/hooks';
+import { useEntryKey } from '/@/renderer/hooks/use-entry-key';
 import { AppRoute } from '/@/renderer/router/routes';
 import { useArtistReleaseTypeItems } from '/@/renderer/store/settings.store';
 import { Spinner } from '/@/shared/components/spinner/spinner';
@@ -72,7 +73,8 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
     const cq = useContainerQuery(TILE_BREAKPOINTS);
     const itemsPerRow = getItemsPerRow(cq);
 
-    const entry = useLocation().key;
+    // B-315: an entry the router did not key gets one of its own.
+    const entry = useEntryKey();
     const storedChip = useArtistChipStore((state) => state.chips[entry]);
     const storeChip = useArtistChipStore((state) => state.setChip);
     const [chosen, setChosen] = useState<string | undefined>(storedChip);

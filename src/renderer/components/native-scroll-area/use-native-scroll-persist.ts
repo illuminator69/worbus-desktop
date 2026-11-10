@@ -1,6 +1,7 @@
 import { RefObject, useEffect, useRef } from 'react';
-import { useLocation, useNavigationType } from 'react-router';
+import { useNavigationType } from 'react-router';
 
+import { useEntryKey } from '/@/renderer/hooks/use-entry-key';
 import { useScrollStore } from '/@/renderer/store/scroll.store';
 
 interface UseNativeScrollPersistProps {
@@ -23,11 +24,12 @@ const getContentNode = (scrollRef: RefObject<HTMLDivElement | null>): HTMLElemen
     return content instanceof HTMLElement ? content : null;
 };
 
-// Persists vertical scroll offset for a NativeScrollArea, keyed by react-router
-// location.key. Restores the saved offset only on POP navigation; PUSH/REPLACE
+// Persists vertical scroll offset for a NativeScrollArea, keyed by the history
+// entry (useEntryKey). Restores the saved offset only on POP navigation; PUSH/REPLACE
 // continue to start at the top.
 export const useNativeScrollPersist = ({ enabled, scrollRef }: UseNativeScrollPersistProps) => {
-    const location = useLocation();
+    // B-315: an entry the router did not key gets one of its own.
+    const entryKey = useEntryKey();
     const navigationType = useNavigationType();
     const setOffset = useScrollStore((s) => s.setOffset);
     const getOffset = useScrollStore((s) => s.getOffset);
@@ -39,7 +41,7 @@ export const useNativeScrollPersist = ({ enabled, scrollRef }: UseNativeScrollPe
     // Viewport ResizeObserver misses scrollHeight-only growth, so also poll via
     // rAF and observe the inner content element whose size actually changes.
     useEffect(() => {
-        const saved = getOffset(location.key);
+        const saved = getOffset(entryKey);
         if (!enabled || navigationType !== 'POP' || typeof saved !== 'number') {
             return;
         }
@@ -119,7 +121,7 @@ export const useNativeScrollPersist = ({ enabled, scrollRef }: UseNativeScrollPe
             mutationObserver.disconnect();
             isRestoringRef.current = false;
         };
-    }, [enabled, getOffset, location.key, navigationType, scrollRef]);
+    }, [enabled, getOffset, entryKey, navigationType, scrollRef]);
 
     useEffect(() => {
         const node = getScrollNode(scrollRef);
@@ -129,12 +131,12 @@ export const useNativeScrollPersist = ({ enabled, scrollRef }: UseNativeScrollPe
 
         const handleScroll = () => {
             if (isRestoringRef.current) return;
-            setOffset(location.key, node.scrollTop);
+            setOffset(entryKey, node.scrollTop);
         };
 
         node.addEventListener('scroll', handleScroll, { passive: true });
         return () => {
             node.removeEventListener('scroll', handleScroll);
         };
-    }, [enabled, location.key, scrollRef, setOffset]);
+    }, [enabled, entryKey, scrollRef, setOffset]);
 };
