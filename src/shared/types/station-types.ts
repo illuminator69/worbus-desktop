@@ -71,6 +71,11 @@ export interface StationCount {
     engine: null | StationEngine;
     /** A list failed: the number may be low, and is never shown as complete. */
     partial: boolean;
+    /**
+     * B-178: the same pool at the ladder's top (PROTOCOL §18.1), never below `count`; absent from
+     * an older hub, which reads as the count.
+     */
+    reach?: number;
     /** Seeds no tier holds. */
     unknown: string[];
 }

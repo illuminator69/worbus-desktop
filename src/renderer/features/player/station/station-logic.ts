@@ -33,6 +33,14 @@ import type {
 export const latchesAutoDj = <T>(result: StationResult<T>): boolean =>
     !result.ok && result.fallback === true && result.busy !== true;
 
+/**
+ * B-178: the songs a radio can draw on: the hub's `reach` when it says more than the count (22
+ * counted, 50 served, 338 reachable), else the count (an older hub sends no `reach`). Worbus for
+ * Android's `reachable` is the same rule.
+ */
+export const reachableSongs = (answer: { count: number; reach?: number }): number =>
+    Math.max(answer.count, answer.reach ?? answer.count);
+
 /** Top up when fewer than this many tracks remain after the current one, in play order. */
 export const LOOKAHEAD_MIN = 2;
 /** How many tracks a top-up asks for. Short on purpose: skips steer the next batch. */

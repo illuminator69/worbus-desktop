@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
+import { reachableSongs } from './station-logic.ts';
+
 /**
  * B-178 (Phase B, the desktop half; the hub's `reach` shipped as H4):
  *   node --test src/renderer/features/player/station/station-reach.harness.ts
@@ -23,4 +25,12 @@ test('main_keeps_the_hubs_reach', () => {
 test('the_mix_form_counts_what_the_radio_reaches', () => {
     const form = read('../../mixes/components/mix-form.tsx');
     assert.match(form, /reachableSongs\(/, 'the line says the first-ceiling count');
+});
+
+test('reachable_songs_rule', () => {
+    assert.equal(reachableSongs({ count: 22, reach: 338 }), 338);
+    assert.equal(reachableSongs({ count: 22 }), 22, 'an older hub: the count');
+    assert.equal(reachableSongs({ count: 40, reach: 40 }), 40);
+    assert.equal(reachableSongs({ count: 22, reach: 10 }), 22, 'never below the count');
+    assert.equal(reachableSongs({ count: 0, reach: 0 }), 0);
 });

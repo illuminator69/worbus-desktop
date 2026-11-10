@@ -19,7 +19,7 @@ import {
     suggestedMixName,
 } from '/@/renderer/features/mixes/mix-recipe';
 import { countStation, customRadioSeed } from '/@/renderer/features/player/station/station-client';
-import { takesVariety } from '/@/renderer/features/player/station/station-logic';
+import { reachableSongs, takesVariety } from '/@/renderer/features/player/station/station-logic';
 import {
     useStationCatalog,
     useStationMode,
@@ -252,7 +252,12 @@ const useCountWords = (
             if (!seeded) return { kind: 'noSeed' };
             const result = await countStation(seeded.seed, ch as StationCharacterId);
             if (result.ok && result.data) {
-                return { count: result.data.count, kind: 'counted', partial: result.data.partial };
+                // B-178: what the radio can reach, not its first ceiling alone.
+                return {
+                    count: reachableSongs(result.data),
+                    kind: 'counted',
+                    partial: result.data.partial,
+                };
             }
             return { kind: result.code === 'seed_unknown' ? 'seedUnknown' : 'failed' };
         },

@@ -162,6 +162,11 @@ const toCount = (body: Json): null | StationCount => {
         count: Math.max(0, Math.trunc(body.count)),
         engine: toEngine(body.engine),
         partial: body.partial === true,
+        // B-178: how far the ladder reaches (PROTOCOL §18.1); absent from an older hub.
+        reach:
+            typeof body.reach === 'number' && Number.isFinite(body.reach)
+                ? Math.max(0, Math.trunc(body.reach))
+                : undefined,
         unknown: Array.isArray(body.unknown)
             ? body.unknown.filter((x): x is string => typeof x === 'string')
             : [],
