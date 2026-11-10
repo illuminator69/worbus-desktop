@@ -15,7 +15,8 @@
  * - a new queue under shuffle: its start row first, the rest at random;
  * - Play next: right after the playing row, in the order given;
  * - Add to queue (and a station or Auto DJ top-up): at the end, in the order given;
- * - any other insert: right after its queue predecessor's play position;
+ * - any other insert: right after its queue predecessor's play position (with none, right
+ *   before its queue successor's);
  * - remove: dropped, the rest keep their order; removing the playing row plays the row after it;
  * - move: queue order only, every row keeps its play position.
  *
@@ -81,7 +82,7 @@ export const orderWithFirst = (
  * relative order (remove, move); a run of new rows goes at the end when no surviving row comes
  * after it in the queue (Add to queue, a top-up), else right after its queue predecessor's play
  * position (Play next lands at current + 1, so its predecessor is the playing row), in the order
- * given. A run at the very top of the queue goes first.
+ * given. A run at the very top of the queue (no predecessor) goes right before its queue successor.
  *
  * `playNextAfter` (Play next): every new row goes right after that row's play position, in queue
  * order. Said, not inferred: with the playing row last in the queue, Play next appends to it
@@ -113,7 +114,11 @@ export const orderAfterEdit = (
         if (row > lastKept) {
             order.push(row);
         } else if (row === 0) {
-            order.unshift(row);
+            // No queue predecessor: right before its queue successor (the first kept row after
+            // it; the rest of its run then follows it as predecessors).
+            let successor = row + 1;
+            while (!kept.has(successor)) successor += 1;
+            order.splice(order.indexOf(successor), 0, row);
         } else {
             order.splice(order.indexOf(row - 1) + 1, 0, row);
         }
