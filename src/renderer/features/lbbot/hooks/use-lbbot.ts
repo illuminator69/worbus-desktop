@@ -73,9 +73,10 @@ import {
 } from '/@/renderer/features/lbbot/components/source-cards-model';
 import { gapProgress } from '/@/renderer/features/lbbot/gap-stage';
 import {
+    gapEntryAfterSummary,
+    type GapEntry,
     gapFailReason,
     gapSettleOutcome,
-    mergeGapSummary,
 } from '/@/renderer/features/lbbot/hooks/fill-announce-logic';
 import {
     gapIsBusy,
@@ -2207,14 +2208,12 @@ export const applyGapSummary = (
 ): void => {
     const { actions, gaps } = useActiveFillsStore.getState();
     const queryKey = ['lbbot', 'gap', groupId];
-    const cached = registry.queryClient?.getQueryData<LbBotResult<LbBotGap>>(queryKey)?.data;
-    const merged = mergeGapSummary(cached, gap);
-    registry.queryClient?.setQueryData(queryKey, {
-        data: merged,
-        error: '',
-        ok: true,
-        status: 200,
-    });
+    const entry = gapEntryAfterSummary(
+        registry.queryClient?.getQueryData<GapEntry>(queryKey),
+        gap,
+    );
+    const merged = entry.data!;
+    registry.queryClient?.setQueryData(queryKey, entry);
     // Results the cache holds no rows for (a search just finished): read the full
     // view once for that result set. Refetches now if the dialog is open, else
     // marks it stale for when it opens.

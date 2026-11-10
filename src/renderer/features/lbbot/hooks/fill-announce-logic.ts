@@ -167,3 +167,23 @@ export const mergeGapSummary = (prev: LbBotGap | null | undefined, summary: LbBo
               sourcesPages: prev.sourcesPages,
           }
         : summary;
+
+/**
+ * B-234: the gap query's cache entry after an /lb/fills summary was merged in. The album page's
+ * gaps box keeps its own read clock in the same entry (`failingSince`, when /lb/gap reads began
+ * failing), so the writer of the summary must produce the same shape.
+ */
+export interface GapEntry {
+    data: LbBotGap | null;
+    error: string;
+    failingSince?: number;
+    ok: boolean;
+    status: number;
+}
+
+export const gapEntryAfterSummary = (before: GapEntry | undefined, summary: LbBotGap): GapEntry => ({
+    data: mergeGapSummary(before?.data, summary),
+    error: '',
+    ok: true,
+    status: 200,
+});

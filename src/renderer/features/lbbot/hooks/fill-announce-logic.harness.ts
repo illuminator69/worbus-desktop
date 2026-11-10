@@ -8,6 +8,7 @@ import {
     announcementLinkPathFor,
     gapAwaitingMatch,
     gapFailReason,
+    gapEntryAfterSummary,
     gapSettleOutcome,
     mergeGapSummary,
 } from './fill-announce-logic.ts';
@@ -283,4 +284,20 @@ test('with nothing cached, or a full view in hand, the incoming gap stands', () 
     assert.equal(mergeGapSummary(undefined, summary), summary);
     const full = gapWith({ sources: rows, sourcesTotal: 12 });
     assert.equal(mergeGapSummary(gapWith({ sources: [] }), full), full);
+});
+
+/**
+ * B-234: /lb/gap failing while this device's ledger row is open. The app-root watcher writes each
+ * /lb/fills summary over the gap's cache entry, which held the box's read clock; the clock read 0
+ * again after every summary, so the box's give-up never fired and it kept polling.
+ */
+test('a summary keeps the box read clock', () => {
+    const failing = { data: gapWith({}), error: 'x', failingSince: 1_000, ok: false, status: 502 };
+    const after = gapEntryAfterSummary(failing, gapWith({ status: 'downloading' }));
+    assert.equal(after.failingSince, 1_000, 'a summary is not an /lb/gap read');
+    assert.equal(after.data?.status, 'downloading', 'the summary is still the newer record');
+    // While reads answer, the clock stays at 0.
+    const answering = { data: gapWith({}), error: '', failingSince: 0, ok: true, status: 200 };
+    assert.equal(gapEntryAfterSummary(answering, gapWith({})).failingSince, 0);
+    assert.equal(gapEntryAfterSummary(undefined, gapWith({})).failingSince, 0);
 });
