@@ -8,6 +8,9 @@ import eslintPluginReactRefresh from 'eslint-plugin-react-refresh';
 const PLAYER_INDEX_MESSAGE =
     'player.index is a play position under shuffle: read playingQueueIndex, playOrder or playPosition from the store.';
 
+const PLAYER_ALIAS_MESSAGE =
+    'Bind the player store slice only as `player`, so a read of player.index stays visible to this rule.';
+
 export default tseslint.config(
     { ignores: ['**/node_modules', '**/dist', '**/out', 'commitlint.config.mjs'] },
     tseslint.configs.recommended,
@@ -63,20 +66,22 @@ export default tseslint.config(
         rules: {
             'no-restricted-syntax': [
                 'error',
-                {
-                    message: PLAYER_INDEX_MESSAGE,
-                    selector:
-                        "MemberExpression[property.name='index'][object.property.name='player']",
-                },
-                {
-                    message: PLAYER_INDEX_MESSAGE,
-                    selector: "MemberExpression[property.name='index'][object.name='player']",
-                },
-                {
-                    message: PLAYER_INDEX_MESSAGE,
-                    selector:
-                        "VariableDeclarator[init.property.name='player'] > ObjectPattern > Property[key.name='index']",
-                },
+                // x.player.index, x.player?.index, x.player['index'], player.index
+                ...[
+                    "MemberExpression[property.name='index'][object.property.name='player']",
+                    "MemberExpression[property.name='index'][object.name='player']",
+                    "MemberExpression[property.value='index'][object.property.name='player']",
+                    "MemberExpression[property.value='index'][object.name='player']",
+                    // const { index } = x.player; const { player: { index } } = x
+                    "VariableDeclarator[init.property.name='player'] > ObjectPattern > Property[key.name='index']",
+                    "Property[key.name='player'] > ObjectPattern > Property[key.name='index']",
+                ].map((selector) => ({ message: PLAYER_INDEX_MESSAGE, selector })),
+                // The slice under another name (const p = x.player; const { player: p } = x)
+                // is the field out of sight: it is only ever called `player`.
+                ...[
+                    "VariableDeclarator[init.property.name='player'][id.type='Identifier'][id.name!='player']",
+                    "ObjectPattern > Property[key.name='player'][value.type='Identifier'][value.name!='player']",
+                ].map((selector) => ({ message: PLAYER_ALIAS_MESSAGE, selector })),
             ],
         },
     },

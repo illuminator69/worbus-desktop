@@ -30,7 +30,12 @@ const sources = (dir: string): string[] =>
         return /\.tsx?$/.test(name) && !/\.harness\.ts$/.test(name) ? [path] : [];
     });
 
-/** `x.player.index`, `player.index`, and `const { index } = x.player`. */
+/**
+ * A read of the field: `x.player.index`, `x.player?.index`, `x.player['index']`, `player.index`,
+ * `const { index } = x.player` and `const { player: { index } } = x`. The player slice bound to
+ * any other name (`const p = x.player`, `const { player: p } = x`) counts too: `p.index` is the
+ * field under a name nothing can follow, so the slice is only ever called `player`.
+ */
 const rawReads = (path: string, text = readFileSync(path, 'utf8')): string[] => {
     const file = ts.createSourceFile(
         path,
@@ -39,30 +44,38 @@ const rawReads = (path: string, text = readFileSync(path, 'utf8')): string[] => 
         true,
         path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
     );
+    const keyIs = (node: ts.Node | undefined, key: string): boolean =>
+        !!node &&
+        (ts.isIdentifier(node) || ts.isStringLiteral(node) || ts.isPrivateIdentifier(node)) &&
+        node.text === key;
     const isPlayer = (node: ts.Expression): boolean =>
         (ts.isIdentifier(node) && node.text === 'player') ||
-        (ts.isPropertyAccessExpression(node) && node.name.text === 'player');
+        (ts.isPropertyAccessExpression(node) && node.name.text === 'player') ||
+        (ts.isElementAccessExpression(node) && keyIs(node.argumentExpression, 'player'));
+    const hasIndex = (pattern: ts.ObjectBindingPattern): boolean =>
+        pattern.elements.some((element) => keyIs(element.propertyName ?? element.name, 'index'));
     const hits: string[] = [];
     const where = (node: ts.Node) =>
         `${relative(RENDERER, path)}:${file.getLineAndCharacterOfPosition(node.getStart()).line + 1}`;
     const visit = (node: ts.Node) => {
         if (
-            ts.isPropertyAccessExpression(node) &&
-            node.name.text === 'index' &&
+            ((ts.isPropertyAccessExpression(node) && node.name.text === 'index') ||
+                (ts.isElementAccessExpression(node) && keyIs(node.argumentExpression, 'index'))) &&
             isPlayer(node.expression)
         ) {
             hits.push(where(node));
         }
-        if (
-            ts.isVariableDeclaration(node) &&
-            node.initializer &&
-            isPlayer(node.initializer) &&
-            ts.isObjectBindingPattern(node.name) &&
-            node.name.elements.some(
-                (element) => (element.propertyName ?? element.name).getText(file) === 'index',
-            )
-        ) {
-            hits.push(where(node));
+        if (ts.isVariableDeclaration(node) && node.initializer && isPlayer(node.initializer)) {
+            const name = node.name;
+            if (ts.isObjectBindingPattern(name) ? hasIndex(name) : !keyIs(name, 'player')) {
+                hits.push(where(node));
+            }
+        }
+        if (ts.isBindingElement(node) && keyIs(node.propertyName ?? node.name, 'player')) {
+            const name = node.name;
+            if (ts.isObjectBindingPattern(name) ? hasIndex(name) : !keyIs(name, 'player')) {
+                hits.push(where(node));
+            }
         }
         ts.forEachChild(node, visit);
     };
