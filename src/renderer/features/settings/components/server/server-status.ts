@@ -47,7 +47,10 @@ export interface HubLinkInput {
     connected: boolean;
     enabled: boolean;
     now: number;
-    /** P3: main reports a live socket (`hub-server`'s activeAddress) whose welcome has not come yet. */
+    /**
+     * P3: main reports a live socket (`hub-server`'s activeAddress), welcomed or not yet. B-326:
+     * false also ends `connected` (the socket it belonged to is gone).
+     */
     opening?: boolean;
     /** Worbus P2: main holds a device secret (a signed-in device has no typed token). */
     signedIn?: boolean;
@@ -73,7 +76,10 @@ export const isHubConfigured = (s: {
     });
 
 export const hubLink = (i: HubLinkInput): HubLink => {
-    if (i.enabled && i.connected) return 'connected';
+    // B-326: `connected` names no address. It holds only while main reports the live socket it
+    // belongs to (`opening` false: main stopped it, for an address change, before its close
+    // cleared the flag). Undefined: a caller that does not know, as before.
+    if (i.enabled && i.connected && i.opening !== false) return 'connected';
     if (!i.enabled) return isHubConfigured(i) ? 'off' : 'notConfigured';
     // The untouched default shows as an empty field, so with no credential it is not an address
     // yet.
