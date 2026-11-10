@@ -73,7 +73,7 @@ const LABEL_KEYS: Record<string, string> = {
 };
 
 // Rows whose route is empty or shared get their glyph by name (SidebarIcon's default is Home's).
-const ICON_NAMES: Record<string, 'activity' | 'attention' | 'library'> = {
+const ICON_NAMES: Record<string, 'activity' | 'library'> = {
     activity: 'activity',
     library: 'library',
 };

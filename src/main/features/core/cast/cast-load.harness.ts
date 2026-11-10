@@ -99,6 +99,8 @@ test('helloAdvertisesTransferAckV2', () => {
     });
     assert.ok(hello.device.caps.includes('transferAckV2'));
     assert.ok(hello.device.caps.includes('loadAck'));
+    // W1: a bridge advances index + 1 and owns no play order; only the app's own hello says so.
+    assert.ok(!hello.device.caps.includes('playOrder'));
 });
 
 test('aQuickLoadIsAnsweredWithItsTransferId', async () => {

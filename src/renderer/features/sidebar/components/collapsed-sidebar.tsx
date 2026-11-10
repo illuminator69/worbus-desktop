@@ -20,7 +20,7 @@ import { Stack } from '/@/shared/components/stack/stack';
 import { LibraryItem } from '/@/shared/types/domain-types';
 import { Platform } from '/@/shared/types/types';
 
-const RAIL_ICON_NAMES: Record<string, 'activity' | 'attention' | 'library'> = {
+const RAIL_ICON_NAMES: Record<string, 'activity' | 'library'> = {
     activity: 'activity',
     library: 'library',
 };

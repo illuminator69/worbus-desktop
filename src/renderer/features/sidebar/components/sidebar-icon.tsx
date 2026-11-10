@@ -1,8 +1,6 @@
 import {
     RiAlbumFill,
     RiAlbumLine,
-    RiAlertFill,
-    RiAlertLine,
     RiBarChart2Fill,
     RiBarChart2Line,
     RiBookShelfFill,
@@ -56,7 +54,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
 interface SidebarIconProps {
     active?: boolean;
     /** Picks the glyph by name for rows whose route is shared or empty. */
-    name?: 'activity' | 'attention' | 'library';
+    name?: 'activity' | 'library';
     route: string;
     size?: string;
 }
@@ -69,9 +67,6 @@ export const SidebarIcon = ({ active, name, route, size }: SidebarIconProps) => 
             case 'activity':
                 if (isActive) return <RiTimeFill size={size} />;
                 return <RiTimeLine size={size} />;
-            case 'attention':
-                if (isActive) return <RiAlertFill size={size} />;
-                return <RiAlertLine size={size} />;
             case 'library':
                 if (isActive) return <RiBookShelfFill size={size} />;
                 return <RiBookShelfLine size={size} />;
