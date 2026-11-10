@@ -25,6 +25,7 @@ import {
     bindingFromAnswer,
     customRadioSeeds,
     keepResolved,
+    latchesAutoDj,
     ownArtistSongs,
     SEED_TRACKS_MAX,
     spreadPick,
@@ -70,7 +71,7 @@ export const probeStations = async (): Promise<null | StationCatalog> => {
 };
 
 const noteFallback = <T>(result: StationResult<T>, route: string): StationResult<T> => {
-    if (!result.ok && (result.status === 503 || result.fallback)) {
+    if (latchesAutoDj(result)) {
         logger.warn('Station engine unavailable, using Auto DJ', { route, status: result.status });
         useStationStore.getState().actions.latchFallback();
     }

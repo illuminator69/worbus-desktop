@@ -23,6 +23,12 @@ import type {
 // by a station (an album, a playlist, a Journey) continues as one when it runs out: the last
 // tracks played become the seed.
 
+/**
+ * Whether a station answer switches autoplay over to Auto DJ for the latch's minute (B-268).
+ */
+export const latchesAutoDj = <T>(result: StationResult<T>): boolean =>
+    !result.ok && (result.status === 503 || result.fallback === true);
+
 /** Top up when fewer than this many tracks remain after the current one, in play order. */
 export const LOOKAHEAD_MIN = 2;
 /** How many tracks a top-up asks for. Short on purpose: skips steer the next batch. */
