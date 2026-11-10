@@ -7,7 +7,7 @@ import test from 'node:test';
  *   node --test src/main/features/core/autodiscover/autodiscover.harness.ts
  *
  * A fresh profile's sign-in page listed "Tower - Jellyfin server at 192.168.129.153": upstream
- * Feishin's music-server discovery is a Jellyfin UDP broadcast, and Worbus works with Navidrome
+ * code's music-server discovery is a Jellyfin UDP broadcast, and Worbus works with Navidrome
  * only, so the one server it can find is one Worbus cannot use. Discovery finds only what Worbus
  * signs in to (Navidrome has no broadcast to answer; the Worbus Server has its own finder).
  */

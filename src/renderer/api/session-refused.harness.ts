@@ -8,7 +8,7 @@ import { whenSessionRefused } from '../../shared/utils/saved-password.ts';
  * B-338 (Phase B, W7):
  *   node --test src/renderer/api/session-refused.harness.ts
  *
- * A Worbus profile copied from Feishin carries the old app's saved Navidrome session and a saved
+ * A Worbus profile copied at the move from the old app carries the old app's saved Navidrome session and a saved
  * password the new app's keyring cannot decrypt. The first native call answers 401; the
  * re-authentication asks main for the password, main answers `null` - the same answer as "no
  * password saved" - and the 401 path reads that as revoked credentials: `authenticationFailure`

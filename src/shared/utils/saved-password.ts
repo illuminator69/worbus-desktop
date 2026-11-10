@@ -1,6 +1,6 @@
 /**
  * B-338: what a server's saved password reads as. `unreadable` is a password that is saved but
- * could not be decrypted (the keyring key follows the app's name, so one the old Feishin saved may
+ * could not be decrypted (the keyring key follows the app's name, so one the old app saved may
  * not read in Worbus; or the keyring itself changed). It is not "no password": the person's
  * credentials were not refused, this computer just cannot read them.
  */
