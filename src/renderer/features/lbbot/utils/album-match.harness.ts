@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { pickAlbumCandidate, rankAlbumCandidates } from './album-match.ts';
+import { pickAlbumCandidate, rankAlbumCandidates, sameArtist } from './album-match.ts';
 
 /**
  * Validating an album lookup against the question (`navi-connect/CLAUDE.md` §7,
@@ -66,4 +66,28 @@ test('an artist that only contains the asked one does not match', () => {
         pickAlbumCandidate([cand('Pink Floyd', 'The Wall')], { artist: 'Pink', title: 'The Wall' }),
         null,
     );
+});
+
+/**
+ * B-313 (the client half of B-176/Q-120; the hub's `_ARTIST_SEP_RE` splits these since S-094): a
+ * bullet and a SPACED hyphen separate acts; an unspaced hyphen never does (Jay-Z, Run-DMC), nor
+ * does `/` (AC/DC). Test vectors shared with the Android lane's rule.
+ */
+test('a bullet and a spaced hyphen separate acts', () => {
+    const same: Array<[string, string]> = [
+        ['Phoebe Bridgers • Phoebe Bridgers, Christian Lee Hutson', 'Phoebe Bridgers'],
+        ['Phoebe Bridgers•Christian Lee Hutson', 'Christian Lee Hutson'],
+        ['Lana Del Rey - Nikki Lane', 'Lana Del Rey'],
+        ['Lana Del Rey - Nikki Lane', 'Nikki Lane'],
+    ];
+    for (const [a, b] of same) assert.equal(sameArtist(a, b), true, `${a} | ${b}`);
+    const different: Array<[string, string]> = [
+        ['Jay-Z', 'Jay'],
+        ['Run-DMC', 'Run'],
+        ['Run-DMC', 'DMC'],
+        ['Lana Del Rey -Nikki Lane', 'Nikki Lane'],
+        ['AC/DC', 'AC'],
+    ];
+    for (const [a, b] of different) assert.equal(sameArtist(a, b), false, `${a} | ${b}`);
+    assert.equal(sameArtist('Jay-Z', 'Jay-Z'), true);
 });
