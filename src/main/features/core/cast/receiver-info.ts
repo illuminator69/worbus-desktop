@@ -49,10 +49,21 @@ export function receiverLevel(volume: unknown): null | number {
     return Math.min(100, Math.max(0, Math.round(level * 100)));
 }
 
-/** The device a service names, or null when it has no address to dial. */
-export function serviceToDevice(
-    service: CastService,
-): null | { host: string; id: string; kind: CastKind | undefined; name: string } {
+/** Cast's own port: what a record that names none is dialled on. */
+export const CAST_DEFAULT_PORT = 8009;
+
+/**
+ * The device a service names, or null when it has no address to dial. B-115: with the port it
+ * advertises (the SRV record's): a speaker group's leader advertises the group on a port of its
+ * own, and 8009 there is the leader alone.
+ */
+export function serviceToDevice(service: CastService): null | {
+    host: string;
+    id: string;
+    kind: CastKind | undefined;
+    name: string;
+    port: number;
+} {
     const txt = (service.txt ?? {}) as Record<string, string>;
     const host =
         service.addresses?.find((address) => address.includes('.')) ?? service.addresses?.[0];
@@ -63,6 +74,10 @@ export function serviceToDevice(
         // `ca`: the capability bits - a group, a TV or a speaker (receiver-info.ts).
         kind: castKind(txt.ca),
         name: txt.fn || service.name,
+        port:
+            Number.isInteger(service.port) && service.port! > 0 && service.port! < 65536
+                ? service.port!
+                : CAST_DEFAULT_PORT,
     };
 }
 

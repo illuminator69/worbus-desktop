@@ -109,7 +109,6 @@ const IDLE_VOLUME_TIMEOUT_MS = 5000;
 // network nobody here is on. The bridge is the only party that can tell the difference,
 // so it probes and reports. The probe is a bare TCP connect: asking the receiver app
 // would mean LAUNCHing it, and launching seizes the speaker's audio output.
-const CAST_PORT = 8009;
 const PROBE_TIMEOUT_MS = 2000;
 const REACHABILITY_INTERVAL_MS = 30_000;
 // Consecutive failed probes before we call a speaker down. One miss is a dropped packet;
@@ -288,6 +287,8 @@ class CastDeviceBridge {
         private readonly deviceId: string,
         private readonly friendlyName: string,
         private host: string,
+        /** B-115: the port the device advertises (a group's is not 8009). */
+        private port: number,
         /** What the speaker is, from its mDNS record; undefined when the record does not say. */
         private readonly kind: CastKind | undefined,
     ) {
@@ -354,10 +355,13 @@ class CastDeviceBridge {
      * every connect timed out — permanently, since re-discovery is skipped for a device we
      * already have a bridge for.
      */
-    updateHost(host: string): void {
-        if (!host || host === this.host) return;
-        log.info(`[cast-bridge] ${this.friendlyName}: address changed ${this.host} → ${host}`);
+    updateHost(host: string, port: number): void {
+        if (!host || (host === this.host && port === this.port)) return;
+        log.info(
+            `[cast-bridge] ${this.friendlyName}: address changed ${this.host}:${this.port} → ${host}:${port}`,
+        );
         this.host = host;
+        this.port = port;
         const wasPlaying = this.playing;
         this.teardownCast();
         // Whatever we held pointed at the old address; pick playback back up at the new one.
@@ -418,7 +422,7 @@ class CastDeviceBridge {
                 finish();
             });
             log.info(`[cast-bridge] ${this.friendlyName}: checking for a running session to adopt`);
-            client.connect(this.host, () => {
+            client.connect({ host: this.host, port: this.port }, () => {
                 client.getSessions((err, sessions) => {
                     const running = (sessions ?? []).find(
                         (s) => s.appId === DEFAULT_MEDIA_RECEIVER_APP_ID,
@@ -865,8 +869,8 @@ class CastDeviceBridge {
             client.on('close', () => {
                 if (this.castClient === client) this.onCastSocketClosed();
             });
-            log.info(`[cast-bridge] ${this.friendlyName}: connecting to ${this.host}`);
-            client.connect(this.host, () => {
+            log.info(`[cast-bridge] ${this.friendlyName}: connecting to ${this.host}:${this.port}`);
+            client.connect({ host: this.host, port: this.port }, () => {
                 this.launchOrJoin(client).then(
                     (player) => {
                         clearTimeout(timeout);
@@ -1798,7 +1802,7 @@ class CastDeviceBridge {
             // Attached before connecting: an `error` with no listener is thrown.
             client.on('error', (err) => finish(err.message));
             try {
-                client.connect(this.host, () => {
+                client.connect({ host: this.host, port: this.port }, () => {
                     try {
                         client.setVolume({ level }, (err, volume) => {
                             if (!err) this.noteReceiverVolume(volume);
@@ -1837,7 +1841,7 @@ class CastDeviceBridge {
             socket.once('timeout', () => done(false));
             socket.once('error', () => done(false));
             try {
-                socket.connect(CAST_PORT, this.host);
+                socket.connect(this.port, this.host);
             } catch {
                 done(false);
             }
@@ -2041,7 +2045,9 @@ function startBridging(): void {
         const device = serviceToDevice(service);
         log.info(
             `[cast-bridge] mDNS up: ${service.name} → ` +
-                (device ? `${device.name} @ ${device.host}` : 'unusable (no IPv4 address)'),
+                (device
+                    ? `${device.name} @ ${device.host}:${device.port}`
+                    : 'unusable (no IPv4 address)'),
         );
         if (!device) return;
         const existing = bridges.get(device.id);
@@ -2049,12 +2055,12 @@ function startBridging(): void {
             // Re-discovery is otherwise ignored, which froze each bridge at the address it
             // first saw. Every announcement is a chance to notice the device moved.
             existing.lastSeenAt = Date.now();
-            existing.updateHost(device.host);
+            existing.updateHost(device.host, device.port);
             return;
         }
         bridges.set(
             device.id,
-            new CastDeviceBridge(device.id, device.name, device.host, device.kind),
+            new CastDeviceBridge(device.id, device.name, device.host, device.port, device.kind),
         );
     });
     browser.on('down', (service) => {
