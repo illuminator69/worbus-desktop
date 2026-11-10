@@ -1,27 +1,37 @@
 /**
- * B-372: what `getPlayQueue` (the classic call) answers, read for the controller. Pure, so the
+ * B-372: a saved play queue as either call answers it - `getPlayQueue` (the current song by id)
+ * or `getPlayQueueByIndex` (by row) - read by one rule. A server with no saved queue leaves the
+ * object out (Navidrome does so for both calls), and that reads as an empty queue. Pure, so the
  * harness runs it.
  */
-interface ClassicPlayQueue<S> {
-    changed: string;
-    changedBy: string;
+export interface SavedPlayQueueBody<S> {
+    changed?: string;
+    changedBy?: string;
     current?: string;
-    entry: S[];
+    currentIndex?: number;
+    entry?: S[];
     position?: number;
-    username: string;
+    username?: string;
 }
 
-export const readClassicPlayQueue = <S extends { id: string }, T>(
-    body: { playQueue: ClassicPlayQueue<S> },
+export const readSavedPlayQueue = <S extends { id: number | string }, T>(
+    raw: SavedPlayQueueBody<S> | undefined,
     toSong: (song: S) => T,
 ) => {
-    const { changed, changedBy, current, entry, position, username } = body.playQueue;
+    const entry = raw?.entry ?? [];
+    const byId = raw?.current ? entry.findIndex((item) => item.id === raw.current) : -1;
     return {
-        changed,
-        changedBy,
-        currentIndex: current ? entry.findIndex((item) => item.id === current) : 0,
-        entry: entry?.map(toSong) || [],
-        positionMs: position ?? 0,
-        username,
+        changed: raw?.changed ?? '',
+        changedBy: raw?.changedBy ?? '',
+        currentIndex: raw?.currentIndex ?? Math.max(byId, 0),
+        entry: entry.map(toSong),
+        positionMs: raw?.position ?? 0,
+        username: raw?.username ?? '',
     };
 };
+
+/** The classic call's answer. */
+export const readClassicPlayQueue = <S extends { id: number | string }, T>(
+    body: { playQueue?: SavedPlayQueueBody<S> },
+    toSong: (song: S) => T,
+) => readSavedPlayQueue(body?.playQueue, toSong);

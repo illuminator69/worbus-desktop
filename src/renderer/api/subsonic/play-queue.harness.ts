@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { readClassicPlayQueue } from './play-queue.ts';
+import { readClassicPlayQueue, readSavedPlayQueue } from './play-queue.ts';
 
 /**
  * B-372 (Phase B):
@@ -54,4 +54,29 @@ test('a_queue_with_no_entries_or_an_unknown_current_reads_as_row_0', () => {
         playQueue: { changed: '', changedBy: '', current: 'x', entry: [song('a')], username: 'a' },
     };
     assert.equal(readClassicPlayQueue(missing, toSong).currentIndex, 0);
+});
+
+test('both_calls_read_by_one_rule', () => {
+    const byIndex = readSavedPlayQueue(
+        {
+            changed: 'c',
+            changedBy: 'W',
+            currentIndex: 1,
+            entry: [song('a'), song('b')],
+            username: 'u',
+        },
+        toSong,
+    );
+    const classic = readSavedPlayQueue(
+        {
+            changed: 'c',
+            changedBy: 'W',
+            current: 'b',
+            entry: [song('a'), song('b')],
+            username: 'u',
+        },
+        toSong,
+    );
+    assert.deepEqual(byIndex, classic);
+    assert.deepEqual(readSavedPlayQueue(undefined, toSong), readClassicPlayQueue({}, toSong));
 });

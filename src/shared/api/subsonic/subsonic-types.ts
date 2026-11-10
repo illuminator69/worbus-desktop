@@ -810,15 +810,18 @@ const savePlayQueueByIndexParameters = z.object({
 
 const saveQueue = z.null();
 
+// B-372: a server with no saved queue leaves `playQueue` out, as it does `playQueueByIndex`.
 const playQueue = z.object({
-    playQueue: z.object({
-        changed: z.string(),
-        changedBy: z.string(),
-        current: z.string().optional(),
-        entry: song.array(),
-        position: z.number().optional(),
-        username: z.string(),
-    }),
+    playQueue: z
+        .object({
+            changed: z.string(),
+            changedBy: z.string(),
+            current: z.string().optional(),
+            entry: song.array().optional(),
+            position: z.number().optional(),
+            username: z.string(),
+        })
+        .optional(),
 });
 
 const playQueueByIndex = z.object({

@@ -7,6 +7,8 @@ import orderBy from 'lodash/orderBy';
 import md5 from 'md5';
 import { z } from 'zod';
 
+import { readClassicPlayQueue, readSavedPlayQueue } from './play-queue';
+
 import { contract, ssApiClient } from '/@/renderer/api/subsonic/subsonic-api';
 import { mapStructuredLyric } from '/@/renderer/api/subsonic/subsonic-structured-lyrics';
 import {
@@ -45,8 +47,6 @@ import {
 } from '/@/shared/types/domain-types';
 import { ServerFeature, ServerFeatures } from '/@/shared/types/features-types';
 import { CLIENT_NAME } from '/@/shared/utils/client-name';
-
-import { readClassicPlayQueue } from './play-queue';
 
 const getSubsonicImageRequest = ({
     apiClientProps: { server },
@@ -1332,17 +1332,10 @@ export const SubsonicController: InternalControllerEndpoint = {
                 throw new Error('Failed to get play queue');
             }
 
-            const { changed, changedBy, currentIndex, entry, position, username } =
-                res.body.playQueueByIndex || {}; // if there is no queue saved, playQueueByIndex may be undefined from a bug in Navidrome
-
-            return {
-                changed: changed ?? '',
-                changedBy: changedBy ?? '',
-                currentIndex: currentIndex ?? 0,
-                entry: entry?.map((song) => ssNormalize.song(song, apiClientProps.server)) || [],
-                positionMs: position ?? 0,
-                username: username ?? '',
-            };
+            // No queue saved: no playQueueByIndex (B-372: one rule for both calls).
+            return readSavedPlayQueue(res.body.playQueueByIndex, (song) =>
+                ssNormalize.song(song, apiClientProps.server),
+            );
         } else {
             const res = await ssApiClient(apiClientProps).getPlayQueue();
 
