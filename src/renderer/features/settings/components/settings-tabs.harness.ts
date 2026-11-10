@@ -49,7 +49,7 @@ test('theTabListInSettingsContentMatchesTheList', () => {
     assert.deepEqual(tabs, tabsFor(true));
     const panels = [...content.matchAll(/panel\('(\w+)'/g)].map((m) => m[1]);
     assert.deepEqual(panels, tabsFor(true));
-    assert.match(content, /tabFor\(storedTab, desktop\)/);
+    assert.match(content, /tabFor\(storedTab, desktop, serverSet\)/);
     for (const tab of ['server', 'desktop']) {
         const at = content.indexOf(`<Tabs.Tab value="${tab}"`);
         assert.match(content.slice(at - 80, at), /desktop && \(/, `${tab} is a desktop-only tab`);

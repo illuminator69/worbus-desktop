@@ -7,6 +7,7 @@ import { AppearanceTab } from '/@/renderer/features/settings/components/appearan
 import { GeneralTab } from '/@/renderer/features/settings/components/general/general-tab';
 import { HotkeysTab } from '/@/renderer/features/settings/components/hotkeys/hotkeys-tab';
 import { PlaybackTab } from '/@/renderer/features/settings/components/playback/playback-tab';
+import { isHubConfigured } from '/@/renderer/features/settings/components/server/server-status';
 import { ServerTab } from '/@/renderer/features/settings/components/server/server-tab';
 import { SettingsTabContext } from '/@/renderer/features/settings/components/settings-context';
 import { SearchResults } from '/@/renderer/features/settings/components/settings-search-results';
@@ -14,6 +15,7 @@ import { tabFor } from '/@/renderer/features/settings/components/settings-tabs';
 import { WindowTab } from '/@/renderer/features/settings/components/window/window-tab';
 import { useSettingSearchStore } from '/@/renderer/features/settings/store/search.store';
 import { LibraryContainer } from '/@/renderer/features/shared/components/library-container';
+import { useHubStore } from '/@/renderer/store';
 import { useSettingsStore, useSettingsStoreActions } from '/@/renderer/store/settings.store';
 import { ScrollArea } from '/@/shared/components/scroll-area/scroll-area';
 import { Tabs } from '/@/shared/components/tabs/tabs';
@@ -27,7 +29,11 @@ export const SettingsContent = () => {
     const setPendingScroll = useSettingSearchStore((state) => state.setPendingScroll);
     const desktop = isElectron();
     // The stored value is left as it is (no migration); it is only read through tabFor.
-    const currentTab = tabFor(storedTab, desktop);
+    // B-318: with no Worbus Server set, the untouched General default opens the Server tab.
+    const hubSettings = useSettingsStore((state) => state.hub);
+    const hubSignedIn = useHubStore((state) => state.authSignedIn);
+    const serverSet = isHubConfigured({ ...hubSettings, signedIn: hubSignedIn });
+    const currentTab = tabFor(storedTab, desktop, serverSet);
 
     // A search result named a section to scroll to; the section clears this once it has. If it never
     // mounts (it is hidden in this state), the request must not wait for some later visit.
