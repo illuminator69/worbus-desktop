@@ -298,3 +298,28 @@ test('Add to queue on an empty queue under shuffle shuffles it (as a new queue)'
     assert.notDeepEqual(order, [...Array(20).keys()], 'not the identity');
     store().setShuffle(PlayerShuffle.NONE as never);
 });
+
+// The controller's insert ruling (2026-11-10, hub, desktop and Android alike): an append goes to
+// the END of play order even when the queue's last row plays early; a drop between two rows goes
+// right after its queue predecessor in play order.
+test('an append lands at the end of play order, not after the queue’s last row', () => {
+    // s5, the queue's last row, plays second.
+    shuffledQueue(6, 0, [0, 5, 1, 2, 3, 4]);
+    store().addToQueueByType(songs(2, 'a'), Play.LAST as never);
+    assert.deepEqual(playIds(), ['s0', 's5', 's1', 's2', 's3', 's4', 'a0', 'a1']);
+    // A drop below the last row is an append too.
+    const last = store().getQueueOrder().items.at(-1)!;
+    store().addToQueueByUniqueId(songs(1, 'd'), last._uniqueId, 'bottom');
+    assert.deepEqual(playIds().slice(-1), ['d0']);
+});
+
+test('a drop between two rows goes right after its queue predecessor in play order', () => {
+    shuffledQueue(6, 0, [0, 5, 1, 2, 3, 4]);
+    // Below s1 (queue row 1), above s2: right after s1 in play order.
+    const s1 = store()
+        .getQueueOrder()
+        .items.find((item) => item.id === 's1')!;
+    store().addToQueueByUniqueId(songs(2, 'm'), s1._uniqueId, 'bottom');
+    assert.deepEqual(playIds(), ['s0', 's5', 's1', 'm0', 'm1', 's2', 's3', 's4']);
+    assert.equal(playing(), 's0');
+});
