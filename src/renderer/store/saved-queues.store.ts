@@ -65,12 +65,16 @@ interface SavedQueuesSlice extends SavedQueuesState {
         mergeFromHub: (incoming: SavedQueue[]) => void;
         remove: (id: string) => void;
         rename: (id: string, name: string) => void;
+        /** B-329: the account this cache is filled under (at each welcome naming a user). */
+        setOwner: (owner: null | string) => void;
         updateProgress: (id: string, progress: SavedQueueProgress) => void;
         upsert: (entry: SavedQueue) => void;
     };
 }
 
 interface SavedQueuesState {
+    /** B-329: the account the cache was filled under; null before accounts (P1) or unknown. */
+    owner: null | string;
     queues: SavedQueue[];
 }
 
@@ -157,6 +161,11 @@ export const useSavedQueuesStore = createWithEqualityFn<SavedQueuesSlice>()(
                             }
                         });
                     },
+                    setOwner: (owner) => {
+                        set((state) => {
+                            state.owner = owner;
+                        });
+                    },
                     updateProgress: (id, progress) => {
                         set((state) => {
                             const entry = state.queues.find((q) => q.id === id);
@@ -195,6 +204,7 @@ export const useSavedQueuesStore = createWithEqualityFn<SavedQueuesSlice>()(
                         });
                     },
                 },
+                owner: null,
                 queues: [],
             })),
             { name: 'store_saved_queues' },
@@ -203,7 +213,7 @@ export const useSavedQueuesStore = createWithEqualityFn<SavedQueuesSlice>()(
             merge: (persistedState, currentState) => merge(currentState, persistedState),
             name: 'store_saved_queues',
             // Persist only the data, never the action closures.
-            partialize: (state) => ({ queues: state.queues }),
+            partialize: (state) => ({ owner: state.owner, queues: state.queues }),
             version: 1,
         },
     ),

@@ -205,9 +205,17 @@ export const createAccountFollower = (
 
 /**
  * B-329: at a welcome, whether this device's saved-queue cache may go up to the welcome user's
- * space (`syncSavedQueues`). `owner` is the account the cache was filled under.
+ * space (`syncSavedQueues`). `owner` is the account the cache was filled under (recorded at each
+ * welcome). A cache from before accounts (Worbus P1, no owner recorded) was the shared session's,
+ * which is the primary user's. Anyone else's cache is cleared, not uploaded: an account change
+ * clears it too (`followAccount`), and the first sign-in after the upgrade is not one. An older
+ * hub names no user and has no spaces: kept, as before.
  */
 export const savedQueueCacheFor = (
-    _owner: null | string | undefined,
-    _user: HubUser | null,
-): 'clear' | 'keep' => 'keep';
+    owner: null | string | undefined,
+    user: HubUser | null,
+): 'clear' | 'keep' => {
+    if (!user) return 'keep';
+    if (owner === null || owner === undefined) return user.primary ? 'keep' : 'clear';
+    return accountName(owner) === accountName(user.name) ? 'keep' : 'clear';
+};

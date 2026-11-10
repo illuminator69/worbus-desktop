@@ -39,6 +39,7 @@ import {
     accountKey,
     accountMismatch,
     createAccountFollower,
+    savedQueueCacheFor,
 } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     clearLbQueries,
@@ -1912,6 +1913,12 @@ export const useHub = () => {
                 {
                     const sqActions = useSavedQueuesStore.getState().actions;
                     const sid = serverIdRef.current;
+                    // B-329: only the cache's owner's rows go up; a cache filled under another
+                    // account (or the P1 shared session's, for anyone but the primary user) is
+                    // cleared first. The cache is this user's from here on.
+                    const { owner } = useSavedQueuesStore.getState();
+                    if (savedQueueCacheFor(owner, welcomeUser) === 'clear') sqActions.clearAll();
+                    if (welcomeUser) sqActions.setOwner(welcomeUser.name);
                     const local = useSavedQueuesStore.getState().queues;
                     sqActions.mergeFromHub(
                         (msg.savedQueues ?? []).map((r: any) => mapHubSavedQueue(r, sid)),
