@@ -98,3 +98,20 @@ export const engineTakesSeekNow = (webPlayer: boolean): boolean => {
         return false;
     }
 };
+
+/**
+ * B-349: the web player's element for the current song reported ready (mounted, source loaded,
+ * paused). The startup seek is applied then, so play() starts at the resume position instead of
+ * at 0 s with a seek after it. use-queue-restore registers the listener; the web engine calls
+ * `webEngineReady`. The first PLAYING still applies a seek that was not taken here (the element
+ * came up before the persisted queue hydrated, or another engine plays).
+ */
+let readyListener: (() => void) | null = null;
+
+export const onWebEngineReady = (listener: (() => void) | null): void => {
+    readyListener = listener;
+};
+
+export const webEngineReady = (): void => {
+    readyListener?.();
+};

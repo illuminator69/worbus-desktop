@@ -80,7 +80,7 @@ test('ready_before_the_restore_leaves_the_first_play_to_carry_it', () => {
 test('wired_engine_ready_and_restore', () => {
     const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
     const engine = read('../audio-player/engine/web-player-engine.tsx');
-    assert.match(engine, /webEngineReady\(\)/, "the web engine says when its element is ready");
+    assert.match(engine, /webEngineReady\(\)/, 'the web engine says when its element is ready');
     const restore = read('./use-queue-restore.ts');
     assert.match(restore, /onWebEngineReady\(/, 'use-queue-restore applies the seek at ready');
 });

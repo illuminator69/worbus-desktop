@@ -13,7 +13,7 @@ import {
 } from '/@/renderer/features/player/audio-player/engine/retry-decision';
 import { AudioPlayer, PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { convertToLogVolume } from '/@/renderer/features/player/audio-player/utils/player-utils';
-import { setEngineSeekProbe } from '/@/renderer/features/player/hooks/startup-seek';
+import { setEngineSeekProbe, webEngineReady } from '/@/renderer/features/player/hooks/startup-seek';
 import { logger } from '/@/renderer/utils/logger';
 import { PlayerStatus } from '/@/shared/types/types';
 
@@ -473,6 +473,8 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
                 internal.preservesPitch = preservesPitch;
             }
             onStartedPlayer1(player);
+            // B-349: the current song's element is up; the startup seek lands before play().
+            if (playerNumRef.current === 1) webEngineReady();
         },
         [onStartedPlayer1, preservesPitch],
     );
@@ -485,6 +487,8 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
                 internal.preservesPitch = preservesPitch;
             }
             onStartedPlayer2(player);
+            // B-349: the current song's element is up; the startup seek lands before play().
+            if (playerNumRef.current === 2) webEngineReady();
         },
         [onStartedPlayer2, preservesPitch],
     );

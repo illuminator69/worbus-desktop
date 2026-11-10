@@ -5,7 +5,10 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
-import { createStartupSeek } from '/@/renderer/features/player/hooks/startup-seek';
+import {
+    createStartupSeek,
+    onWebEngineReady,
+} from '/@/renderer/features/player/hooks/startup-seek';
 import { savePlayQueueQuery } from '/@/renderer/features/player/utils/save-play-queue';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
 import {
@@ -92,6 +95,19 @@ export const useInitialTimestampRestore = () => {
     useEffect(() => {
         startupSeek.noteCurrentSong(currentSong?._uniqueId);
     }, [currentSong]);
+
+    // B-349: on the element before play(), not 100 ms after it. The web player's element for the
+    // current song is up and paused when it reports ready; a seek then lands before anything is
+    // heard or reported. Whatever is not taken here, the first PLAYING still applies.
+    useEffect(() => {
+        onWebEngineReady(() => {
+            const at = startupSeek.takeOnPlaying(
+                usePlayerStore.getState().getCurrentSong()?._uniqueId,
+            );
+            if (at !== null) mediaSeekToTimestamp(at);
+        });
+        return () => onWebEngineReady(null);
+    }, [mediaSeekToTimestamp]);
 
     useEffect(() => {
         if (startupRestoreInitializedRef.current || startupRestoreSessionHandled) {
