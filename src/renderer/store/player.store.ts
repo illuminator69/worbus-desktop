@@ -362,12 +362,25 @@ function findShuffledPositionForQueueIndex(
  */
 function followEdit(state: any, base: EditBase, playNextAfter?: string): void {
     const ids: string[] = state.queue.default;
-    const order = base.shuffled
-        ? orderAfterEdit(base.ids, base.order, ids, playNextAfter)
-        : ids.map((_, row) => row);
+    const order = !base.shuffled
+        ? ids.map((_, row) => row)
+        : base.order.length === 0
+          ? // Rows into an empty order under shuffle: a new queue, shuffled.
+            orderWithFirst(ids.length, -1, shuffleInPlace)
+          : orderAfterEdit(base.ids, base.order, ids, playNextAfter);
     state.queue.shuffled = base.shuffled ? order : [];
     if (base.position >= 0) {
-        state.player.index = positionAfterEdit(base.ids, base.order, base.position, ids, order);
+        const next = positionAfterEdit(
+            base.ids,
+            base.order,
+            base.position,
+            ids,
+            order,
+            state.player.repeat === PlayerRepeat.ALL,
+        );
+        state.player.index = next.position;
+        // The playing row went and nothing followed it: the play order is over.
+        if (next.stopped) state.player.status = PlayerStatus.PAUSED;
     }
 }
 

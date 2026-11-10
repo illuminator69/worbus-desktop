@@ -124,8 +124,10 @@ export const orderAfterEdit = (
 
 /**
  * The playing position after a queue edit: the playing row's new position when it survived,
- * else the row that came after it in play order (the last one when nothing did); -1 for an
- * empty queue.
+ * else the row that came after it in play order. When nothing came after it the play order is
+ * over: with repeat all (`wrap`) it goes round to the first position, else it stays on the last
+ * one and `stopped` says playback ends there (the hub's remove does the same). -1 for an empty
+ * queue.
  */
 export const positionAfterEdit = (
     beforeIds: readonly string[],
@@ -133,13 +135,16 @@ export const positionAfterEdit = (
     beforePosition: number,
     afterIds: readonly string[],
     afterOrder: readonly number[],
-): number => {
-    if (afterOrder.length === 0) return -1;
+    wrap: boolean,
+): { position: number; stopped: boolean } => {
+    if (afterOrder.length === 0) return { position: -1, stopped: false };
     const positionOf = new Map<string, number>();
     afterOrder.forEach((row, position) => positionOf.set(afterIds[row], position));
     for (let position = Math.max(0, beforePosition); position < beforeOrder.length; position += 1) {
         const found = positionOf.get(beforeIds[beforeOrder[position]]);
-        if (found !== undefined) return found;
+        if (found !== undefined) return { position: found, stopped: false };
     }
-    return afterOrder.length - 1;
+    return wrap
+        ? { position: 0, stopped: false }
+        : { position: afterOrder.length - 1, stopped: true };
 };
