@@ -46,6 +46,8 @@ import {
 import { ServerFeature, ServerFeatures } from '/@/shared/types/features-types';
 import { CLIENT_NAME } from '/@/shared/utils/client-name';
 
+import { readClassicPlayQueue } from './play-queue';
+
 const getSubsonicImageRequest = ({
     apiClientProps: { server },
     baseUrl,
@@ -1348,16 +1350,9 @@ export const SubsonicController: InternalControllerEndpoint = {
                 throw new Error('Failed to get play queue');
             }
 
-            const { changed, changedBy, current, entry, position, username } = res.body.playQueue;
-
-            return {
-                changed,
-                changedBy,
-                currentIndex: current ? entry.findIndex((item) => item.id === current) : 0,
-                entry: entry?.map((song) => ssNormalize.song(song, apiClientProps.server)) || [],
-                positionMs: position ?? 0,
-                username,
-            };
+            return readClassicPlayQueue(res.body, (song) =>
+                ssNormalize.song(song, apiClientProps.server),
+            );
         }
     },
     getRandomSongList: async (args) => {
