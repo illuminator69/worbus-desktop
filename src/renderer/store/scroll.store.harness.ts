@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { hasEntryIdentity, useScrollStore } from './scroll.store.ts';
+import { entryKeyFor, hasEntryIdentity, useScrollStore } from './scroll.store.ts';
 
 /**
  * R4 (B-208):  node --test src/renderer/store/scroll.store.harness.ts
@@ -33,4 +33,48 @@ test('aRealEntryKeepsItsOffset', () => {
     setOffset('def456', 100);
     assert.equal(getOffset('abc123'), 900);
     assert.equal(getOffset('def456'), 100);
+});
+
+/**
+ * B-315: B-208's rule hid the shared offset but left those entries with no identity at all: a page
+ * reached by a hash change (lb-bot's `leaveTo` after a merge uses `location.replace`) saved nothing,
+ * so Back to it landed at the top. An entry with no key gets one stamped into its own history
+ * state (react-router reads `history.state.key` back as `location.key` on POP), so it keeps its
+ * offset like any other entry.
+ */
+const fakeHistory = (state: unknown) => {
+    const h = {
+        replaceState: (next: unknown) => {
+            h.state = next;
+        },
+        state,
+    };
+    return h;
+};
+
+test('aStatelessEntryGetsAKeyOfItsOwnAndKeepsItsOffset', () => {
+    let n = 0;
+    const mint = () => `stamped${++n}`;
+    // The entry location.replace made: react-router gives it "default", its state is null.
+    const entry = fakeHistory(null);
+    const key = entryKeyFor('default', entry, mint);
+    assert.ok(hasEntryIdentity(key), 'a key that names this entry');
+    const { getOffset, setOffset } = useScrollStore.getState();
+    setOffset(key, 700);
+    // Back to it later: react-router reads the key from the entry's state.
+    const onPop = (entry.state as { key?: string } | null)?.key ?? 'default';
+    assert.equal(getOffset(onPop), 700);
+    // The same entry keeps the same key; a second stateless entry gets another.
+    assert.equal(entryKeyFor('default', entry, mint), key);
+    assert.notEqual(entryKeyFor('default', fakeHistory({ idx: 3 }), mint), key);
+});
+
+test('theStampKeepsTheRoutersOwnState', () => {
+    const entry = fakeHistory({ idx: 4, usr: { from: 'x' } });
+    const key = entryKeyFor('default', entry, () => 'k1');
+    assert.deepEqual(entry.state, { idx: 4, key, usr: { from: 'x' } });
+    // An entry the router keyed is left alone.
+    const keyed = fakeHistory({ idx: 1, key: 'abc', usr: null });
+    assert.equal(entryKeyFor('abc', keyed, () => 'k2'), 'abc');
+    assert.deepEqual(keyed.state, { idx: 1, key: 'abc', usr: null });
 });

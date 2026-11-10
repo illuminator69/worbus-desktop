@@ -9,6 +9,21 @@ import { create } from 'zustand';
  */
 export const hasEntryIdentity = (key: string): boolean => key !== '' && key !== 'default';
 
+/** The part of `window.history` the entry key needs (a harness passes a fake). */
+export interface EntryHistory {
+    replaceState: (state: unknown, unused: string) => void;
+    readonly state: unknown;
+}
+
+/**
+ * B-315: the key this history entry's scroll offset (and chip) is kept under.
+ */
+export const entryKeyFor = (
+    locationKey: string,
+    _history: EntryHistory,
+    _mint: () => string,
+): string => locationKey;
+
 type ScrollState = {
     getOffset: (key: string) => number | undefined;
     offsets: Record<string, number>;
