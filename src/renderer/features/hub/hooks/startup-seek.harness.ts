@@ -90,7 +90,19 @@ const startup = (
         sameQueueLoadStep(targetIndex, sec, pause, deps());
     const seekTo = (sec: number) => seekDirectiveStep(sec, deps());
 
-    return { armSeek, current, engine, load, pending, played, playing, seek, seekTo, shown, writes };
+    return {
+        armSeek,
+        current,
+        engine,
+        load,
+        pending,
+        played,
+        playing,
+        seek,
+        seekTo,
+        shown,
+        writes,
+    };
 };
 
 test('alignBeforeMountLandsAtHubPosition', () => {

@@ -60,7 +60,9 @@ export interface LoadSeekDeps extends ArmSeekDeps {
 
 /**
  * B-348: a hub `load` of the queue already here positions it in place (no reload): the row, then
- * the hub's offset. The caller handles play or pause afterwards.
+ * the hub's offset, through armSeekStep like every other hub seek, so a seek the web player cannot
+ * take yet retargets the startup seek instead of being dropped. The caller handles play or pause
+ * afterwards (no pauseSoon here); a pending seek still carries the load's pause.
  */
 export const sameQueueLoadStep = (
     targetIndex: number,
@@ -68,19 +70,11 @@ export const sameQueueLoadStep = (
     pause: boolean,
     deps: LoadSeekDeps,
 ): ArmSeekOutcome => {
-    deps.withdrawStartupSeek();
-    if (targetIndex !== deps.currentIndex) {
-        deps.armPending(targetIndex, sec, pause);
-        deps.playByIndex(targetIndex);
-        return 'pending';
-    }
-    deps.seekNow(sec);
-    return 'seeked';
+    const outcome = armSeekStep(targetIndex, sec, pause, { ...deps, pauseSoon: () => {} });
+    if (outcome === 'pending') deps.playByIndex(targetIndex);
+    return outcome;
 };
 
-/** B-348: a hub `seek` directive on the current song. */
-export const seekDirectiveStep = (sec: number, deps: ArmSeekDeps): ArmSeekOutcome => {
-    deps.withdrawStartupSeek();
-    deps.seekNow(sec);
-    return 'seeked';
-};
+/** B-348: a hub `seek` directive on the current song, through the same gate. */
+export const seekDirectiveStep = (sec: number, deps: ArmSeekDeps): ArmSeekOutcome =>
+    armSeekStep(deps.currentIndex, sec, false, deps);

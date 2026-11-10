@@ -4,7 +4,13 @@ import { useCallback, useEffect, useRef } from 'react';
 import { api } from '/@/renderer/api';
 import { getItemImageUrl } from '/@/renderer/components/item-image/item-image';
 import { NO_PINS } from '/@/renderer/features/hub/utils/act-pins';
-import { armSeekStep } from '/@/renderer/features/hub/utils/arm-seek';
+import {
+    type ArmSeekOutcome,
+    armSeekStep,
+    type LoadSeekDeps,
+    sameQueueLoadStep,
+    seekDirectiveStep,
+} from '/@/renderer/features/hub/utils/arm-seek';
 import {
     type ArmedSeek,
     armedSeekOnTrack,
@@ -398,6 +404,13 @@ const openAdoptPauseGuard = (): GuardWindow => {
  * or not (`reportVolume`). Transport lives in the main process
  * (src/main/features/core/hub/index.ts).
  */
+/** B-339, B-348: a hub seek the web player could not take yet rides on the first play. */
+const noteRetargeted = (outcome: ArmSeekOutcome, sec: number): void => {
+    if (outcome === 'retargeted') {
+        logger.info('[hub] engine not up yet: the first play starts at the hub position', { sec });
+    }
+};
+
 export const useHub = () => {
     const settings = useHubSettings();
     const serverId = useCurrentServerId();
@@ -1093,35 +1106,36 @@ export const useHub = () => {
     // current, seeking now is both correct and necessary — nothing will re-arm it,
     // because onCurrentSongChange only fires on an actual change. B-339: unless the web player is
     // not up yet at a fresh start; then the startup seek carries the hub's position (arm-seek.ts).
+    // B-348: every hub seek (adopt, load, seek) goes through armSeekStep with these.
+    const seekDeps = useCallback(
+        (): LoadSeekDeps => ({
+            armPending: (index, at, pauseAfter) => {
+                pendingSeek.current = {
+                    armedAt: Date.now(),
+                    index,
+                    pause: pauseAfter,
+                    sec: at,
+                };
+            },
+            currentIndex: playingQueueIndex(usePlayerStore.getState()),
+            // Only the web player can drop a seek before it mounts; the others are up.
+            engineTakesSeek: engineTakesSeekNow(
+                useSettingsStore.getState().playback.type === PlayerType.WEB,
+            ),
+            pauseSoon: () => setTimeout(() => mediaPause(), 100),
+            playByIndex: mediaPlayByIndex,
+            retargetStartupSeek,
+            seekNow: mediaSeekToTimestamp,
+            showPosition: (at) => setTimestamp(at, { seek: true }),
+            withdrawStartupSeek,
+        }),
+        [mediaPause, mediaPlayByIndex, mediaSeekToTimestamp],
+    );
+
     const armSeek = useCallback(
-        (targetIndex: number, sec: number, pause: boolean) => {
-            const outcome = armSeekStep(targetIndex, sec, pause, {
-                armPending: (index, at, pauseAfter) => {
-                    pendingSeek.current = {
-                        armedAt: Date.now(),
-                        index,
-                        pause: pauseAfter,
-                        sec: at,
-                    };
-                },
-                currentIndex: playingQueueIndex(usePlayerStore.getState()),
-                // Only the web player can drop a seek before it mounts; the others are up.
-                engineTakesSeek: engineTakesSeekNow(
-                    useSettingsStore.getState().playback.type === PlayerType.WEB,
-                ),
-                pauseSoon: () => setTimeout(() => mediaPause(), 100),
-                retargetStartupSeek,
-                seekNow: mediaSeekToTimestamp,
-                showPosition: (at) => setTimestamp(at, { seek: true }),
-                withdrawStartupSeek,
-            });
-            if (outcome === 'retargeted') {
-                logger.info('[hub] engine not up yet: the first play starts at the hub position', {
-                    sec,
-                });
-            }
-        },
-        [mediaPause, mediaSeekToTimestamp],
+        (targetIndex: number, sec: number, pause: boolean) =>
+            noteRetargeted(armSeekStep(targetIndex, sec, pause, seekDeps()), sec),
+        [seekDeps],
     );
 
     const resolveSongs = useCallback(
@@ -1173,9 +1187,11 @@ export const useHub = () => {
                     break;
                 }
                 case 'load': {
-                    // The hub places the playhead from here on: the startup seek to where
-                    // this device was when it closed must not take it back on first play.
-                    withdrawStartupSeek();
+                    // The hub places the playhead from here on: the startup seek to where this
+                    // device was when it closed must not take it back on first play. B-348: a
+                    // queue already here is positioned through armSeekStep, which withdraws it
+                    // or, before the web player is up, aims it at the hub's position; a new
+                    // queue withdraws it below.
                     // PROTOCOL §7.1: a transfer's load must be acknowledged, or the hub
                     // commits the active slot and never learns we couldn't start.
                     // §7.2: the ack carries the directive's transferId, and must arrive
@@ -1229,20 +1245,15 @@ export const useHub = () => {
                                 adopt.order,
                             );
                         }
-                        if ((msg.index ?? 0) !== playingQueueIndex(usePlayerStore.getState())) {
-                            // Changing track reloads the source; an immediate
-                            // seek would be lost. Arm it for onCurrentSongChange.
-                            pendingSeek.current = {
-                                armedAt: Date.now(),
-                                index: msg.index ?? 0,
-                                pause: wantPause,
-                                sec: targetSec,
-                            };
-                            mediaPlayByIndex(msg.index ?? 0);
-                        } else {
-                            mediaSeekToTimestamp(targetSec);
-                        }
+                        // Changing track reloads the source, so the seek is armed for
+                        // onCurrentSongChange; on the same row it is sought now, or carried by
+                        // the startup seek while the web player is not up (B-348).
+                        noteRetargeted(
+                            sameQueueLoadStep(msg.index ?? 0, targetSec, wantPause, seekDeps()),
+                            targetSec,
+                        );
                     } else {
+                        withdrawStartupSeek();
                         const songs = await resolveSongs(msg.tracks, heldSongs());
                         if (!songs.length) {
                             // Nothing resolved — the queue is unplayable here (server
@@ -1389,8 +1400,7 @@ export const useHub = () => {
                     // I-031: those two are this directive's last word. No report after it.
                     return 'silent';
                 }
-                case 'seek':
-                    withdrawStartupSeek();
+                case 'seek': {
                     // B-111: a load's armed seek still to land would put the player back at the
                     // load's offset after this one; it lands here instead. (setQueue's own
                     // restore seek, 100 ms in, fires before the armed one at 150 ms.)
@@ -1399,8 +1409,12 @@ export const useHub = () => {
                         pendingSeek.current,
                         landingSeek.current,
                     );
-                    mediaSeekToTimestamp((msg.positionMs ?? 0) / 1000);
+                    // B-348: through armSeekStep's engine gate, like every hub seek: before the
+                    // web player is up the startup seek carries it, else it withdraws that one.
+                    const sec = (msg.positionMs ?? 0) / 1000;
+                    noteRetargeted(seekDirectiveStep(sec, seekDeps()), sec);
                     break;
+                }
                 case 'setRepeat':
                     setRepeat(msg.mode as PlayerRepeat);
                     break;
@@ -1433,11 +1447,11 @@ export const useHub = () => {
             mediaPause,
             mediaPlay,
             mediaPlayByIndex,
-            mediaSeekToTimestamp,
             mediaStop,
             reconcileQueue,
             report,
             resolveSongs,
+            seekDeps,
             setQueue,
             setRepeat,
             setShuffle,
