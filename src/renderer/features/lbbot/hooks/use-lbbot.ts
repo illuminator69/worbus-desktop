@@ -73,8 +73,8 @@ import {
 } from '/@/renderer/features/lbbot/components/source-cards-model';
 import { gapProgress } from '/@/renderer/features/lbbot/gap-stage';
 import {
-    gapEntryAfterSummary,
     type GapEntry,
+    gapEntryAfterSummary,
     gapFailReason,
     gapSettleOutcome,
 } from '/@/renderer/features/lbbot/hooks/fill-announce-logic';
@@ -2208,10 +2208,7 @@ export const applyGapSummary = (
 ): void => {
     const { actions, gaps } = useActiveFillsStore.getState();
     const queryKey = ['lbbot', 'gap', groupId];
-    const entry = gapEntryAfterSummary(
-        registry.queryClient?.getQueryData<GapEntry>(queryKey),
-        gap,
-    );
+    const entry = gapEntryAfterSummary(registry.queryClient?.getQueryData<GapEntry>(queryKey), gap);
     const merged = entry.data!;
     registry.queryClient?.setQueryData(queryKey, entry);
     // Results the cache holds no rows for (a search just finished): read the full
@@ -2846,8 +2843,9 @@ export { gapProgress };
 export { gapIsBusy };
 
 /** A gap read as the box's query keeps it: when failing reads began rides along (0: answered).
- *  The app-root watcher writes the same key without it, which reads as answered or just failing. */
-type GapRead = LbBotResult<LbBotGap> & { failingSince?: number };
+ *  B-234: the app-root watcher writes the same key in the same shape (`gapEntryAfterSummary`),
+ *  keeping the clock. */
+type GapRead = GapEntry & LbBotResult<LbBotGap>;
 
 /**
  * One review group, polled while something is on screen to show it.

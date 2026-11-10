@@ -181,9 +181,14 @@ export interface GapEntry {
     status: number;
 }
 
-export const gapEntryAfterSummary = (before: GapEntry | undefined, summary: LbBotGap): GapEntry => ({
+export const gapEntryAfterSummary = (
+    before: GapEntry | undefined,
+    summary: LbBotGap,
+): GapEntry => ({
     data: mergeGapSummary(before?.data, summary),
     error: '',
+    // A summary is not an /lb/gap read: the box's clock is the reads' and stays as it was.
+    failingSince: before?.failingSince ?? 0,
     ok: true,
     status: 200,
 });

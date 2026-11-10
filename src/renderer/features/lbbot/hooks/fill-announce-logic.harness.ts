@@ -7,8 +7,8 @@ import {
     announcementKindFor,
     announcementLinkPathFor,
     gapAwaitingMatch,
-    gapFailReason,
     gapEntryAfterSummary,
+    gapFailReason,
     gapSettleOutcome,
     mergeGapSummary,
 } from './fill-announce-logic.ts';
