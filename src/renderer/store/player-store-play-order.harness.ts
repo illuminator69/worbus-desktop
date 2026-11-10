@@ -323,3 +323,14 @@ test('a drop between two rows goes right after its queue predecessor in play ord
     assert.deepEqual(playIds(), ['s0', 's5', 's1', 'm0', 'm1', 's2', 's3', 's4']);
     assert.equal(playing(), 's0');
 });
+
+test('a drop above the first row goes right before its queue successor in play order', () => {
+    // s0, the queue's first row, plays second.
+    shuffledQueue(4, 3, [2, 0, 3, 1]);
+    const s0 = store()
+        .getQueueOrder()
+        .items.find((item) => item.id === 's0')!;
+    store().addToQueueByUniqueId(songs(2, 't'), s0._uniqueId, 'top');
+    assert.deepEqual(playIds(), ['s2', 't0', 't1', 's0', 's3', 's1']);
+    assert.equal(playing(), 's3');
+});
