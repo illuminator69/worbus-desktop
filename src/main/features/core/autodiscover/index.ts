@@ -1,49 +1,18 @@
-import { createSocket } from 'dgram';
 import { ipcMain } from 'electron';
 
 import log from '/@/main/logger';
-import { DiscoveredServerItem, ServerType } from '/@/shared/types/types';
+import { DiscoveredServerItem } from '/@/shared/types/types';
 
-type JellyfinResponse = {
-    Address: string;
-    Id: string;
-    Name: string;
-};
-
-function discoverAll(reply: (server: DiscoveredServerItem) => void) {
-    return Promise.all([discoverJellyfin(reply)]);
-}
-
-function discoverJellyfin(reply: (server: DiscoveredServerItem) => void) {
-    const sock = createSocket('udp4');
-    sock.on('message', (msg) => {
-        try {
-            const response: JellyfinResponse = JSON.parse(msg.toString('utf-8'));
-
-            reply({
-                name: response.Name,
-                type: ServerType.JELLYFIN,
-                url: response.Address,
-            });
-        } catch (e) {
-            // Got a spurious response, ignore?
-            log.error(e);
-        }
-    });
-
-    sock.bind(() => {
-        sock.setBroadcast(true);
-        // Send a broadcast packet to both loopback and default route, allowing discovery of same-machine instances
-        sock.send('who is JellyfinServer?', 7359, '127.255.255.255');
-        sock.send('who is JellyfinServer?', 7359, '255.255.255.255');
-    });
-
-    return new Promise<void>((resolve) => {
-        setTimeout(() => {
-            sock.close();
-            resolve();
-        }, 3000);
-    });
+/**
+ * B-382: the sign-in page's music-server discovery finds only servers Worbus signs in to, which
+ * is Navidrome. Upstream Feishin's one probe was a Jellyfin UDP broadcast (`who is
+ * JellyfinServer?` on 7359); it offered a server that leads nowhere, and is gone. Navidrome
+ * answers no broadcast, so today this finds nothing and the page shows no found row; the Worbus
+ * Server has its own finder (Settings, Server). A Navidrome probe would go here.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the reply a probe would call
+function discoverAll(_reply: (server: DiscoveredServerItem) => void): Promise<void> {
+    return Promise.resolve();
 }
 
 ipcMain.on('autodiscover-ping', (ev) => {

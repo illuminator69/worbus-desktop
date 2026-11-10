@@ -16,7 +16,10 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 
 test('discovery_offers_no_jellyfin_server', () => {
     const src = read('./index.ts');
-    const all = src.slice(src.indexOf('function discoverAll'), src.indexOf('function discoverAll') + 300);
+    const all = src.slice(
+        src.indexOf('function discoverAll'),
+        src.indexOf('function discoverAll') + 300,
+    );
     assert.doesNotMatch(all, /discoverJellyfin/, 'discovery broadcasts for Jellyfin servers');
     assert.doesNotMatch(src, /who is JellyfinServer\?/, 'the Jellyfin broadcast is still sent');
 });
