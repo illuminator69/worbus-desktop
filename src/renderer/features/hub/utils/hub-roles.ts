@@ -202,3 +202,12 @@ export const createAccountFollower = (
         return queue;
     };
 };
+
+/**
+ * B-329: at a welcome, whether this device's saved-queue cache may go up to the welcome user's
+ * space (`syncSavedQueues`). `owner` is the account the cache was filled under.
+ */
+export const savedQueueCacheFor = (
+    _owner: null | string | undefined,
+    _user: HubUser | null,
+): 'clear' | 'keep' => 'keep';

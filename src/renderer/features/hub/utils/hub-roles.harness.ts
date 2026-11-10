@@ -25,6 +25,7 @@ import {
     ROLE_GATES,
     rolesOf,
     routeAccess,
+    savedQueueCacheFor,
     userAfterRefusal,
 } from './hub-roles.ts';
 
@@ -613,4 +614,26 @@ test('an older server verdict is dropped when the address changes', () => {
         useHub,
         /if \(moved\) \{\s*clearIndexMirrorForHubChange\(\);\s*\/\/[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*useHubStore\.getState\(\)\.actions\.setStore\(\{ signInResult: null \}\);/,
     );
+});
+
+/**
+ * B-329: the first sign-in after the P2 upgrade pushed the token-era (P1) saved-queue cache into
+ * whichever account signed in. The cache carries no owner, and the welcome's syncSavedQueues
+ * uploads whatever is local; clearing follows only an account *change*, and the first sign-in is
+ * not one. The P1 cache was the shared session's, i.e. the primary user's.
+ */
+test('the_saved_queue_cache_goes_up_only_to_its_owner', () => {
+    const alice = { admin: false, name: 'alice', primary: false };
+    const owner = { admin: true, name: 'Ilya', primary: true };
+    // A P1 cache (no owner recorded) and a welcome naming a non-primary user: not alice's.
+    assert.equal(savedQueueCacheFor(null, alice), 'clear');
+    assert.equal(savedQueueCacheFor(undefined, alice), 'clear');
+    // ... but the primary user's own, as it was the shared session's.
+    assert.equal(savedQueueCacheFor(null, owner), 'keep');
+    // A cache filled under an account goes up to that account only (names compare lower-cased).
+    assert.equal(savedQueueCacheFor('alice', alice), 'keep');
+    assert.equal(savedQueueCacheFor('ALICE', alice), 'keep');
+    assert.equal(savedQueueCacheFor('ilya', alice), 'clear');
+    // An older hub names no user: no spaces, as before.
+    assert.equal(savedQueueCacheFor(null, null), 'keep');
 });
