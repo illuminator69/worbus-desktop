@@ -1,6 +1,7 @@
 import { ipcRenderer, OpenDialogOptions, webFrame } from 'electron';
 
 import { TitleTheme } from '/@/shared/types/types';
+import { type SavedPassword } from '/@/shared/utils/saved-password';
 
 const set = (
     property: string,
@@ -34,6 +35,11 @@ const disableMediaKeys = () => {
 
 const passwordGet = async (server: string): Promise<null | string> => {
     return ipcRenderer.invoke('password-get', server);
+};
+
+/** B-338: none saved, unreadable here, or the password. */
+const passwordRead = async (server: string): Promise<SavedPassword> => {
+    return ipcRenderer.invoke('password-read', server);
 };
 
 const passwordRemove = (server: string) => {
@@ -102,6 +108,7 @@ export const localSettings = {
     get,
     openFileSelector,
     passwordGet,
+    passwordRead,
     passwordRemove,
     passwordSet,
     restart,

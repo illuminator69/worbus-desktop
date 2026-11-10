@@ -18,6 +18,7 @@ import path from 'path';
 import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
 import { migratedFrom } from '/@/main/migrate-from-feishin';
+import { type SavedPassword } from '/@/shared/utils/saved-password';
 
 const getFrame = () => {
     const isWindows = process.platform === 'win32';
@@ -162,41 +163,54 @@ export const PASSWORD_UNREADABLE_AFTER_MOVE =
     "Your saved password couldn't be read after the move from Feishin. Sign in again.";
 const unreadableAfterMove = new Set<string>();
 
-ipcMain.handle('password-get', (_event, server: string): null | string => {
-    if (safeStorage.isEncryptionAvailable()) {
-        const servers = store.get('server') as Record<string, string> | undefined;
-
-        if (!servers) {
-            return null;
-        }
-
-        const encrypted = servers[server];
-        if (!encrypted) return null;
-
-        try {
-            return safeStorage.decryptString(Buffer.from(encrypted, 'hex'));
-        } catch (error) {
-            // Worbus P5 (design §6.4): the keyring key follows the app's name, so a password the
-            // old Feishin saved may not read here. Say so and ask for the sign-in (no password ->
-            // the server's sign-in), never clearing it silently: the old app still reads it.
-            if (!migratedFrom(storePath)) throw error;
-            // Once per server and session: the edit form and the 401 paths ask again and again.
-            if (!unreadableAfterMove.has(server)) {
-                unreadableAfterMove.add(server);
-                log.warn('Saved password unreadable after the move from Feishin', {
-                    serverId: server,
-                });
-                _event.sender.send(
-                    'password-unreadable-after-move',
-                    PASSWORD_UNREADABLE_AFTER_MOVE,
-                );
-            }
-            return null;
-        }
+/**
+ * B-338: a saved password, read: none saved, unreadable (saved but it does not decrypt here), or
+ * the password. The decryption error rides along for `password-get`, which still throws it outside
+ * a move from Feishin.
+ */
+const readSavedPassword = (
+    event: Electron.IpcMainInvokeEvent,
+    server: string,
+): SavedPassword | { error: unknown; kind: 'unreadable' } => {
+    const servers = store.get('server') as Record<string, string> | undefined;
+    const encrypted = servers?.[server];
+    if (!encrypted) return { kind: 'none' };
+    if (!safeStorage.isEncryptionAvailable()) {
+        // As before for `password-get` (null, never a throw); a 401 path asks for it again.
+        log.warn('Password encryption unavailable', { serverId: server });
+        return { kind: 'unreadable' };
     }
+    try {
+        return { kind: 'ok', password: safeStorage.decryptString(Buffer.from(encrypted, 'hex')) };
+    } catch (error) {
+        // Worbus P5 (design §6.4): the keyring key follows the app's name, so a password the
+        // old Feishin saved may not read here. Say so and ask for the sign-in, never clearing it
+        // silently: the old app still reads it.
+        if (migratedFrom(storePath) && !unreadableAfterMove.has(server)) {
+            // Once per server and session: the edit form and the 401 paths ask again and again.
+            unreadableAfterMove.add(server);
+            log.warn('Saved password unreadable after the move from Feishin', {
+                serverId: server,
+            });
+            event.sender.send('password-unreadable-after-move', PASSWORD_UNREADABLE_AFTER_MOVE);
+        }
+        return { error, kind: 'unreadable' };
+    }
+};
 
-    log.warn('Password encryption unavailable', { serverId: server });
+ipcMain.handle('password-get', (event, server: string): null | string => {
+    const saved = readSavedPassword(event, server);
+    if (saved.kind === 'ok') return saved.password;
+    if (saved.kind === 'unreadable' && 'error' in saved && !migratedFrom(storePath)) {
+        throw saved.error;
+    }
     return null;
+});
+
+// B-338: the 401 paths ask this, so an unreadable password is never read as "none saved".
+ipcMain.handle('password-read', (event, server: string): SavedPassword => {
+    const saved = readSavedPassword(event, server);
+    return saved.kind === 'unreadable' ? { kind: 'unreadable' } : saved;
 });
 
 ipcMain.on('password-remove', (_event, server: string) => {

@@ -30,6 +30,8 @@ import * as coverSeeds from '/@/renderer/themes/cover/cover-seed-store';
 import { useCoverWash } from '/@/renderer/themes/cover/use-cover-wash';
 import { useAppTheme } from '/@/renderer/themes/use-app-theme';
 import { toast } from '/@/shared/components/toast/toast';
+import { setAskForPassword } from '/@/renderer/api/utils';
+import { askForPassword } from '/@/renderer/features/servers/utils/ask-for-password';
 import { logger } from '/@/renderer/utils/logger';
 import { sanitizeCss } from '/@/renderer/utils/sanitize';
 import { WebAudio } from '/@/shared/types/types';
@@ -43,6 +45,8 @@ const utils = isElectron() ? window.api.utils : null;
 // Worbus P5 (design §6.4): a saved password the move from Feishin left unreadable. Registered once,
 // before the first render, so nothing sent at sign-in is missed.
 utils?.onPasswordUnreadableAfterMove((message) => toast.warn({ message }));
+// B-338: a refused session whose saved password cannot be read opens the server's sign-in form.
+setAskForPassword(askForPassword);
 
 if (import.meta.env.DEV) {
     void import('/@/renderer/dev-handle');

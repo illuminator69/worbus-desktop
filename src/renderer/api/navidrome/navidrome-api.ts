@@ -7,7 +7,7 @@ import qs from 'qs';
 
 import i18n from '/@/i18n/i18n';
 import { validateResponse } from '/@/renderer/api/response-validation';
-import { authenticationFailure } from '/@/renderer/api/utils';
+import { askForPasswordAgain, authenticationFailure } from '/@/renderer/api/utils';
 import { useAuthStore } from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
 import { getServerUrl } from '/@/renderer/utils/normalize-server-url';
@@ -15,6 +15,7 @@ import { ndType } from '/@/shared/api/navidrome/navidrome-types';
 import { resultWithHeaders } from '/@/shared/api/utils';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerListItemWithCredential } from '/@/shared/types/domain-types';
+import { type SavedPassword, whenSessionRefused } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -352,6 +353,8 @@ const waitForResult = async (count = 0): Promise<void> => {
 
 const limitedFail = debounce(authenticationFailure, RETRY_DELAY_MS);
 const TIMEOUT_ERROR = Error();
+/** B-338: the password was asked for; the request fails, nobody is logged out. */
+const PASSWORD_ASKED = Error();
 
 axiosClient.interceptors.response.use(
     (response) => {
@@ -377,13 +380,20 @@ axiosClient.interceptors.response.use(
 
             if (localSettings && currentServer?.savePassword) {
                 return localSettings
-                    .passwordGet(currentServer.id)
-                    .then(async (password: null | string) => {
+                    .passwordRead(currentServer.id)
+                    .then(async (saved: SavedPassword) => {
                         authSuccess = false;
 
-                        if (password === null) {
+                        const step = whenSessionRefused(saved);
+                        if (step === 'askAgain') {
+                            // B-338: unreadable is not refused. Ask for the password; no logout.
+                            askForPasswordAgain(currentServer);
+                            throw PASSWORD_ASKED;
+                        }
+                        if (step === 'expire' || saved.kind !== 'ok') {
                             throw error;
                         }
+                        const { password } = saved;
 
                         if (shouldDelay) {
                             await waitForResult();
@@ -441,6 +451,7 @@ axiosClient.interceptors.response.use(
                         return axiosClient.request(error.config);
                     })
                     .catch((newError: any) => {
+                        if (newError === PASSWORD_ASKED) throw error;
                         if (newError !== TIMEOUT_ERROR) {
                             console.error('Error when trying to reauthenticate: ', newError);
 

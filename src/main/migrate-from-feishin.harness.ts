@@ -670,16 +670,22 @@ test('the fixed sentences are said where the plan puts them', () => {
     );
     // An unreadable password after the move is said and answered with no password (the server's
     // sign-in), never removed: the old app still reads it.
-    const handler = settings.slice(settings.indexOf("ipcMain.handle('password-get'"));
-    const getter = handler.slice(0, handler.indexOf('\n});'));
-    assert.match(getter, /if \(!migratedFrom\(storePath\)\) throw error;/);
+    // B-338: one reader for `password-get` and `password-read`; `password-get` still answers null
+    // after the move (and throws outside one), `password-read` says `unreadable`.
+    const reader = settings.slice(settings.indexOf('const readSavedPassword'));
+    const getter = reader.slice(0, reader.indexOf("ipcMain.on('password-remove'"));
+    assert.match(getter, /!migratedFrom\(storePath\)\) \{\s*throw saved\.error;/);
     // Said once per server and session, the log line too (the 401 paths ask again and again).
-    const once = getter.indexOf('if (!unreadableAfterMove.has(server))');
+    const once = getter.indexOf('!unreadableAfterMove.has(server)');
     assert.ok(once > 0, 'a once-per-server guard');
     assert.ok(
         getter.indexOf("log.warn('Saved password unreadable") > once,
         'the warning is logged inside the once-per-server guard',
     );
-    assert.match(getter, /return null;\s*\}\s*\}/);
+    assert.match(getter, /return \{ error, kind: 'unreadable' \};/);
+    assert.match(
+        getter,
+        /return saved\.kind === 'unreadable' \? \{ kind: 'unreadable' \} : saved;/,
+    );
     assert.doesNotMatch(getter, /delete |store\.set|store\.delete/);
 });

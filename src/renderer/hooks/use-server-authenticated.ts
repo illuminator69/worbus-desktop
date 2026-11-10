@@ -7,11 +7,13 @@ import { useNavigate } from 'react-router';
 
 import { api } from '/@/renderer/api';
 import { controller } from '/@/renderer/api/controller';
+import { askForPasswordAgain } from '/@/renderer/api/utils';
 import { AppRoute } from '/@/renderer/router/routes';
 import { getServerById, useAuthStoreActions, useCurrentServerId } from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { AuthState } from '/@/shared/types/types';
+import { whenSessionRefused } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -154,9 +156,24 @@ export const useServerAuthenticated = () => {
 
                     // Only reauthenticate if it's a forbidden error AND password is saved
                     if (isForbiddenError && serverWithAuth.savePassword && localSettings) {
-                        const password = await localSettings.passwordGet(serverWithAuth.id);
+                        const saved = await localSettings.passwordRead(serverWithAuth.id);
+                        const step = whenSessionRefused(saved);
 
-                        if (password) {
+                        if (step === 'askAgain') {
+                            // B-338: a password this computer cannot read is not a refused one.
+                            // Ask for it; the server stays current (no logout, no Worbus Server
+                            // sign-out) and the saved password is kept.
+                            logger.warn('Server authentication needs the password again', {
+                                reason: 'saved password unreadable',
+                                serverId: serverWithAuth.id,
+                            });
+                            askForPasswordAgain(serverWithAuth);
+                            setReady(AuthState.INVALID);
+                            return;
+                        }
+
+                        if (saved.kind === 'ok') {
+                            const { password } = saved;
                             logger.info('Authenticating server', {
                                 method: 'authenticate',
                                 reason: 'getUserInfo failed with forbidden error',
