@@ -45,6 +45,10 @@ const utils = isElectron() ? window.api.utils : null;
 // Worbus P5 (design §6.4): a saved password the move from Feishin left unreadable. Registered once,
 // before the first render, so nothing sent at sign-in is missed.
 utils?.onPasswordUnreadableAfterMove((message) => toast.warn({ message }));
+// B-335: what main tells the person (mpv failed or restarted, the macOS media-keys warning).
+// Upstream's subscriber was a commented-out effect, deleted in 92d4681a2; registered once here,
+// before the first render, like the sentence above.
+utils?.mainMessageListener(({ message, type }) => toast.show({ message, type }));
 // B-338: a refused session whose saved password cannot be read opens the server's sign-in form.
 setAskForPassword(askForPassword);
 
