@@ -60,3 +60,20 @@ test('theTabListInSettingsContentMatchesTheList', () => {
         );
     }
 });
+
+/**
+ * B-318: the stored `tab` defaults to 'general' and S-096 rules out flipping a default, so the store
+ * cannot tell "never chose" from "chose General". A desktop with no Worbus Server set reads the
+ * untouched default as the Server tab, where a person with no server needs to be. Once a server is
+ * set, General is General.
+ */
+test('noServerSetOpensTheServerTabOverTheDefault', () => {
+    assert.equal(tabFor('general', true, false), 'server');
+    assert.equal(tabFor('general', true, true), 'general');
+    // A tab the person chose, other than the default, is kept with no server set.
+    assert.equal(tabFor('playback', true, false), 'playback');
+    // An unknown value falls back the same way.
+    assert.equal(tabFor('nonsense', true, false), 'server');
+    // The web has no Server tab.
+    assert.equal(tabFor('general', false, false), 'general');
+});
