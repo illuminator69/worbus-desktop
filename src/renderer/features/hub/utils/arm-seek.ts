@@ -52,3 +52,35 @@ export const armSeekStep = (
     if (pause) deps.pauseSoon();
     return 'seeked';
 };
+
+export interface LoadSeekDeps extends ArmSeekDeps {
+    /** mediaPlayByIndex: change row (the pending seek lands on the song change). */
+    playByIndex: (index: number) => void;
+}
+
+/**
+ * B-348: a hub `load` of the queue already here positions it in place (no reload): the row, then
+ * the hub's offset. The caller handles play or pause afterwards.
+ */
+export const sameQueueLoadStep = (
+    targetIndex: number,
+    sec: number,
+    pause: boolean,
+    deps: LoadSeekDeps,
+): ArmSeekOutcome => {
+    deps.withdrawStartupSeek();
+    if (targetIndex !== deps.currentIndex) {
+        deps.armPending(targetIndex, sec, pause);
+        deps.playByIndex(targetIndex);
+        return 'pending';
+    }
+    deps.seekNow(sec);
+    return 'seeked';
+};
+
+/** B-348: a hub `seek` directive on the current song. */
+export const seekDirectiveStep = (sec: number, deps: ArmSeekDeps): ArmSeekOutcome => {
+    deps.withdrawStartupSeek();
+    deps.seekNow(sec);
+    return 'seeked';
+};

@@ -6,7 +6,7 @@ import {
     engineTakesSeekNow,
     setEngineSeekProbe,
 } from '../../player/hooks/startup-seek.ts';
-import { armSeekStep } from '../utils/arm-seek.ts';
+import { armSeekStep, sameQueueLoadStep, seekDirectiveStep } from '../utils/arm-seek.ts';
 
 /**
  * B-339:  node --test src/renderer/features/hub/hooks/startup-seek.harness.ts
@@ -69,7 +69,28 @@ const startup = (
         if (at !== null) engineSeek(at);
     };
 
-    return { armSeek, current, engine, pending, playing, seek, shown, writes };
+    const played: number[] = [];
+    const deps = () => ({
+        armPending: (index: number, at: number, pause: boolean) =>
+            pending.push({ index, pause, sec: at }),
+        currentIndex: current.index,
+        engineTakesSeek: engineTakesSeekNow(kind === 'web'),
+        pauseSoon: () => {},
+        playByIndex: (index: number) => played.push(index),
+        retargetStartupSeek: (at: number) => seek.retarget(at, current.uniqueId),
+        seekNow: (at: number) => {
+            shown.push(at);
+            engineSeek(at);
+        },
+        showPosition: (at: number) => shown.push(at),
+        withdrawStartupSeek: () => seek.withdraw(),
+    });
+    // B-348: use-hub's `load` of the queue already here, and its `seek` directive.
+    const load = (targetIndex: number, sec: number, pause = false) =>
+        sameQueueLoadStep(targetIndex, sec, pause, deps());
+    const seekTo = (sec: number) => seekDirectiveStep(sec, deps());
+
+    return { armSeek, current, engine, load, pending, played, playing, seek, seekTo, shown, writes };
 };
 
 test('alignBeforeMountLandsAtHubPosition', () => {
@@ -222,4 +243,50 @@ test('alignBeforeMountClosedAtZeroLandsAtHubPosition', () => {
     s.engine.ready = true;
     s.playing();
     assert.deepEqual(s.writes, [HUB_SEC]);
+});
+
+/**
+ * B-348: a hub `load` of the queue already here (same queue, same row) or a `seek`, before the web
+ * player has mounted at a fresh start. Both used to withdraw the startup seek and seek the engine
+ * directly, past armSeekStep's engine gate: the seek went to a null ref and the restore seek was
+ * gone, so the first play started at 0 s (or the closed position) instead of the hub's.
+ */
+test('sameRowLoadBeforeMountLandsAtHubPosition', () => {
+    const s = startup();
+    s.seek.arm(CLOSED_SEC, 'u3');
+    assert.equal(s.load(3, HUB_SEC), 'retargeted');
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC]);
+});
+
+test('seekDirectiveBeforeMountLandsAtItsPosition', () => {
+    const s = startup();
+    s.seek.arm(CLOSED_SEC, 'u3');
+    assert.equal(s.seekTo(HUB_SEC), 'retargeted');
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC]);
+});
+
+test('loadAndSeekAfterMountSeekAtOnce', () => {
+    const s = startup();
+    s.seek.arm(CLOSED_SEC, 'u3');
+    s.engine.ready = true;
+    assert.equal(s.load(3, HUB_SEC), 'seeked');
+    assert.equal(s.seekTo(120), 'seeked');
+    assert.deepEqual(s.writes, [HUB_SEC, 120]);
+    s.playing();
+    assert.deepEqual(s.writes, [HUB_SEC, 120], 'the startup seek was withdrawn');
+});
+
+test('loadToAnotherRowArmsAndChangesRow', () => {
+    const s = startup({ index: 2, uniqueId: 'u2' });
+    s.seek.arm(CLOSED_SEC, 'u2');
+    assert.equal(s.load(3, HUB_SEC, true), 'pending');
+    assert.deepEqual(s.pending, [{ index: 3, pause: true, sec: HUB_SEC }]);
+    assert.deepEqual(s.played, [3]);
+    s.engine.ready = true;
+    s.playing();
+    assert.deepEqual(s.writes, [], 'the startup seek is withdrawn: the row changed');
 });
