@@ -467,7 +467,21 @@ export const useHub = () => {
     // (not user-initiated) — prevents do:load side effects from being
     // misinterpreted as "user started new local playback".
     // (hub-driven-window.ts; the initial value is built every render and kept only on the first.)
-    const hubDriven = useRef(createHubDrivenWindow({ now: () => Date.now() }));
+    // W1 review: what the player held when the window opened, and what to do when it lapses
+    // (set below, once publishQueue exists).
+    const heldAtWindowOpen = useRef('');
+    const onHubWindowLapse = useRef<() => void>(() => undefined);
+    const hubDriven = useRef(
+        createHubDrivenWindow({
+            clearTimer: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+            now: () => Date.now(),
+            onLapse: () => onHubWindowLapse.current(),
+            onOpen: () => {
+                heldAtWindowOpen.current = localSignature();
+            },
+            setTimer: (fn, ms) => setTimeout(fn, ms),
+        }),
+    );
     // The window in which local playback is force-paused after adopting an orphaned (no active
     // device) session — see the onPlayerProgress watchdog. B-058: a play somebody asks for inside
     // it closes it (isGuardOpen), so the watchdog pauses only audio nobody asked for.
@@ -939,6 +953,14 @@ export const useHub = () => {
             });
         })();
     }, [buildHubTracks, resolveSavedQueueId, savedQueueCoverUrl]);
+
+    // W1 review: a change made while the window was open (an order this device built because the
+    // hub's did not fit, a shuffle toggle right after a directive) was swallowed with the events.
+    // At the lapse, publish it if the player changed meanwhile and the hub has not been told.
+    onHubWindowLapse.current = () => {
+        const now = localSignature();
+        if (now !== heldAtWindowOpen.current && now !== lastQueueSig.current) publishQueue();
+    };
 
     // Spotify semantics: if the user starts playback locally while another
     // device is active, the music belongs to the session — send the local
@@ -1517,6 +1539,9 @@ export const useHub = () => {
                 // order would re-shuffle.
                 const adopt = adoptOf(session);
                 if (adopt && orderDiffers(usePlayerStore.getState(), adopt)) {
+                    // The window first: the store change below fires the queue subscription,
+                    // and outside it that publish is a claim (the hard-pause beat above).
+                    hubDriven.current.hold(2000);
                     setShuffle(
                         adopt.shuffle ? PlayerShuffle.TRACK : PlayerShuffle.NONE,
                         adopt.order,

@@ -42,7 +42,11 @@ const clock = () => {
 test('the window says once that it lapsed, after the last hold', () => {
     const c = clock();
     let lapses = 0;
-    const w = createHubDrivenWindow({ ...c, onLapse: () => (lapses += 1) } as never);
+    const w = createHubDrivenWindow({
+        ...c,
+        onLapse: () => (lapses += 1),
+        onOpen: () => undefined,
+    });
     w.hold(2000);
     c.advance(1500);
     assert.equal(w.isOpen(), true);
@@ -59,7 +63,11 @@ test('the window says once that it lapsed, after the last hold', () => {
 test('a shorter hold never shortens it; close() shuts it without a lapse', () => {
     const c = clock();
     let lapses = 0;
-    const w = createHubDrivenWindow({ ...c, onLapse: () => (lapses += 1) } as never);
+    const w = createHubDrivenWindow({
+        ...c,
+        onLapse: () => (lapses += 1),
+        onOpen: () => undefined,
+    });
     w.hold(2000);
     w.hold(1000);
     assert.equal(w.until(), 3000);
@@ -67,4 +75,16 @@ test('a shorter hold never shortens it; close() shuts it without a lapse', () =>
     assert.equal(w.isOpen(), false);
     c.advance(5000);
     assert.equal(lapses, 0, 'a dropped socket is not a lapse to publish into');
+});
+
+test('it says when it opens from closed, not when a hold extends it', () => {
+    const c = clock();
+    let opens = 0;
+    const w = createHubDrivenWindow({ ...c, onLapse: () => undefined, onOpen: () => (opens += 1) });
+    w.hold(2000);
+    w.hold(2000);
+    assert.equal(opens, 1);
+    c.advance(2500);
+    w.hold(1000);
+    assert.equal(opens, 2, 'opened again after a lapse');
 });
