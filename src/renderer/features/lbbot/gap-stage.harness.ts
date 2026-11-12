@@ -539,3 +539,59 @@ test('searchAgainNeverShowsTheFinishedSearchsLine', () => {
     );
     assert.equal(searchProgressLine(null), '');
 });
+
+/*
+ * B-231, ruling (a) (2026-11-10; built here in the fix round 2026-11-12): PROTOCOL §15.2 is right.
+ * A pending match (`picking`, some track `downloaded`, no stalled placement) makes Open in lb-bot
+ * prominent but, unlike a stalled placement, still offers search, fetch and Auto for the tracks
+ * that are neither in the library nor `downloaded`. With none of those left, it is lb-bot's to sort
+ * out (attention), as before. Worbus for Android's `GapStageTest` carries the same vectors.
+ */
+test('aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded', async () => {
+    const tracks = [track(1, 'present'), track(2, 'downloaded'), track(3, 'missing')];
+    const awaiting = gap({ status: 'picking', tracks });
+    assert.deepEqual(
+        gapStage(input({ gap: awaiting })),
+        { kind: 'folded', missing: 1 },
+        'a pending match is attention: no search or fetch for the track still missing',
+    );
+    assert.deepEqual(gapStage(input({ gap: awaiting, view: 'tracks' })), {
+        kind: 'tracks',
+        missing: [track(3, 'missing')],
+        total: 3,
+    });
+    assert.deepEqual(gapStage(input({ gap: awaiting, searchAsked: true, view: 'sources' })), {
+        kind: 'searching',
+    });
+    assert.deepEqual(
+        gapStage(input({ gap: gap({ sources: [good], status: 'picking', tracks }), view: 'sources' })),
+        { kind: 'choosing', preselected: 0, sources: [good] },
+    );
+    // The ledger settles a pending match as failed · needs_match (Q-031): that is the match
+    // pending, not a fill that failed, so it does not take the box off the tracks.
+    assert.deepEqual(
+        gapStage(input({ fill: fill('failed'), gap: awaiting, view: 'tracks' })).kind,
+        'tracks',
+    );
+    // The box shows the prominent Open in lb-bot over those stages: one predicate says when.
+    const mod = (await import('./gap-stage.ts')) as Record<string, unknown>;
+    assert.equal(typeof mod.gapMatchPending, 'function', 'no notice predicate for the box');
+    const pending = mod.gapMatchPending as (g: GapRecord) => boolean;
+    assert.equal(pending(awaiting), true);
+    assert.equal(pending(gap({ status: 'picking' })), false, 'nothing downloaded: a plain pick');
+    assert.equal(pending(gap({ stalledPlacement: true, status: 'failed', tracks })), false);
+});
+
+test('aPendingMatchWithNothingLeftToFetchIsLbBotsToSortOut', () => {
+    const allHere = gap({
+        status: 'picking',
+        tracks: [track(1, 'present'), track(2, 'downloaded')],
+    });
+    for (const view of ['folded', 'tracks', 'sources'] as const) {
+        assert.deepEqual(gapStage(input({ gap: allHere, view })), {
+            cause: 'awaitingMatch',
+            kind: 'attention',
+            reason: '',
+        });
+    }
+});
