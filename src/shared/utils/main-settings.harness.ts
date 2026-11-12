@@ -246,3 +246,35 @@ test('a_font_main_cannot_load_is_cleared_in_main_too', () => {
         "the bad path is cleared in the renderer only; main's copy brings it back",
     );
 });
+
+/**
+ * Fix round 2 (2026-11-12), review minor: the reset's restart prompt compared main's STORED value
+ * before the reset with the default. Main acts on what it STARTED on: a tray turned back on this
+ * session (stored = default) still runs without one until a restart, and got no prompt. And the
+ * lyrics sources and NetEase translation, which main reads on each fetch, asked for a restart
+ * nobody needs.
+ */
+test('the_reset_owes_a_restart_against_what_main_started_on', async () => {
+    const mod = (await import('./main-settings.ts')) as Record<string, unknown>;
+    const reset = mod.resetMirroredIn as (store: unknown, startedOn?: unknown) => boolean;
+    assert.ok(Array.isArray(mod.RESTART_KEYS), 'no list of the keys main acts on only at start');
+    // Started with the tray off; turned back on this session (the default); then Reset.
+    const toggledBack = fakeMainStore({ window_enable_tray: true }, { window_enable_tray: true });
+    assert.equal(
+        reset(toggledBack, { window_enable_tray: false }),
+        true,
+        'main still runs without the tray it started without, and nobody is asked',
+    );
+    // Only the lyrics changed: main reads them on each fetch, no restart.
+    const lyricsOnly = fakeMainStore(
+        { enableNeteaseTranslation: false, lyrics: ['NetEase', 'lrclib.net'] },
+        { enableNeteaseTranslation: true, lyrics: ['lrclib.net'] },
+    );
+    assert.equal(
+        reset(lyricsOnly, { enableNeteaseTranslation: true, lyrics: ['lrclib.net'] }),
+        false,
+        'a lyrics-only reset asks for a restart',
+    );
+    const main = read('../../main/features/core/settings/index.ts');
+    assert.match(main, /resetMirroredIn\(store, STARTED_ON\)/, 'main compares with what it stores');
+});
