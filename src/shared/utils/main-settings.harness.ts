@@ -219,3 +219,13 @@ test('a_reset_that_owed_a_restart_asks_once_after_its_reload', async () => {
     const app = read('../../renderer/app.tsx');
     assert.match(app, /takeRestartOwedAfterReset\(window\.sessionStorage\)/);
 });
+
+test('every_key_the_preload_asks_main_for_is_served', () => {
+    // Fix round 2026-11-12: the preload reads `maximized` at start (the window bar's maximise
+    // button), through the same generic channel; B-324's allow-list refused it, so the button
+    // always started as "not maximised".
+    const preload = read('../../preload/local-settings.ts');
+    const asked = [...preload.matchAll(/^get\('([a-zA-Z_.]+)'\)/gm)].map((m) => m[1]);
+    assert.ok(asked.includes('maximized'), `found ${asked.join(', ')}`);
+    for (const key of asked) assert.equal(rendererMayUse(key), true, key);
+});
