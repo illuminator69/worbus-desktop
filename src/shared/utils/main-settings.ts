@@ -88,3 +88,28 @@ export const mirroredWrites = (before: Tree, after: Tree): Array<{ key: string; 
     MIRRORED_SETTINGS.filter(({ path }) => !same(at(before, path), at(after, path))).map(
         ({ key, path }) => ({ key, value: at(after, path) }),
     );
+
+/** The part of main's electron-store a reset uses (`main-settings.harness.ts` passes a fake). */
+export interface ResettableStore {
+    delete: (key: string) => void;
+    get: (key: string) => unknown;
+    reset: (...keys: string[]) => void;
+}
+
+/**
+ * B-328, "Reset to default": main's copies of the mirrored settings go back to main's own
+ * defaults (`reset`), and a key with no default (the font, the password backend) is removed. The
+ * renderer then reloads on its own defaults and the launch adopt finds nothing old to copy back.
+ * Answers whether any value main acted on at start changed: a restart is owed for main to act on
+ * the defaults (the tray, the window frame, media keys, the playback engine).
+ */
+export const resetMirroredIn = (store: ResettableStore): boolean => {
+    let changed = false;
+    for (const { key } of MIRRORED_SETTINGS) {
+        const before = store.get(key);
+        store.delete(key);
+        store.reset(key);
+        if (!same(before, store.get(key))) changed = true;
+    }
+    return changed;
+};

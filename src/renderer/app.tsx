@@ -32,6 +32,8 @@ import { useAppTheme } from '/@/renderer/themes/use-app-theme';
 import { toast } from '/@/shared/components/toast/toast';
 import { setAskForPassword } from '/@/renderer/api/utils';
 import { askForPassword } from '/@/renderer/features/servers/utils/ask-for-password';
+import { openRestartRequiredToast } from '/@/renderer/features/settings/restart-toast';
+import { takeRestartOwedAfterReset } from '/@/renderer/store/reset-restart';
 import { logger } from '/@/renderer/utils/logger';
 import { sanitizeCss } from '/@/renderer/utils/sanitize';
 import { WebAudio } from '/@/shared/types/types';
@@ -160,6 +162,13 @@ const LbBotFillAnnouncementsEffect = () => {
 
 const SyncSettingsEffect = () => {
     useSyncSettingsToMain();
+    // B-328: a reset that put main's settings back to its defaults asks for the restart once,
+    // after its reload.
+    useEffect(() => {
+        if (isElectron() && takeRestartOwedAfterReset(window.sessionStorage)) {
+            openRestartRequiredToast();
+        }
+    }, []);
 
     return null;
 };

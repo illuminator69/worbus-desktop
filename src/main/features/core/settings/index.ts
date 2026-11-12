@@ -18,7 +18,7 @@ import path from 'path';
 import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
 import { migratedFrom } from '/@/main/migrate-from-feishin';
-import { rendererMayUse } from '/@/shared/utils/main-settings';
+import { rendererMayUse, resetMirroredIn } from '/@/shared/utils/main-settings';
 import { type SavedPassword } from '/@/shared/utils/saved-password';
 
 const getFrame = () => {
@@ -158,6 +158,10 @@ ipcMain.handle('settings-set-sync', (__event, data: { property: string; value: a
         store.set(data.property, data.value);
     }
 });
+
+// B-328: "Reset to default" puts main's copies of the mirrored settings back to its defaults
+// before the renderer reloads; answers whether a restart is owed.
+ipcMain.handle('settings-reset-mirrored', () => resetMirroredIn(store));
 
 export const PASSWORD_UNREADABLE_AFTER_MOVE =
     "Your saved password couldn't be read after the move from Feishin. Sign in again.";

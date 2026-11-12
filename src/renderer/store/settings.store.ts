@@ -33,6 +33,7 @@ import {
     migrateHomeItems,
     NEW_DEFAULT_HOME_ORDER,
 } from '/@/renderer/store/home-items-migration';
+import { noteRestartOwedAfterReset } from '/@/renderer/store/reset-restart';
 import { migrateSongColumns } from '/@/renderer/store/song-columns-migration';
 import { mergeOverridingColumns } from '/@/renderer/store/utils';
 import { FontValueSchema } from '/@/renderer/types/fonts';
@@ -1130,7 +1131,7 @@ export interface SettingsSlice extends z.infer<typeof SettingsStateSchema> {
     actions: {
         addCollection: (collection: SavedCollection) => void;
         removeCollection: (id: string) => void;
-        reset: () => void;
+        reset: () => Promise<void>;
         resetSampleRate: () => void;
         setAlbumGroupItems: (items: SortableItem<AlbumGroupItem>[]) => void;
         setArtistItems: (item: SortableItem<ArtistItem>[]) => void;
@@ -2386,7 +2387,19 @@ export const useSettingsStore = createWithEqualityFn<SettingsSlice>()(
                                 );
                             });
                         },
-                        reset: () => {
+                        reset: async () => {
+                            // B-328: main's copies of the settings it owns go back to its defaults
+                            // first; otherwise the launch adopt copies the old ones back.
+                            const local = isElectron() ? window.api?.localSettings : undefined;
+                            if (local?.resetMirrored) {
+                                try {
+                                    if (await local.resetMirrored()) {
+                                        noteRestartOwedAfterReset(window.sessionStorage);
+                                    }
+                                } catch (error) {
+                                    console.error('Main did not reset its settings', error);
+                                }
+                            }
                             localStorage.removeItem('store_settings');
                             window.location.reload();
                         },

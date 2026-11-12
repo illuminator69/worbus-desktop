@@ -21,6 +21,11 @@ const get = async (property: string) => {
     return ipcRenderer.invoke('settings-get', { property });
 };
 
+/** B-328: main's copies of the settings it owns back to its defaults; true if a restart is owed. */
+const resetMirrored = async (): Promise<boolean> => {
+    return ipcRenderer.invoke('settings-reset-mirrored');
+};
+
 const restart = () => {
     ipcRenderer.send('app-restart');
 };
@@ -111,6 +116,7 @@ export const localSettings = {
     passwordRead,
     passwordRemove,
     passwordSet,
+    resetMirrored,
     restart,
     set,
     setSync,

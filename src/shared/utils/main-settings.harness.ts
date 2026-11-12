@@ -181,10 +181,41 @@ test('a_reset_puts_main_s_copies_back_to_its_defaults', async () => {
 
 test('the_reset_reaches_main_before_the_reload', () => {
     const store = read('../../renderer/store/settings.store.ts');
-    const body = store.slice(store.indexOf('reset: '), store.indexOf('resetSampleRate:'));
+    // The implementation, not the slice type's `reset: () => ...;` line.
+    const start = store.search(/reset: (async )?\(\) => \{/);
+    const body = store.slice(start, store.indexOf('resetSampleRate: () => {', start));
     const toMain = body.indexOf('resetMirrored(');
     assert.ok(toMain > 0, 'reset() never tells main');
     assert.ok(toMain < body.indexOf('window.location.reload()'), 'main is told after the reload');
     const main = read('../../main/features/core/settings/index.ts');
     assert.match(main, /'settings-reset-mirrored'[\s\S]{0,120}resetMirroredIn\(store\)/);
+});
+
+test('a_reset_that_owed_a_restart_asks_once_after_its_reload', async () => {
+    const { noteRestartOwedAfterReset, takeRestartOwedAfterReset } =
+        await import('../../renderer/store/reset-restart.ts');
+    const kept = new Map<string, string>();
+    const storage = {
+        getItem: (k: string) => kept.get(k) ?? null,
+        removeItem: (k: string) => void kept.delete(k),
+        setItem: (k: string, v: string) => void kept.set(k, v),
+    };
+    assert.equal(takeRestartOwedAfterReset(storage), false);
+    noteRestartOwedAfterReset(storage);
+    assert.equal(takeRestartOwedAfterReset(storage), true);
+    assert.equal(takeRestartOwedAfterReset(storage), false, 'asked again at the next reload');
+    // Storage refused (a private window): the reset goes on, nothing is asked.
+    const refused = {
+        getItem: () => {
+            throw new Error('blocked');
+        },
+        removeItem: () => undefined,
+        setItem: () => {
+            throw new Error('blocked');
+        },
+    };
+    noteRestartOwedAfterReset(refused);
+    assert.equal(takeRestartOwedAfterReset(refused), false);
+    const app = read('../../renderer/app.tsx');
+    assert.match(app, /takeRestartOwedAfterReset\(window\.sessionStorage\)/);
 });

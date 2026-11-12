@@ -18,7 +18,7 @@ export const ResetSettings = memo(() => {
     const { reset } = useSettingsStoreActions();
 
     const handleResetToDefault = () => {
-        reset();
+        void reset();
         closeAllModals();
     };
 
