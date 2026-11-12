@@ -1,3 +1,5 @@
+import type { FingerprintAnswer } from '/@/shared/utils/fingerprint-refusal';
+
 import { ipcRenderer } from 'electron';
 
 /**
@@ -11,7 +13,7 @@ const fingerprint = (
     ndUser: string,
     ndPassword: string,
     count: number,
-): Promise<string[]> =>
+): Promise<FingerprintAnswer> =>
     ipcRenderer.invoke('audiomuse-fingerprint', { baseUrl, count, ndPassword, ndUser, token });
 
 export interface AlchemyResult {

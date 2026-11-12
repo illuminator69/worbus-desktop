@@ -2059,7 +2059,9 @@
             "title": "Preview \"{{name}}\""
         },
         "mixes": {
+            "audioMuseTooOld": "This server's AudioMuse is too old for your listening mix - it needs {{need}} or later.",
             "empty": "No mixes yet. A mix stores the recipe - the source, the seed and the mood - rather than a fixed tracklist, so it is built again each time you play it. Start something playing and press New mix.",
+            "fingerprintRefused": "The server refused to build your listening mix.",
             "new": "New mix",
             "noHub": "Mixes are stored on your navi-connect hub, so they are unavailable while this device is not connected to it.",
             "title": "Mixed for You",

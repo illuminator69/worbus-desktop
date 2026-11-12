@@ -18,7 +18,9 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 const load = async () =>
     (await import('./fingerprint-refusal.ts').catch(() => null)) as null | {
         fingerprintRefusal: (viaHub: boolean, status: number, body: string) => unknown;
-        refusalLine: (r: unknown) => { key: string; values: Record<string, string> } | { text: string };
+        refusalLine: (
+            r: unknown,
+        ) => { key: string; values: Record<string, string> } | { text: string };
     };
 
 test('the_hubs_known_refusals_are_named', async () => {
@@ -27,7 +29,11 @@ test('the_hubs_known_refusals_are_named', async () => {
     const tooOld = mod.fingerprintRefusal(
         true,
         503,
-        JSON.stringify({ code: 'audiomuse_too_old', error: 'AudioMuse refused the POST', need: '3.7.1' }),
+        JSON.stringify({
+            code: 'audiomuse_too_old',
+            error: 'AudioMuse refused the POST',
+            need: '3.7.1',
+        }),
     );
     assert.deepEqual(tooOld, { code: 'audiomuse_too_old', need: '3.7.1' });
     assert.deepEqual(mod.refusalLine(tooOld), {
@@ -39,7 +45,11 @@ test('the_hubs_known_refusals_are_named', async () => {
         code: 'audiomuse_too_old',
         need: '3.7.1',
     });
-    const bad = mod.fingerprintRefusal(true, 400, '{"code":"bad_request","error":"n must be 1-500"}');
+    const bad = mod.fingerprintRefusal(
+        true,
+        400,
+        '{"code":"bad_request","error":"n must be 1-500"}',
+    );
     assert.deepEqual(bad, { code: 'bad_request', error: 'n must be 1-500' });
     assert.deepEqual(mod.refusalLine(bad), { text: 'n must be 1-500' });
     // Anything else through the hub is today's empty answer.

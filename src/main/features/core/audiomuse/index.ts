@@ -3,6 +3,8 @@ import { ipcMain } from 'electron';
 import { getHubConfig, hubAuth, hubEvents } from '../hub';
 import { fingerprintRequest } from './fingerprint-request';
 
+import { type FingerprintAnswer, fingerprintRefusal } from '/@/shared/utils/fingerprint-refusal';
+
 /**
  * navi-connect Tier-2 AudioMuse-AI core API client (main process).
  *
@@ -116,22 +118,28 @@ const itemIds = (data: unknown): string[] => {
 
 ipcMain.handle(
     'audiomuse-fingerprint',
-    async (_event, args: FingerprintArgs): Promise<string[]> => {
+    async (_event, args: FingerprintArgs): Promise<FingerprintAnswer> => {
         const ep = endpoint(args);
-        if (!ep) return [];
+        if (!ep) return { ids: [] };
         // Worbus P2: signed in to a Worbus Server, the fingerprint is the hub's to answer (it is the
         // primary user's listening, 403 to anyone else). The direct route would read whatever
         // Navidrome account this app holds - never taken while signed in, nor while a sign-in is
         // owed (a memory-only secret after a restart, a 4005 being answered).
         const auth = hubAuth.state();
-        if (!ep.viaHub && (auth.signedIn || auth.needsSignIn)) return [];
+        if (!ep.viaHub && (auth.signedIn || auth.needsSignIn)) return { ids: [] };
         try {
             const { init, url } = fingerprintRequest(ep, args);
             const res = await fetch(url, init);
-            if (!res.ok) return [];
-            return itemIds(await res.json());
+            if (!res.ok) {
+                // Fix round 3: a refusal with a name (an AudioMuse too old for the POST, a bad `n`)
+                // is said, not shown as "no listening"; anything else stays the empty answer.
+                const body = await res.text().catch(() => '');
+                const refused = fingerprintRefusal(ep.viaHub, res.status, body);
+                return refused ? { ids: [], refused } : { ids: [] };
+            }
+            return { ids: itemIds(await res.json()) };
         } catch {
-            return [];
+            return { ids: [] };
         }
     },
 );
