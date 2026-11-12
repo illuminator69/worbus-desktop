@@ -84,3 +84,23 @@ test('wired_engine_ready_and_restore', () => {
     const restore = read('./use-queue-restore.ts');
     assert.match(restore, /onWebEngineReady\(/, 'use-queue-restore applies the seek at ready');
 });
+
+test('only_the_main_web_player_signals_ready', () => {
+    // Review minor (fix round 2026-11-12): the radio player renders the same WebPlayerEngine, so a
+    // station played first at a fresh start reported ready too; the listener then used up the
+    // queue's startup seek on an engine that was not mounted, and the queue later started at 0 s.
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    const engine = read('../audio-player/engine/web-player-engine.tsx');
+    assert.doesNotMatch(
+        engine,
+        /webEngineReady\(\)/,
+        'every WebPlayerEngine signals the startup seek, the radio one included',
+    );
+    assert.match(engine, /onCurrentReady\?\.\(\)/);
+    assert.match(
+        read('../audio-player/web-player.tsx'),
+        /onCurrentReady=\{webEngineReady\}/,
+        "the main player does not pass the queue's ready signal",
+    );
+    assert.doesNotMatch(read('../../radio/components/radio-web-player.tsx'), /onCurrentReady/);
+});
