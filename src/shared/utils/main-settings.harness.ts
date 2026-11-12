@@ -200,10 +200,20 @@ test('a_reset_that_owed_a_restart_asks_once_after_its_reload', async () => {
         removeItem: (k: string) => void kept.delete(k),
         setItem: (k: string, v: string) => void kept.set(k, v),
     };
-    assert.equal(takeRestartOwedAfterReset(storage), false);
-    noteRestartOwedAfterReset(storage);
-    assert.equal(takeRestartOwedAfterReset(storage), true);
-    assert.equal(takeRestartOwedAfterReset(storage), false, 'asked again at the next reload');
+    assert.equal(
+        takeRestartOwedAfterReset(() => storage),
+        false,
+    );
+    noteRestartOwedAfterReset(() => storage);
+    assert.equal(
+        takeRestartOwedAfterReset(() => storage),
+        true,
+    );
+    assert.equal(
+        takeRestartOwedAfterReset(() => storage),
+        false,
+        'asked again at the next reload',
+    );
     // Storage refused (a private window): the reset goes on, nothing is asked.
     const refused = {
         getItem: () => {
@@ -214,10 +224,13 @@ test('a_reset_that_owed_a_restart_asks_once_after_its_reload', async () => {
             throw new Error('blocked');
         },
     };
-    noteRestartOwedAfterReset(refused);
-    assert.equal(takeRestartOwedAfterReset(refused), false);
+    noteRestartOwedAfterReset(() => refused);
+    assert.equal(
+        takeRestartOwedAfterReset(() => refused),
+        false,
+    );
     const app = read('../../renderer/app.tsx');
-    assert.match(app, /takeRestartOwedAfterReset\(window\.sessionStorage\)/);
+    assert.match(app, /takeRestartOwedAfterReset\(\(\) => window\.sessionStorage\)/);
 });
 
 test('every_key_the_preload_asks_main_for_is_served', () => {
@@ -282,9 +295,11 @@ test('the_reset_owes_a_restart_against_what_main_started_on', async () => {
 test('the_session_storage_is_read_inside_the_guard', async () => {
     // Fix round 2 (2026-11-12), review nit: `window.sessionStorage` was read as an argument, outside
     // the helpers' try; its getter can throw (blocked site data). The helpers take a getter now.
-    const { noteRestartOwedAfterReset, takeRestartOwedAfterReset } = (await import(
-        '../../renderer/store/reset-restart.ts'
-    )) as Record<string, (s: unknown) => unknown>;
+    const { noteRestartOwedAfterReset, takeRestartOwedAfterReset } =
+        (await import('../../renderer/store/reset-restart.ts')) as Record<
+            string,
+            (s: unknown) => unknown
+        >;
     const blocked = () => {
         throw new Error('SecurityError');
     };
@@ -297,7 +312,10 @@ test('the_session_storage_is_read_inside_the_guard', async () => {
         setItem: (k: string, v: string) => void kept.set(k, v),
     };
     noteRestartOwedAfterReset(() => storage);
-    assert.equal(takeRestartOwedAfterReset(() => storage), true);
+    assert.equal(
+        takeRestartOwedAfterReset(() => storage),
+        true,
+    );
     for (const file of ['../../renderer/app.tsx', '../../renderer/store/settings.store.ts']) {
         assert.doesNotMatch(
             read(file),

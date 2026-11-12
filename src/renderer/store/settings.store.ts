@@ -2392,13 +2392,13 @@ export const useSettingsStore = createWithEqualityFn<SettingsSlice>()(
                             // first; otherwise the launch adopt copies the old ones back.
                             const local = isElectron() ? window.api?.localSettings : undefined;
                             if (local?.resetMirrored) {
+                                let owed = false;
                                 try {
-                                    if (await local.resetMirrored()) {
-                                        noteRestartOwedAfterReset(window.sessionStorage);
-                                    }
+                                    owed = await local.resetMirrored();
                                 } catch (error) {
                                     console.error('Main did not reset its settings', error);
                                 }
+                                if (owed) noteRestartOwedAfterReset(() => window.sessionStorage);
                             }
                             localStorage.removeItem('store_settings');
                             window.location.reload();

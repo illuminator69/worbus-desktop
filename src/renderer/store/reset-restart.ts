@@ -3,13 +3,16 @@
  * main acts on them (the tray, the window frame, media keys, the playback engine). The reset
  * reloads the renderer, which would drop a toast shown before it, so the debt is noted in this
  * tab's sessionStorage and the restart is asked once after the reload. Storage may be refused (a
- * private window, blocked site data): the reset itself never depends on it.
+ * private window, blocked site data; the `window.sessionStorage` getter itself can throw), so the
+ * helpers take a getter and read it inside their guard: the reset itself never depends on it.
  */
 const RESTART_OWED_KEY = 'worbus-reset-restart-owed';
 
-export const noteRestartOwedAfterReset = (storage: Pick<Storage, 'setItem'>): void => {
+type StorageGetter<K extends keyof Storage> = () => Pick<Storage, K>;
+
+export const noteRestartOwedAfterReset = (storage: StorageGetter<'setItem'>): void => {
     try {
-        storage.setItem(RESTART_OWED_KEY, '1');
+        storage().setItem(RESTART_OWED_KEY, '1');
     } catch {
         // Nothing noted: the person is not asked, as before the fix; main's defaults still apply at
         // the next start.
@@ -18,11 +21,12 @@ export const noteRestartOwedAfterReset = (storage: Pick<Storage, 'setItem'>): vo
 
 /** Whether a reset owed a restart; the note is used up. */
 export const takeRestartOwedAfterReset = (
-    storage: Pick<Storage, 'getItem' | 'removeItem'>,
+    storage: StorageGetter<'getItem' | 'removeItem'>,
 ): boolean => {
     try {
-        const owed = storage.getItem(RESTART_OWED_KEY) === '1';
-        if (owed) storage.removeItem(RESTART_OWED_KEY);
+        const store = storage();
+        const owed = store.getItem(RESTART_OWED_KEY) === '1';
+        if (owed) store.removeItem(RESTART_OWED_KEY);
         return owed;
     } catch {
         return false;

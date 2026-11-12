@@ -165,7 +165,7 @@ const SyncSettingsEffect = () => {
     // B-328: a reset that put main's settings back to its defaults asks for the restart once,
     // after its reload.
     useEffect(() => {
-        if (isElectron() && takeRestartOwedAfterReset(window.sessionStorage)) {
+        if (isElectron() && takeRestartOwedAfterReset(() => window.sessionStorage)) {
             openRestartRequiredToast();
         }
     }, []);
