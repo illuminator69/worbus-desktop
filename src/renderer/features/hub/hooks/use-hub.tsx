@@ -76,6 +76,7 @@ import {
     notePlayheadStep,
     PlayheadRun,
 } from '/@/renderer/features/hub/utils/playhead-run';
+import { queuePlaysHere } from '/@/renderer/features/hub/utils/queue-playing';
 import {
     publicationFields,
     publicationSignature,
@@ -132,6 +133,7 @@ import {
     resolveQueueSource,
 } from '/@/renderer/features/player/utils/saved-queue-source';
 import { isPreviewId, previewHubTrack } from '/@/renderer/features/preview/preview-track';
+import { useRadioStore } from '/@/renderer/features/radio/hooks/use-radio-player';
 import {
     isPermutation,
     isShuffleEnabled,
@@ -374,11 +376,14 @@ const frameSignature = (ids: readonly string[], adopt: PlayOrderAdopt | undefine
  * It is also what `applied` promises (I-031, do-echo.ts): a report that carries a directive's
  * number was read from the player after that directive ended.
  */
+/** Fix round 4: an internet radio station is active (it is not the queue; `queuePlaysHere`). */
+const radioActiveNow = (): boolean => Boolean(useRadioStore.getState().currentStreamUrl);
+
 const readPlayer = (): { index: number; isPlaying: boolean; positionMs: number } => {
     const state = usePlayerStore.getState();
     return {
         index: playingQueueIndex(state),
-        isPlaying: state.player.status === PlayerStatus.PLAYING,
+        isPlaying: queuePlaysHere(state.player.status, radioActiveNow()),
         positionMs: Math.round((useTimestampStoreBase.getState().timestamp || 0) * 1000),
     };
 };
@@ -1066,7 +1071,7 @@ export const useHub = () => {
     const lookAtPlayer = useCallback((): PlayerLook => {
         const state = usePlayerStore.getState();
         return {
-            playing: state.player.status === PlayerStatus.PLAYING,
+            playing: queuePlaysHere(state.player.status, radioActiveNow()),
             positionSec: useTimestampStoreBase.getState().timestamp || 0,
             rolling: isPlayheadRolling(playheadRun.current, Date.now(), ROLLING_PROOF_MS),
             rowIndex: readPlayer().index,
@@ -2177,6 +2182,22 @@ export const useHub = () => {
     // cleared or replaced it - and this player is still playing, it is paused here. Every
     // change of the held timer (a frame, the lost link, a cancel made offline) asks again, so
     // a timer that is replaced is waited for at its own end and one that is cleared not at all.
+    // Fix round 4: a station starting or stopping changes whether the QUEUE plays here without a
+    // player-status change (the store can stay PLAYING across the swap). Tell the hub then.
+    useEffect(
+        () =>
+            useRadioStore.subscribe((state, prev) => {
+                const radioActive = Boolean(state.currentStreamUrl);
+                if (radioActive === Boolean(prev.currentStreamUrl)) return;
+                playing.current = queuePlaysHere(
+                    usePlayerStore.getState().player.status,
+                    radioActive,
+                );
+                report();
+            }),
+        [report],
+    );
+
     useEffect(() => {
         if (!hub) return undefined;
         let timeout: null | ReturnType<typeof setTimeout> = null;
@@ -2368,7 +2389,7 @@ export const useHub = () => {
                 report();
             },
             onPlayerStatus: (properties, prev) => {
-                playing.current = properties.status === PlayerStatus.PLAYING;
+                playing.current = queuePlaysHere(properties.status, radioActiveNow());
                 // Q-051: a tick that lands after the store left PLAYING must not extend the
                 // run it had, or the paused store reads as a runaway - see notePlayerStatus.
                 playheadRun.current = notePlayerStatus(
