@@ -17,6 +17,7 @@ import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/
 import { useSongUrl } from '/@/renderer/features/player/audio-player/hooks/use-stream-url';
 import { PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
+import { webEngineReady } from '/@/renderer/features/player/hooks/startup-seek';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
 import {
     playPosition,
@@ -615,6 +616,7 @@ export function WebPlayer() {
             isTransitioning={Boolean(isTransitioning)}
             loopPlayer1={loopPlayer1}
             loopPlayer2={loopPlayer2}
+            onCurrentReady={webEngineReady} // B-349: the queue's startup seek is this player's
             onEndedPlayer1={handleOnEndedPlayer1}
             onEndedPlayer2={handleOnEndedPlayer2}
             onErrorPause={handleOnErrorPause}

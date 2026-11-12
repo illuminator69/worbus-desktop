@@ -13,7 +13,7 @@ import {
 } from '/@/renderer/features/player/audio-player/engine/retry-decision';
 import { AudioPlayer, PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { convertToLogVolume } from '/@/renderer/features/player/audio-player/utils/player-utils';
-import { setEngineSeekProbe, webEngineReady } from '/@/renderer/features/player/hooks/startup-seek';
+import { setEngineSeekProbe } from '/@/renderer/features/player/hooks/startup-seek';
 import { logger } from '/@/renderer/utils/logger';
 import { PlayerStatus } from '/@/shared/types/types';
 
@@ -33,6 +33,11 @@ interface WebPlayerEngineProps {
     isTransitioning: boolean;
     loopPlayer1: boolean;
     loopPlayer2: boolean;
+    /**
+     * B-349: the current song's element is ready. Only the queue's player passes it (the startup
+     * seek is the queue's); the radio player renders this engine too and passes nothing.
+     */
+    onCurrentReady?: () => void;
     onEndedPlayer1: () => void;
     onEndedPlayer2: () => void;
     onErrorPause: () => void;
@@ -76,6 +81,7 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
         isTransitioning,
         loopPlayer1,
         loopPlayer2,
+        onCurrentReady,
         onEndedPlayer1,
         onEndedPlayer2,
         onErrorPause,
@@ -474,9 +480,9 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
             }
             onStartedPlayer1(player);
             // B-349: the current song's element is up; the startup seek lands before play().
-            if (playerNumRef.current === 1) webEngineReady();
+            if (playerNumRef.current === 1) onCurrentReady?.();
         },
-        [onStartedPlayer1, preservesPitch],
+        [onCurrentReady, onStartedPlayer1, preservesPitch],
     );
 
     const handleOnReadyPlayer2 = useCallback(
@@ -488,9 +494,9 @@ export const WebPlayerEngine = (props: WebPlayerEngineProps) => {
             }
             onStartedPlayer2(player);
             // B-349: the current song's element is up; the startup seek lands before play().
-            if (playerNumRef.current === 2) webEngineReady();
+            if (playerNumRef.current === 2) onCurrentReady?.();
         },
-        [onStartedPlayer2, preservesPitch],
+        [onCurrentReady, onStartedPlayer2, preservesPitch],
     );
 
     if (isLoading || !ReactPlayerComponent) {
