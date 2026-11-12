@@ -666,3 +666,23 @@ test('an_unrecorded_cache_that_shares_rows_with_the_users_space_is_that_users', 
     const hub = readFileSync(new URL('../hooks/use-hub.tsx', import.meta.url), 'utf8');
     assert.match(hub, /savedQueueCacheFor\(owner, welcomeUser, \{/);
 });
+
+/**
+ * Fix round 2 (2026-11-12), the coordinator's ruling on the review's major: a shared row id is no
+ * proof that an unrecorded cache is this user's. A P2 build's first sign-in already uploaded P1
+ * caches into non-primary spaces (BACKLOG B-329: one Feishin queue in all three users' spaces on
+ * the VM), so a P1 cache can share rows with alice's space, and keeping it would upload the rest
+ * of it there. No owner recorded and a non-primary user: cleared, whatever the overlap.
+ */
+test('a_shared_row_id_is_no_proof_the_cache_is_this_users', () => {
+    const alice = { admin: false, name: 'alice', primary: false };
+    const leaked = {
+        hubIds: ['caee5ee9', 'a1'],
+        localIds: ['caee5ee9', 'p2', 'p3'],
+    };
+    assert.equal(
+        (savedQueueCacheFor as (...a: unknown[]) => string)(null, alice, leaked),
+        'clear',
+        "a P1 cache sharing a leaked row goes up into alice's space",
+    );
+});
