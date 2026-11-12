@@ -4,7 +4,7 @@ import i18n from '/@/i18n/i18n';
 import { useAuthStore } from '/@/renderer/store';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerListItem } from '/@/shared/types/types';
-import { createPasswordAsk } from '/@/shared/utils/saved-password';
+import { createPasswordAsk, expiryStillApplies } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -44,6 +44,9 @@ export const askForPasswordAgain = (server: null | ServerListItem): void => {
 
 export const authenticationFailure = (currentServer: null | ServerListItem, message?: string) => {
     const store = useAuthStore.getState();
+    // Fix round 4: only the sign-in this expiry was decided for. A refusal made while logged out,
+    // or one a newer sign-in has replaced since (the Navidrome path waits 1 s), logs nobody out.
+    if (!expiryStillApplies(currentServer, store.currentServer)) return;
     const serverId = currentServer?.id ?? store.currentServer?.id;
 
     toast.error({

@@ -211,11 +211,21 @@ test('a_refusal_of_an_older_sign_in_does_not_log_out_the_newer_one', async () =>
     // debounced (1 s) with a null server, which `authenticationFailure` then resolved to whatever was
     // current by then.
     const mod = (await import('../../shared/utils/saved-password.ts')) as Record<string, unknown>;
-    assert.equal(typeof mod.sentWithAnotherSignIn, 'function', 'a stale 401 expires the new sign-in');
+    assert.equal(
+        typeof mod.sentWithAnotherSignIn,
+        'function',
+        'a stale 401 expires the new sign-in',
+    );
     assert.equal(typeof mod.expiryStillApplies, 'function');
     const sentWithAnotherSignIn = mod.sentWithAnotherSignIn as (s: unknown, c: unknown) => boolean;
     const expiryStillApplies = mod.expiryStillApplies as (r: unknown, c: unknown) => boolean;
-    const signedIn = { credential: 'u=a&s=2&t=2', id: 'nd', ndCredential: 'new', url: 'u', username: 'a' };
+    const signedIn = {
+        credential: 'u=a&s=2&t=2',
+        id: 'nd',
+        ndCredential: 'new',
+        url: 'u',
+        username: 'a',
+    };
     // Sent with no credential, or with the old one, while a newer sign-in is current: stale.
     assert.equal(sentWithAnotherSignIn(undefined, signedIn), true);
     assert.equal(sentWithAnotherSignIn('Bearer old', signedIn), true);
@@ -229,9 +239,19 @@ test('a_refusal_of_an_older_sign_in_does_not_log_out_the_newer_one', async () =>
     assert.equal(expiryStillApplies(before, signedIn), false, 'a newer sign-in came meanwhile');
     assert.equal(expiryStillApplies(null, signedIn), false, 'refused while logged out');
     assert.equal(expiryStillApplies({ ...signedIn, id: 'other' }, signedIn), false);
-    assert.equal(expiryStillApplies(signedIn, null), true, 'already out: its entry is still cleared');
+    assert.equal(
+        expiryStillApplies(signedIn, null),
+        true,
+        'already out: its entry is still cleared',
+    );
     const nd = read('./navidrome/navidrome-api.ts');
-    assert.match(nd, /sentWithAnotherSignIn\(\s*error\.config\?\.headers\?\.\['x-nd-authorization'\],\s*currentServer,?\s*\)/);
+    assert.match(
+        nd,
+        /sentWithAnotherSignIn\(\s*error\.config\?\.headers\?\.\['x-nd-authorization'\],\s*currentServer,?\s*\)/,
+    );
     const utils = read('./utils.ts');
-    assert.match(utils, /if \(!expiryStillApplies\(currentServer, store\.currentServer\)\) return;/);
+    assert.match(
+        utils,
+        /if \(!expiryStillApplies\(currentServer, store\.currentServer\)\) return;/,
+    );
 });

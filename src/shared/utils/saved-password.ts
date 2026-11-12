@@ -69,3 +69,41 @@ export const createPasswordAsk = <S extends AskedServer>(
         return true;
     };
 };
+
+/** The parts of a server entry that say which sign-in a refusal or an expiry is about. */
+export interface SignInOf {
+    credential?: string;
+    id: string;
+    ndCredential?: string;
+}
+
+/**
+ * Fix round 4 (2026-11-12): the refused request was sent under another sign-in than the current
+ * one (no credential, or an older bearer, while a newer sign-in is current). Its 401 says nothing
+ * about the current session: it fails, and nobody is logged out. With nothing current, or a current
+ * server holding no session, a refusal is a real one, as before.
+ */
+export const sentWithAnotherSignIn = (
+    sentAuthorization: unknown,
+    current: null | Pick<SignInOf, 'ndCredential'> | undefined,
+): boolean =>
+    Boolean(current?.ndCredential) && sentAuthorization !== `Bearer ${current?.ndCredential}`;
+
+/**
+ * Fix round 4: whether an expiry decided for `refused` (debounced in the Navidrome path) still
+ * applies when it runs. Not for a refusal made while logged out (no server), nor when the current
+ * server is another one or the same one signed in again meanwhile (new credentials). With nothing
+ * current any more, it still clears the refused server's entry, as before.
+ */
+export const expiryStillApplies = (
+    refused: null | SignInOf | undefined,
+    current: null | SignInOf | undefined,
+): boolean => {
+    if (!refused) return false;
+    if (!current) return true;
+    return (
+        current.id === refused.id &&
+        (current.ndCredential ?? '') === (refused.ndCredential ?? '') &&
+        (current.credential ?? '') === (refused.credential ?? '')
+    );
+};

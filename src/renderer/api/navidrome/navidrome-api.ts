@@ -16,7 +16,11 @@ import { resultWithHeaders } from '/@/shared/api/utils';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerListItemWithCredential } from '/@/shared/types/domain-types';
 import { errorSummary } from '/@/shared/utils/error-summary';
-import { type SavedPassword, whenSessionRefused } from '/@/shared/utils/saved-password';
+import {
+    type SavedPassword,
+    sentWithAnotherSignIn,
+    whenSessionRefused,
+} from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -378,6 +382,14 @@ axiosClient.interceptors.response.use(
     (error) => {
         if (error.response && error.response.status === 401) {
             const currentServer = useAuthStore.getState().currentServer;
+
+            // Fix round 4: sent under another sign-in than the current one (before a sign-in, or
+            // with a bearer since replaced): this refusal is not the current session's.
+            if (
+                sentWithAnotherSignIn(error.config?.headers?.['x-nd-authorization'], currentServer)
+            ) {
+                return Promise.reject(error);
+            }
 
             if (localSettings && currentServer?.savePassword) {
                 return localSettings
