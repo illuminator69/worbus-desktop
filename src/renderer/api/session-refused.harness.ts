@@ -202,3 +202,36 @@ test('a_concurrent_refusal_joins_the_open_form_instead_of_pointing', async () =>
     const modal = read('../features/servers/utils/ask-for-password.tsx');
     assert.match(modal, /onClose: closed/);
 });
+
+test('a_refusal_of_an_older_sign_in_does_not_log_out_the_newer_one', async () => {
+    // Fix round 4 (2026-11-12), from the VM walk: a poll kept running with no credential while
+    // logged out; the person signed in; the next 401 (for a request sent before the sign-in) logged
+    // the NEW sign-in out, and the hub signed out after it. Two ways it got there: the 401 path reads
+    // the current server when it answers, not the one the request was sent under; and the expiry is
+    // debounced (1 s) with a null server, which `authenticationFailure` then resolved to whatever was
+    // current by then.
+    const mod = (await import('../../shared/utils/saved-password.ts')) as Record<string, unknown>;
+    assert.equal(typeof mod.sentWithAnotherSignIn, 'function', 'a stale 401 expires the new sign-in');
+    assert.equal(typeof mod.expiryStillApplies, 'function');
+    const sentWithAnotherSignIn = mod.sentWithAnotherSignIn as (s: unknown, c: unknown) => boolean;
+    const expiryStillApplies = mod.expiryStillApplies as (r: unknown, c: unknown) => boolean;
+    const signedIn = { credential: 'u=a&s=2&t=2', id: 'nd', ndCredential: 'new', url: 'u', username: 'a' };
+    // Sent with no credential, or with the old one, while a newer sign-in is current: stale.
+    assert.equal(sentWithAnotherSignIn(undefined, signedIn), true);
+    assert.equal(sentWithAnotherSignIn('Bearer old', signedIn), true);
+    assert.equal(sentWithAnotherSignIn('Bearer new', signedIn), false);
+    // Nothing current, or a current server with no session: a real refusal, as before.
+    assert.equal(sentWithAnotherSignIn(undefined, null), false);
+    assert.equal(sentWithAnotherSignIn(undefined, { ...signedIn, ndCredential: undefined }), false);
+    // The debounced expiry: only the sign-in it was decided for.
+    const before = { ...signedIn, credential: 'u=a&s=1&t=1', ndCredential: 'old' };
+    assert.equal(expiryStillApplies(signedIn, signedIn), true);
+    assert.equal(expiryStillApplies(before, signedIn), false, 'a newer sign-in came meanwhile');
+    assert.equal(expiryStillApplies(null, signedIn), false, 'refused while logged out');
+    assert.equal(expiryStillApplies({ ...signedIn, id: 'other' }, signedIn), false);
+    assert.equal(expiryStillApplies(signedIn, null), true, 'already out: its entry is still cleared');
+    const nd = read('./navidrome/navidrome-api.ts');
+    assert.match(nd, /sentWithAnotherSignIn\(\s*error\.config\?\.headers\?\.\['x-nd-authorization'\],\s*currentServer,?\s*\)/);
+    const utils = read('./utils.ts');
+    assert.match(utils, /if \(!expiryStillApplies\(currentServer, store\.currentServer\)\) return;/);
+});
