@@ -573,8 +573,27 @@ test('aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded', asyn
     // The ledger settles a pending match as failed · needs_match (Q-031): that is the match
     // pending, not a fill that failed, so it does not take the box off the tracks.
     assert.deepEqual(
-        gapStage(input({ fill: fill('failed'), gap: awaiting, view: 'tracks' })).kind,
+        gapStage(
+            input({
+                fill: fill('failed', { state: 'needs_match' } as Partial<GapFillRow>),
+                gap: awaiting,
+                view: 'tracks',
+            }),
+        ).kind,
         'tracks',
+    );
+    // Amendment (fix round 3, 2026-11-12, the coordinator's ruling for both clients): a PLAIN
+    // failed fill over a pending match is a failure, and shows Failed, as on Android.
+    assert.equal(
+        gapStage(
+            input({
+                fill: fill('failed', { state: 'failed' } as Partial<GapFillRow>),
+                gap: awaiting,
+                view: 'tracks',
+            }),
+        ).kind,
+        'failed',
+        "a plain failed fill on a pending match shows the tracks; Android shows Failed",
     );
     // The box shows the prominent Open in lb-bot over those stages: one predicate says when.
     const mod = (await import('./gap-stage.ts')) as Record<string, unknown>;
