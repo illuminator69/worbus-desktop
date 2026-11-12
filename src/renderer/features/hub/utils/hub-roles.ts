@@ -207,25 +207,20 @@ export const createAccountFollower = (
  * B-329: at a welcome, whether this device's saved-queue cache may go up to the welcome user's
  * space (`syncSavedQueues`). `owner` is the account the cache was filled under (recorded at each
  * welcome). A cache from before accounts (Worbus P1, no owner recorded) was the shared session's,
- * which is the primary user's, unless it shares rows with the welcome's list (below). Anyone else's
- * cache is cleared, not uploaded: an account change clears it too (`followAccount`), and the first
- * sign-in after the upgrade is not one. An older
+ * which is the primary user's. Anyone else's cache is cleared, not uploaded: an account change
+ * clears it too (`followAccount`), and the first sign-in after the upgrade is not one. An older
  * hub names no user and has no spaces: kept, as before.
+ *
+ * Known one-time loss (fix round 2, 2026-11-12): a profile that ran P2 builds as a non-primary
+ * user has no owner recorded either, so its rows not yet uploaded are cleared at its first welcome
+ * here. Nothing persisted tells it from a P1 cache, and a row id it shares with the space proves
+ * nothing (P2 builds already uploaded P1 rows into such spaces), so it is never used as proof.
  */
 export const savedQueueCacheFor = (
     owner: null | string | undefined,
     user: HubUser | null,
-    rows?: { hubIds: readonly string[]; localIds: readonly string[] },
 ): 'clear' | 'keep' => {
     if (!user) return 'keep';
-    if (owner === null || owner === undefined) {
-        if (user.primary) return 'keep';
-        // Review minor (fix round 2026-11-12): no owner recorded is also a profile that ran P2
-        // builds as this non-primary user (the field is new). Its cache was filled from this
-        // user's space, so it shares rows with the list the hub sends for it; a P1 cache holds the
-        // primary's rows and shares none. Kept then, so rows not yet uploaded survive.
-        const hub = new Set((rows?.hubIds ?? []).filter(Boolean));
-        return (rows?.localIds ?? []).some((id) => hub.has(id)) ? 'keep' : 'clear';
-    }
+    if (owner === null || owner === undefined) return user.primary ? 'keep' : 'clear';
     return accountName(owner) === accountName(user.name) ? 'keep' : 'clear';
 };

@@ -639,35 +639,6 @@ test('the_saved_queue_cache_goes_up_only_to_its_owner', () => {
 });
 
 /**
- * Review minor (fix round 2026-11-12): a profile that ran P2 builds as a NON-primary user has no
- * owner recorded either (the field is new), and its first welcome after this upgrade cleared its
- * cache as if it were P1's: rows not yet uploaded (an offline edit, a progress update not yet
- * pushed) were lost. The welcome itself tells the two apart: a cache filled from this user's space
- * shares rows with the list the hub sends for that space; a P1 cache (the primary's rows) shares
- * none with another user's space.
- */
-test('an_unrecorded_cache_that_shares_rows_with_the_users_space_is_that_users', () => {
-    const alice = { admin: false, name: 'alice', primary: false };
-    // P2-era alice: the hub's list for her holds rows this cache holds too. Kept, so the
-    // offline-only row q3 goes up with the rest.
-    assert.equal(
-        savedQueueCacheFor(null, alice, { hubIds: ['q1', 'q2'], localIds: ['q1', 'q2', 'q3'] }),
-        'keep',
-        "a P2 profile's own cache is cleared at its first welcome",
-    );
-    // P1 cache, first welcome into alice's space: nothing in common. Cleared, as before.
-    assert.equal(
-        savedQueueCacheFor(null, alice, { hubIds: ['a1'], localIds: ['p1', 'p2'] }),
-        'clear',
-    );
-    assert.equal(savedQueueCacheFor(null, alice, { hubIds: [], localIds: ['p1'] }), 'clear');
-    // A recorded owner still decides alone.
-    assert.equal(savedQueueCacheFor('ilya', alice, { hubIds: ['q1'], localIds: ['q1'] }), 'clear');
-    const hub = readFileSync(new URL('../hooks/use-hub.tsx', import.meta.url), 'utf8');
-    assert.match(hub, /savedQueueCacheFor\(owner, welcomeUser, \{/);
-});
-
-/**
  * Fix round 2 (2026-11-12), the coordinator's ruling on the review's major: a shared row id is no
  * proof that an unrecorded cache is this user's. A P2 build's first sign-in already uploaded P1
  * caches into non-primary spaces (BACKLOG B-329: one Feishin queue in all three users' spaces on
