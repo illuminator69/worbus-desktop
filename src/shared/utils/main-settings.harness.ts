@@ -229,3 +229,20 @@ test('every_key_the_preload_asks_main_for_is_served', () => {
     assert.ok(asked.includes('maximized'), `found ${asked.join(', ')}`);
     for (const key of asked) assert.equal(rendererMayUse(key), true, key);
 });
+
+test('a_font_main_cannot_load_is_cleared_in_main_too', () => {
+    // Review minor (fix round 2026-11-12): main reports a bad custom font file; the handler cleared
+    // the renderer's copy only, so main kept `local_font_path`, the adopt copied it back at the next
+    // launch and the error came again, at every launch.
+    const settings = read(
+        '../../renderer/features/settings/components/general/application-settings.tsx',
+    );
+    const at = settings.indexOf('const onFontError');
+    const handler = settings.slice(at, settings.indexOf('useEffect(', at));
+    assert.match(handler, /custom: null/);
+    assert.match(
+        handler,
+        /localSettings\??\.setSync\('local_font_path', null\)/,
+        "the bad path is cleared in the renderer only; main's copy brings it back",
+    );
+});
