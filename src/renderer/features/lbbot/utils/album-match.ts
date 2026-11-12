@@ -23,6 +23,18 @@
  */
 
 /**
+ * B-313, the owner's ruling (2026-11-12): one rule on both clients, and a letter in ANY script
+ * counts, as on Worbus for Android. After lower-casing, every code point that is not a letter
+ * (`\p{L}`) or a decimal digit (`\p{Nd}`) is a separator: no accent folding and no NFC/NFKC, so a
+ * combining mark separates, "Björk" is not "Bjork" and full-width letters stay full-width. The
+ * ASCII-only rule before it turned 방탄소년단, 米津玄師, Кино and Σωκράτης into "" (no act, so
+ * nothing matched them, themselves included) and made names that differ only in non-ASCII letters
+ * equal ("Björk" and "Bjärk" were both "bj rk"). The table both clients run is
+ * `artist-name-vectors.ts`.
+ */
+const NOT_A_LETTER_OR_DIGIT = /[^\p{L}\p{Nd}]+/gu;
+
+/**
  * Drop the edition suffix and everything that is punctuation rather than a word.
  *
  * The suffix matters in both directions: Deezer ships "Discovery (Remastered)"
@@ -34,22 +46,23 @@
  * the real case are the proof this is tight enough: of `Discovery`,
  * `Re-Discovery`, `Discovery Remixed` and `Homework / Discovery`, exactly one
  * normalises to `discovery`.
+ *
+ * Titles take the artists' letters rule (B-313): once an artist in any script can match, an
+ * ASCII-only title fell back to its Latin remainder, and `화양연화 pt.1` picked `花様年華 pt.1`
+ * (both "pt 1"). The bracket rule is the desktop's own, unchanged.
  */
 export const normalizeAlbumTitle = (value: string): string =>
     (value || '')
         .toLowerCase()
         .replace(/[([{][^)\]}]*[)\]}]/g, ' ')
-        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(NOT_A_LETTER_OR_DIGIT, ' ')
         .trim();
 
 /** Artists take the same treatment minus the suffix rule — an artist name has no
  *  edition. `&`, `feat.` and the rest collapse to spaces, so the comparison below
  *  is over words rather than over punctuation two catalogues spell differently. */
 export const normalizeArtistName = (value: string): string =>
-    (value || '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, ' ')
-        .trim();
+    (value || '').toLowerCase().replace(NOT_A_LETTER_OR_DIGIT, ' ').trim();
 
 /**
  * Split a credit string into the acts it names.
@@ -73,9 +86,16 @@ export const normalizeArtistName = (value: string): string =>
  * `x` as whole words, and a hyphen with whitespace on BOTH sides ("Lana Del Rey - Nikki Lane").
  * Never an unspaced hyphen (Jay-Z, Run-DMC) and never `/` (AC/DC). The bullet and the spaced
  * hyphen are the hub's (`_ARTIST_SEP_RE`, B-176/Q-120); Worbus for Android's rule is the same.
+ *
+ * "Whole word" is in any script (the 2026-11-12 ruling): a keyword counts only where no letter,
+ * mark, decimal digit or connector stands beside it. `\b` is ASCII in JavaScript, so "Iannis
+ * Xénakis" split at the x and matched "Iannis"; once é is a letter, the x is inside a word.
  */
-export const CREDIT_SEPARATORS =
-    /\s+-\s+|\s*(?:&|\+|,|;|•|\bfeat\.?\b|\bfeaturing\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i;
+const WORD_CHAR = String.raw`[\p{L}\p{M}\p{Nd}\p{Pc}]`;
+export const CREDIT_SEPARATORS = new RegExp(
+    String.raw`\s+-\s+|\s*(?:&|\+|,|;|•|(?<!${WORD_CHAR})(?:feat\.?|featuring|with|vs\.?|x)(?!${WORD_CHAR}))\s*`,
+    'iu',
+);
 
 const creditedActs = (value: string): string[] => {
     const whole = normalizeArtistName(value);
