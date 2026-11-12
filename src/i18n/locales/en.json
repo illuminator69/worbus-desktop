@@ -258,6 +258,7 @@
         "serverNotSelectedError": "No server selected",
         "serverRequired": "Server required",
         "sessionExpiredError": "Your session has expired",
+        "signInFromServerMenu": "The music server needs your password. Sign in again from the server menu.",
         "systemFontError": "An error occurred when trying to get system fonts",
         "settingsSyncError": "Discrepancies were found between the settings in the renderer and the main process. Restart the application to apply the changes"
     },

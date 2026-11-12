@@ -162,5 +162,8 @@ test('after_a_cancel_one_pointer_says_where_to_sign_in', async () => {
     ask({ ...server, credential: 'c2' }); // and one pointer for it
     assert.deepEqual(pointed, ['nd', 'nd']);
     const utils = read('./utils.ts');
-    assert.match(utils, /createPasswordAsk<ServerListItem>\(\s*\(server\) => askHandler\?\.\(server\),\s*\(\) =>/);
+    assert.match(
+        utils,
+        /createPasswordAsk<ServerListItem>\(\s*\(server\) => askHandler\?\.\(server\),\s*\(\) =>/,
+    );
 });

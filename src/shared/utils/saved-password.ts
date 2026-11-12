@@ -34,13 +34,16 @@ export interface AskedServer {
  * once per sign-in. After the person cancels it, later refused requests do not open it again (each
  * request still fails, nobody is logged out) until that server's sign-in changes: its address,
  * user name or stored credentials (a sign-in that worked writes new ones), or the app starts again.
- * The person can still open the form themselves from the server menu.
+ * The person can still open the form themselves from the server menu; the first suppressed ask
+ * for a sign-in says so (`pointOnce`).
  */
 export const createPasswordAsk = <S extends AskedServer>(
     open: (server: S) => void,
+    pointOnce?: (server: S) => void,
 ): ((server: S) => boolean) => {
-    // Per server id: the sign-in last asked for. Memory only; never logged.
-    const asked = new Map<string, string>();
+    // Per server id: the sign-in last asked for, and whether its suppression was pointed out.
+    // Memory only; never logged.
+    const asked = new Map<string, { pointed: boolean; signIn: string }>();
     return (server) => {
         const signIn = JSON.stringify([
             server.url,
@@ -48,8 +51,16 @@ export const createPasswordAsk = <S extends AskedServer>(
             server.credential ?? '',
             server.ndCredential ?? '',
         ]);
-        if (asked.get(server.id) === signIn) return false;
-        asked.set(server.id, signIn);
+        const last = asked.get(server.id);
+        if (last?.signIn === signIn) {
+            // Suppressed after a Cancel: the first one says where to sign in (fix round 2).
+            if (!last.pointed) {
+                last.pointed = true;
+                pointOnce?.(server);
+            }
+            return false;
+        }
+        asked.set(server.id, { pointed: false, signIn });
         open(server);
         return true;
     };

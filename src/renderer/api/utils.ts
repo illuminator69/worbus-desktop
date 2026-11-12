@@ -24,7 +24,16 @@ export const setAskForPassword = (ask: (server: ServerListItem) => void): void =
  * B-338: the session was refused and the saved password cannot be read here. Ask for it; log
  * nobody out, keep the saved password, leave the Worbus Server signed in.
  */
-const askOnce = createPasswordAsk<ServerListItem>((server) => askHandler?.(server));
+const ASK_POINTER_TOAST_ID = 'password-ask-pointer';
+
+const askOnce = createPasswordAsk<ServerListItem>(
+    (server) => askHandler?.(server),
+    () =>
+        toast.warn({
+            id: ASK_POINTER_TOAST_ID,
+            message: i18n.t('error.signInFromServerMenu') as string,
+        }),
+);
 
 export const askForPasswordAgain = (server: null | ServerListItem): void => {
     if (server) askOnce(server);
