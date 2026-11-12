@@ -91,3 +91,22 @@ test('a bullet and a spaced hyphen separate acts', () => {
     for (const [a, b] of different) assert.equal(sameArtist(a, b), false, `${a} | ${b}`);
     assert.equal(sameArtist('Jay-Z', 'Jay-Z'), true);
 });
+
+/**
+ * B-313, owner's ruling 2026-11-12 (letters in any script count): an album whose artist and title are
+ * written in Hangul is found, and once the artist can match, the title must not fall back to its Latin
+ * remainder - under an ASCII-only title rule `화양연화 pt.1` and `花様年華 pt.1` are both "pt 1".
+ */
+test('a title and artist in any script: found, and not by their Latin remainder', () => {
+    const asked = { artist: '방탄소년단', title: '화양연화 pt.1' };
+    assert.equal(
+        pickAlbumCandidate([cand('방탄소년단', '화양연화 pt.1')], asked)?.title,
+        '화양연화 pt.1',
+    );
+    assert.equal(pickAlbumCandidate([cand('방탄소년단', '花様年華 pt.1')], asked), null);
+    assert.equal(
+        pickAlbumCandidate([cand('米津玄師', '馬と鹿')], { artist: '米津玄師', title: '馬と鹿' })
+            ?.title,
+        '馬と鹿',
+    );
+});
