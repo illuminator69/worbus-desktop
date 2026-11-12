@@ -625,7 +625,11 @@ test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', async () => {
     // count leaves only those out. A track this fetch has just downloaded still counts. A fetch first
     // seen already running remembers nothing and counts as before; the count is never zero.
     const mod = (await import('./gap-stage.ts')) as Record<string, unknown>;
-    assert.equal(typeof mod.heldForMatchNext, 'function', 'the box remembers nothing across the fetch');
+    assert.equal(
+        typeof mod.heldForMatchNext,
+        'function',
+        'the box remembers nothing across the fetch',
+    );
     const next = mod.heldForMatchNext as (
         prev: ReadonlySet<string>,
         g: GapRecord | null,
@@ -633,25 +637,42 @@ test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', async () => {
     ) => ReadonlySet<string>;
     const before = gap({
         status: 'picking',
-        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'missing')],
+        tracks: [
+            track(1, 'present'),
+            track(2, 'present'),
+            track(3, 'downloaded'),
+            track(4, 'missing'),
+        ],
     });
     const held = next(new Set(), before, false);
     assert.deepEqual([...held], ['1-3']);
     // The fetch runs: lb-bot's record reads downloading; Harbor Four queued.
     const queued = gap({
         status: 'downloading',
-        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'queued')],
+        tracks: [
+            track(1, 'present'),
+            track(2, 'present'),
+            track(3, 'downloaded'),
+            track(4, 'queued'),
+        ],
     });
     const keep = next(held, queued, true);
     const count = (g: GapRecord, h: ReadonlySet<string>) => {
-        const stage = gapStage(input({ gap: g, heldForMatch: h, view: 'tracks' } as Partial<GapInput>));
+        const stage = gapStage(
+            input({ gap: g, heldForMatch: h, view: 'tracks' } as Partial<GapInput>),
+        );
         return stage.kind === 'active' ? { done: stage.done, wanted: stage.wanted } : stage.kind;
     };
     assert.deepEqual(count(queued, keep), { done: 0, wanted: 1 }, 'Getting 2 tracks … 1 of 2');
     // The caveat case: track 4 downloaded, not yet filed. It is this fetch's: still counted.
     const landed = gap({
         status: 'downloading',
-        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'downloaded')],
+        tracks: [
+            track(1, 'present'),
+            track(2, 'present'),
+            track(3, 'downloaded'),
+            track(4, 'downloaded'),
+        ],
     });
     assert.deepEqual(
         count(landed, next(keep, landed, true)),

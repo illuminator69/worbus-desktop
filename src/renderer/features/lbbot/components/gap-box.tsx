@@ -32,11 +32,15 @@ import {
     gapStage,
     gapStageFamily,
     gapTracksToFetch,
+    gapTransferring,
     type GapView,
     gapViewOnAsk,
+    heldForMatchNext,
     heldTracks,
     searchProgressLine,
 } from '/@/renderer/features/lbbot/gap-stage';
+
+const NOTHING_HELD: ReadonlySet<string> = new Set();
 import { useKeepTopInView } from '/@/renderer/features/lbbot/hooks/use-keep-top-in-view';
 import {
     allowMp3ForAlbum,
@@ -307,10 +311,26 @@ const GapBox = ({
     // turns straight into the result row instead of the box folding away for a frame (B-244).
     const [unlandedSeen, setUnlandedSeen] = useState(false);
     const landed = gap ? gapFillLanded(gap, fill) : false;
+    // B-231 (fix round 5): what the pending match held as downloaded as this page last saw it, kept
+    // across a fetch, so the in-flight count leaves out only those tracks (Android's heldForMatch).
+    const [matchHeld, setMatchHeld] = useState<{ groupId: string; keys: ReadonlySet<string> }>(
+        () => ({
+            groupId,
+            keys: new Set(),
+        }),
+    );
+    const heldBefore = matchHeld.groupId === groupId ? matchHeld.keys : NOTHING_HELD;
+    const heldForMatch = gap
+        ? heldForMatchNext(heldBefore, gap, gapTransferring(gap, committed))
+        : heldBefore;
+    if (matchHeld.groupId !== groupId || heldForMatch !== matchHeld.keys) {
+        setMatchHeld({ groupId, keys: heldForMatch });
+    }
     const stage = gapStage({
         committed,
         fill,
         gap,
+        heldForMatch,
         landedAt: landed && unlandedSeen ? now : landedAt,
         mirroredMissing,
         now,
@@ -559,7 +579,7 @@ const GapBox = ({
     // The tracks a search or fetch is for (B-231: less those a pending match holds downloaded).
     const missing = gap ? gapTracksToFetch(gap) : [];
     const showDisc = gapShowsDisc(missing);
-    const progress = gapProgress(gap);
+    const progress = gapProgress(gap, heldForMatch);
     const open = stage.kind === 'tracks';
     const family = gapStageFamily(stage);
     // B-236: Request swaps the tall sources for the short transfer while the page keeps its scroll;

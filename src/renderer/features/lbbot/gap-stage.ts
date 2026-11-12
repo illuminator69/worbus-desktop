@@ -56,6 +56,8 @@ export interface GapInput {
     fill: GapFillRow | null;
     /** lb-bot's record for the group; null until the first read lands. */
     gap: GapRecord | null;
+    /** B-231: the pending match's downloaded tracks as this page last saw them (`heldForMatchNext`). */
+    heldForMatch?: ReadonlySet<string>;
     /** When the box saw a fill land during this visit (`gapFillLanded` turning true), 0 if not. */
     landedAt: number;
     /** The index's count, for the folded line before `gap` lands. */
@@ -142,25 +144,60 @@ const SEARCH_IN_FLIGHT = new Set(['queued', 'running']);
 export const searchProgressLine = (task: GapRecord['sourceTask'] | undefined): string =>
     task && SEARCH_IN_FLIGHT.has(task.status) ? task.current : '';
 
+/** A gap track's identity across reads: disc and position (Android's key). */
+export const gapTrackKey = (track: Pick<LbBotGapTrack, 'disc' | 'position'>): string =>
+    `${track.disc}-${track.position}`;
+
+/**
+ * B-231 (fix round 5, Android's `heldForMatch`): what the pending match holds as `downloaded`, as
+ * this page last saw it. Outside a fetch it is read off the record (empty when the gap is no
+ * pending match); during a fetch it is kept, less any track no longer `downloaded` (the match took
+ * it). A page first seeing a fetch already running remembers nothing.
+ */
+export const heldForMatchNext = (
+    prev: ReadonlySet<string>,
+    gap: GapRecord | null,
+    transferring: boolean,
+): ReadonlySet<string> => {
+    if (!gap) return prev;
+    const downloaded = new Set(
+        gap.tracks.filter((track) => track.state === 'downloaded').map(gapTrackKey),
+    );
+    const next = transferring
+        ? [...prev].filter((key) => downloaded.has(key))
+        : gapMatchPending(gap)
+          ? [...downloaded]
+          : [];
+    // The same set is the same object, so a caller holding it in state settles.
+    return next.length === prev.size && next.every((key) => prev.has(key)) ? prev : new Set(next);
+};
+
+/** A transfer in flight for the gap, wherever it was started (the stage's `active`). */
+export const gapTransferring = (gap: GapRecord, committed: boolean): boolean =>
+    committed ||
+    gap.status === 'downloading' ||
+    gap.tracks.some((track) => track.state === 'queued' || track.state === 'downloading');
+
 /**
  * Fill progress, counted off the tracks rather than off a task: a gap fill is per-track and has no
  * single transfer to report. Measured against the tracks being filled, not the album's length:
  * progress against 17 when only 12 were queued stalls at 12/17 and reads as a hang.
  */
 export const gapProgress = (
-    gap:
-        | null
-        | Pick<LbBotGap, 'stalledPlacement' | 'status' | 'tracks'>
-        | Pick<LbBotGap, 'tracks'>
-        | undefined,
+    gap: null | Pick<LbBotGap, 'tracks'> | undefined,
+    heldForMatch?: ReadonlySet<string>,
 ) => {
-    // B-231 (fix round 4): on a pending match the downloaded tracks are not part of a fetch (they
-    // wait for lb-bot's match), the same set `gapTracksToFetch` leaves out. lb-bot's needs_match
-    // bucket outranks a transfer, so the gap still reads `picking` while the fetch runs.
-    const pending = !!gap && 'status' in gap && gapMatchPending(gap);
-    const wanted = (gap?.tracks ?? []).filter(
-        (track) => track.state !== 'present' && !(pending && track.state === 'downloaded'),
-    );
+    const notPresent = (gap?.tracks ?? []).filter((track) => track.state !== 'present');
+    // B-231 (fix round 5, Android's rule): on a fetch over a pending match, the tracks the match
+    // held as downloaded when the fetch started (`heldForMatchNext`) are not the fetch's; only they
+    // are left out, so a track this fetch has just downloaded still counts. Never zero: a set that
+    // would leave nothing counts what the record says.
+    const fetched = heldForMatch?.size
+        ? notPresent.filter(
+              (track) => !(track.state === 'downloaded' && heldForMatch.has(gapTrackKey(track))),
+          )
+        : notPresent;
+    const wanted = fetched.length > 0 ? fetched : notPresent;
     const done = wanted.filter((track) => SETTLED_TRACK_STATES.has(track.state));
     const failed = wanted.filter((track) => track.state === 'failed');
     return {
@@ -239,12 +276,8 @@ export const gapStage = (input: GapInput): GapStage => {
         if (input.view === 'folded') return { kind: 'folded', missing: input.mirroredMissing };
         return input.readGaveUp ? { kind: 'unreachable' } : { kind: 'loading' };
     }
-    const transferring =
-        input.committed ||
-        gap.status === 'downloading' ||
-        gap.tracks.some((track) => track.state === 'queued' || track.state === 'downloading');
-    if (transferring) {
-        const progress = gapProgress(gap);
+    if (gapTransferring(gap, input.committed)) {
+        const progress = gapProgress(gap, input.heldForMatch);
         return {
             done: progress.done,
             failed: progress.failed,
