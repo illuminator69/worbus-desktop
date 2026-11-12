@@ -2,7 +2,7 @@ import { Bonjour } from 'bonjour-service';
 import log from 'electron-log/main';
 
 interface CastBrowser {
-    on(event: 'down' | 'up', listener: (service: CastService) => void): void;
+    on(event: 'down' | 'srv-update' | 'up', listener: (service: CastService) => void): void;
     stop(): void;
     /** Re-send the mDNS PTR query. See REQUERY_* below. */
     update(): void;
@@ -2041,7 +2041,9 @@ function startBridging(): void {
     bonjour = new Bonjour();
     browser = bonjour.find({ type: 'googlecast' }) as unknown as CastBrowser;
 
-    browser.on('up', (service) => {
+    // Both a first sighting (`up`) and a known record whose SRV changed (`srv-update`: bonjour-service
+    // sends that, not `up`, when a device re-announces another host or port) go through one path.
+    const onAnnounced = (service: CastService) => {
         const device = serviceToDevice(service);
         log.info(
             `[cast-bridge] mDNS up: ${service.name} → ` +
@@ -2062,7 +2064,9 @@ function startBridging(): void {
             device.id,
             new CastDeviceBridge(device.id, device.name, device.host, device.port, device.kind),
         );
-    });
+    };
+    browser.on('up', onAnnounced);
+    browser.on('srv-update', onAnnounced);
     browser.on('down', (service) => {
         const device = serviceToDevice(service);
         log.info(`[cast-bridge] mDNS down: ${service.name}`);
