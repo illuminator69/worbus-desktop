@@ -98,3 +98,13 @@ test('a_cancelled_ask_does_not_come_back_until_the_sign_in_changes', async () =>
     ask({ ...server, credential: 'u=a&s=3&t=4', ndCredential: 'new', url: 'http://nd2' });
     assert.deepEqual(opened, ['nd', 'nd', 'other', 'nd']);
 });
+
+test('the_asked_form_closes_only_itself_on_success', () => {
+    // Review nit (fix round 2026-11-12): on success the edit form called closeAllModals(), which
+    // also closed whatever modal the asked form had opened over.
+    const form = read('../features/servers/components/edit-server-form.tsx');
+    assert.match(form, /onDone\?: \(\) => void/);
+    assert.match(form, /if \(isUpdate\) \(onDone \?\? closeAllModals\)\(\);/);
+    const ask = read('../features/servers/utils/ask-for-password.tsx');
+    assert.match(ask, /onDone=\{\(\) => closeModal\(ASK_FOR_PASSWORD_MODAL\)\}/);
+});
