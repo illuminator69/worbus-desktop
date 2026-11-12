@@ -167,3 +167,32 @@ test('after_a_cancel_one_pointer_says_where_to_sign_in', async () => {
         /createPasswordAsk<ServerListItem>\(\s*\(server\) => askHandler\?\.\(server\),\s*\(\) =>/,
     );
 });
+
+test('a_concurrent_refusal_joins_the_open_form_instead_of_pointing', async () => {
+    // Fix round 4 (2026-11-12), from the VM walk: several 401s arrive together; the first opened
+    // the form and the second, the same sign-in, was counted as "suppressed after a Cancel", so
+    // the pointer toast showed beside the form before any Cancel. While the form is open, a
+    // refusal joins it; the pointer is for a refusal after the form was closed.
+    const { createPasswordAsk } = await import('../../shared/utils/saved-password.ts');
+    const pointed: string[] = [];
+    let closeForm: () => void = () => undefined;
+    const ask = (createPasswordAsk as (...a: unknown[]) => (s: unknown) => boolean)(
+        (_s: unknown, closed?: () => void) => {
+            closeForm = closed ?? (() => undefined);
+        },
+        (s: { id: string }) => pointed.push(s.id),
+    );
+    const server = { credential: 'c1', id: 'nd', url: 'http://nd', username: 'a' };
+    ask(server); // the form opens
+    ask(server); // a concurrent 401: joins it
+    ask(server);
+    assert.deepEqual(pointed, [], 'the pointer shows beside the open form');
+    closeForm(); // Cancel
+    ask(server); // suppressed after the Cancel: the pointer, once
+    ask(server);
+    assert.deepEqual(pointed, ['nd']);
+    const utils = read('./utils.ts');
+    assert.match(utils, /\(server, closed\) => askHandler\?\.\(server, closed\)/);
+    const modal = read('../features/servers/utils/ask-for-password.tsx');
+    assert.match(modal, /onClose: closed/);
+});
