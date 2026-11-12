@@ -188,7 +188,7 @@ test('the_reset_reaches_main_before_the_reload', () => {
     assert.ok(toMain > 0, 'reset() never tells main');
     assert.ok(toMain < body.indexOf('window.location.reload()'), 'main is told after the reload');
     const main = read('../../main/features/core/settings/index.ts');
-    assert.match(main, /'settings-reset-mirrored'[\s\S]{0,120}resetMirroredIn\(store\)/);
+    assert.match(main, /'settings-reset-mirrored'[\s\S]{0,120}resetMirroredIn\(store\b/);
 });
 
 test('a_reset_that_owed_a_restart_asks_once_after_its_reload', async () => {

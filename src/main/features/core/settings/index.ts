@@ -18,7 +18,7 @@ import path from 'path';
 import { SETTINGS_MIGRATIONS } from '/@/main/features/core/settings/migrations';
 import log from '/@/main/logger';
 import { migratedFrom } from '/@/main/migrate-from-feishin';
-import { rendererMayUse, resetMirroredIn } from '/@/shared/utils/main-settings';
+import { rendererMayUse, resetMirroredIn, startValuesOf } from '/@/shared/utils/main-settings';
 import { type SavedPassword } from '/@/shared/utils/saved-password';
 
 const getFrame = () => {
@@ -129,6 +129,9 @@ export const store = new Store<any>({
     migrations: SETTINGS_MIGRATIONS,
 });
 
+// B-328: what main acts on this run (read once, as main starts): a reset owes a restart against it.
+const STARTED_ON = startValuesOf(store);
+
 /*
  * B-324: the generic settings channel serves the renderer only the keys it uses
  * (`shared/utils/main-settings.ts`: the settings main owns for it, and the few it keeps in main
@@ -161,7 +164,7 @@ ipcMain.handle('settings-set-sync', (__event, data: { property: string; value: a
 
 // B-328: "Reset to default" puts main's copies of the mirrored settings back to its defaults
 // before the renderer reloads; answers whether a restart is owed.
-ipcMain.handle('settings-reset-mirrored', () => resetMirroredIn(store));
+ipcMain.handle('settings-reset-mirrored', () => resetMirroredIn(store, STARTED_ON));
 
 export const PASSWORD_UNREADABLE_AFTER_MOVE =
     "Your saved password couldn't be read after the move from Feishin. Sign in again.";

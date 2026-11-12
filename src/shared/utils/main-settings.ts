@@ -99,19 +99,44 @@ export interface ResettableStore {
 }
 
 /**
+ * The mirrored keys main acts on only when it starts, so a new value needs a restart (read in
+ * `main/index.ts` at start: the window frame, the tray, the `--password-store` switch, the global
+ * media keys, and the media session and playback engine, module-level constants). The others are
+ * read when used: the lyrics sources and NetEase translation on each fetch, the font on each
+ * `feishin://` request, the tray switches on each close or minimise, start-minimized only at the
+ * next start anyway.
+ */
+export const RESTART_KEYS: readonly string[] = [
+    'global_media_hotkeys',
+    'mediaSession',
+    'password_store',
+    'playbackType',
+    'window_enable_tray',
+    'window_window_bar_style',
+];
+
+/** At main's start: the values of `RESTART_KEYS` main acts on this run. */
+export const startValuesOf = (store: Pick<ResettableStore, 'get'>): Record<string, unknown> =>
+    Object.fromEntries(RESTART_KEYS.map((key) => [key, store.get(key)]));
+
+/**
  * B-328, "Reset to default": main's copies of the mirrored settings go back to main's own
  * defaults (`reset`), and a key with no default (the font, the password backend) is removed. The
  * renderer then reloads on its own defaults and the launch adopt finds nothing old to copy back.
- * Answers whether any value main acted on at start changed: a restart is owed for main to act on
- * the defaults (the tray, the window frame, media keys, the playback engine).
+ * Answers whether a restart is owed: a `RESTART_KEYS` value after the reset differs from the one
+ * main started on (`startedOn`, `startValuesOf` at main's start; without it, the value stored
+ * before the reset).
  */
-export const resetMirroredIn = (store: ResettableStore): boolean => {
-    let changed = false;
+export const resetMirroredIn = (
+    store: ResettableStore,
+    startedOn?: Record<string, unknown>,
+): boolean => {
+    let owed = false;
     for (const { key } of MIRRORED_SETTINGS) {
-        const before = store.get(key);
+        const before = startedOn && key in startedOn ? startedOn[key] : store.get(key);
         store.delete(key);
         store.reset(key);
-        if (!same(before, store.get(key))) changed = true;
+        if (RESTART_KEYS.includes(key) && !same(before, store.get(key))) owed = true;
     }
-    return changed;
+    return owed;
 };
