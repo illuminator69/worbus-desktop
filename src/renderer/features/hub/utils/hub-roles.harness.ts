@@ -236,7 +236,7 @@ test('non primary sees no listening or fingerprint', () => {
     const muse = read('../../../../main/features/core/audiomuse/index.ts');
     assert.match(
         muse,
-        /if \(!ep\.viaHub && \(auth\.signedIn \|\| auth\.needsSignIn\)\) return \[\];/,
+        /if \(!ep\.viaHub && \(auth\.signedIn \|\| auth\.needsSignIn\)\) return \{ ids: \[\] \};/,
     );
 });
 

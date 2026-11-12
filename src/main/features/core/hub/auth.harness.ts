@@ -724,7 +724,7 @@ test('nothing goes out on a credential that is not there', () => {
     const muse = read('../audiomuse/index.ts');
     assert.match(
         muse,
-        /if \(!ep\.viaHub && \(auth\.signedIn \|\| auth\.needsSignIn\)\) return \[\];/,
+        /if \(!ep\.viaHub && \(auth\.signedIn \|\| auth\.needsSignIn\)\) return \{ ids: \[\] \};/,
     );
     const cast = read('../cast/index.ts');
     const connect = cast.slice(cast.indexOf('private connectHub(): void {'));
