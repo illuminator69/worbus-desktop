@@ -124,3 +124,67 @@ test('the_mirrored_keys_are_ones_main_reads', () => {
         assert.match(main, new RegExp(`store\\.get\\('${key}'`), `main reads ${key}`);
     }
 });
+
+/**
+ * B-328 (review major, fix round 2026-11-12): "Reset to default" removed only the renderer's
+ * localStorage and reloaded. The launch adopt then copied main's OLD values back, so the twelve
+ * settings main owns survived a reset that said everything resets. A reset must put main's copies
+ * back to main's own defaults first; the adopt after the reload then finds nothing old to copy.
+ */
+
+/** electron-store 8 / conf 10 as the reset sees it: defaults merged at creation, `reset(key)` sets
+ *  a key that has a default back to it, `delete` removes it. */
+const fakeMainStore = (defaults: Record<string, unknown>, held: Record<string, unknown>) => {
+    const data: Record<string, unknown> = { ...defaults, ...held };
+    return {
+        data,
+        delete: (key: string) => void delete data[key],
+        get: (key: string) => data[key],
+        reset: (...keys: string[]) => {
+            for (const key of keys) if (defaults[key] !== undefined) data[key] = defaults[key];
+        },
+    };
+};
+
+test('a_reset_puts_main_s_copies_back_to_its_defaults', async () => {
+    const mod = (await import('./main-settings.ts')) as Record<string, unknown>;
+    assert.equal(
+        typeof mod.resetMirroredIn,
+        'function',
+        "a reset reaches only the renderer's localStorage; main keeps the old values",
+    );
+    const resetMirroredIn = mod.resetMirroredIn as (store: unknown) => boolean;
+    const store = fakeMainStore(
+        { playbackType: 'web', window_enable_tray: true },
+        { local_font_path: '/fonts/old.ttf', playbackType: 'local', window_enable_tray: false },
+    );
+    assert.equal(resetMirroredIn(store), true, 'main acted on other values: a restart is owed');
+    assert.equal(store.get('window_enable_tray'), true);
+    assert.equal(store.get('playbackType'), 'web');
+    assert.equal(store.get('local_font_path'), undefined, 'a key with no default is removed');
+    // After the reload the renderer holds its defaults, and the adopt copies nothing old back.
+    const values = Object.fromEntries(MIRRORED_SETTINGS.map(({ key }) => [key, store.get(key)]));
+    const patch = mirroredPatchFrom(
+        {
+            font: { custom: null },
+            playback: { type: 'web' },
+            window: { tray: true },
+        },
+        values,
+    );
+    assert.deepEqual(patch.window, undefined, 'the old tray switch came back');
+    assert.deepEqual(patch.playback, undefined, 'the old playback engine came back');
+    assert.deepEqual(patch.font, undefined, 'the old font came back');
+    // Nothing to put back: no restart owed.
+    assert.equal(resetMirroredIn(fakeMainStore({ playbackType: 'web' }, {})), false);
+});
+
+test('the_reset_reaches_main_before_the_reload', () => {
+    const store = read('../../renderer/store/settings.store.ts');
+    const body = store.slice(store.indexOf('reset: '), store.indexOf('resetSampleRate:'));
+    const toMain = body.indexOf('resetMirrored(');
+    assert.ok(toMain > 0, 'reset() never tells main');
+    assert.ok(toMain < body.indexOf('window.location.reload()'), 'main is told after the reload');
+    const main = read('../../main/features/core/settings/index.ts');
+    assert.match(main, /'settings-reset-mirrored'[\s\S]{0,120}resetMirroredIn\(store\)/);
+});
