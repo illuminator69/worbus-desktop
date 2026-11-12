@@ -97,14 +97,76 @@ export const CREDIT_SEPARATORS = new RegExp(
     'iu',
 );
 
-const creditedActs = (value: string): string[] => {
-    const whole = normalizeArtistName(value);
+/**
+ * B-313 amendment (2026-11-12, the coordinator's ruling for both clients): an act written `A (B)`,
+ * with ONE trailing bracketed part in round or full-width brackets, is also A alone and B alone.
+ * K-pop libraries tag "BTS (방탄소년단)" where lb-bot and MusicBrainz say "BTS"; the ASCII-only
+ * rule matched that by dropping the Hangul, and the any-script rule alone would not.
+ *
+ * - A and B are compared as whole keys (`BTS (방탄소년단)` is not `BT`, nor `방탄`).
+ * - Two bracketed acts match only as wholes: `A (B)` is not `A (C)`, nor `B (A)`.
+ * - A bracket whose every word is a number or a {@link CREDIT_DISAMBIGUATORS} word
+ *   ("(US)", "(band)", "(2)", "(UK band)", "(가수)") is never a name on its own; A still is.
+ * - Square brackets, two bracketed parts and an unclosed bracket are not the shape.
+ * - The credit is split into acts first, so "IU (아이유) & BTS (방탄소년단)" is two such acts.
+ */
+const TRAILING_BRACKET = /^([^()（）]*)[(（]([^()（）]*)[)）]\s*$/u;
+
+/** Words that only tell two acts of one name apart: roles, a few genres, countries and
+ *  nationalities, as MusicBrainz, Discogs and Wikipedia write them in a credit's bracket. */
+export const CREDIT_DISAMBIGUATORS: ReadonlySet<string> = new Set(
+    [
+        // roles
+        'artist band composer dj duo group mc musician producer rapper singer songwriter trio vocalist',
+        // genres
+        'electronic folk hip hop indie jazz metal pop punk rap rock',
+        // countries and regions
+        'au br ca cn de dk es fi fr gb hk ie japan jp korea kr mx nl north nz pl ru se south tw ua uk us usa',
+        // nationalities
+        'american australian brazilian british canadian chinese danish dutch english finnish french german',
+        'irish italian japanese korean mexican norwegian russian scottish spanish swedish',
+        // the same roles in the scripts the shape is common in
+        '가수 그룹 래퍼 밴드 バンド 歌手',
+    ]
+        .join(' ')
+        .split(' '),
+);
+
+const isDisambiguator = (key: string): boolean =>
+    key.split(' ').every((word) => /^\p{Nd}+$/u.test(word) || CREDIT_DISAMBIGUATORS.has(word));
+
+/** One credited act: its whole key, and for the `A (B)` shape the keys it also is alone. */
+type CreditedAct = { alone: string[]; bracketed: boolean; key: string };
+
+const creditedAct = (part: string): CreditedAct | null => {
+    const key = normalizeArtistName(part);
+    if (!key) return null;
+    const shape = TRAILING_BRACKET.exec(part.trim());
+    const inner = shape ? normalizeArtistName(shape[2]) : '';
+    if (!shape || !inner) return { alone: [], bracketed: false, key };
+    const alone = [normalizeArtistName(shape[1]), isDisambiguator(inner) ? '' : inner];
+    return { alone: alone.filter(Boolean), bracketed: true, key };
+};
+
+const creditedActs = (value: string): CreditedAct[] => {
+    const whole = creditedAct(value || '');
     if (!whole) return [];
-    const parts = (value || '').split(CREDIT_SEPARATORS).map(normalizeArtistName).filter(Boolean);
+    const parts = (value || '')
+        .split(CREDIT_SEPARATORS)
+        .map(creditedAct)
+        .filter((act): act is CreditedAct => act !== null);
     // A credit that is ENTIRELY separator tokens splits to nothing - an act
     // actually named "X" is the real case. Falling back to the whole string
     // keeps that artist matchable instead of silently never matching.
     return parts.length > 0 ? parts : [whole];
+};
+
+/** Exact whole keys; else a bracketed act against a plain one, by what the bracketed one is alone. */
+const sameAct = (x: CreditedAct, y: CreditedAct): boolean => {
+    if (x.key === y.key) return true;
+    if (x.bracketed === y.bracketed) return false;
+    const [shaped, plain] = x.bracketed ? [x, y] : [y, x];
+    return shaped.alone.includes(plain.key);
 };
 
 /**
@@ -121,14 +183,12 @@ const creditedActs = (value: string): string[] => {
  * Splitting handles the collaboration case that containment was reaching for,
  * and handles it better: a one-word act ("Madonna" in "Madonna & Justin
  * Timberlake") matches, which a "the shorter side must have two tokens" guard
- * would have refused.
+ * would have refused. The one widening is the `A (B)` shape above.
  */
 export const sameArtist = (a: string, b: string): boolean => {
     const left = creditedActs(a);
     const right = creditedActs(b);
-    if (left.length === 0 || right.length === 0) return false;
-    const rightSet = new Set(right);
-    return left.some((act) => rightSet.has(act));
+    return left.some((x) => right.some((y) => sameAct(x, y)));
 };
 
 /** Titles are compared exactly once normalised — unlike artists, a title that is
