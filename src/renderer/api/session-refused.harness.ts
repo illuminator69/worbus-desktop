@@ -116,8 +116,9 @@ test('a_failed_reauthentication_logs_no_credential', async () => {
     const nd = read('./navidrome/navidrome-api.ts');
     const at = nd.indexOf("'Error when trying to reauthenticate");
     assert.ok(at > 0);
-    const line = nd.slice(at, nd.indexOf('\n', at));
-    assert.doesNotMatch(line, /,\s*newError\)/, 'the whole error object reaches the console');
+    const call = nd.slice(at, nd.indexOf(');', at) + 2);
+    assert.doesNotMatch(call, /,\s*newError\s*\)/, 'the whole error object reaches the console');
+    assert.match(call, /errorSummary\(newError\)/);
     const mod = (await import('../../shared/utils/error-summary.ts').catch(() => null)) as null | {
         errorSummary: (e: unknown) => unknown;
     };

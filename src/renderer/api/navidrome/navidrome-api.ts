@@ -15,6 +15,7 @@ import { ndType } from '/@/shared/api/navidrome/navidrome-types';
 import { resultWithHeaders } from '/@/shared/api/utils';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerListItemWithCredential } from '/@/shared/types/domain-types';
+import { errorSummary } from '/@/shared/utils/error-summary';
 import { type SavedPassword, whenSessionRefused } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
@@ -453,7 +454,11 @@ axiosClient.interceptors.response.use(
                     .catch((newError: any) => {
                         if (newError === PASSWORD_ASKED) throw error;
                         if (newError !== TIMEOUT_ERROR) {
-                            console.error('Error when trying to reauthenticate: ', newError);
+                            // The error carries the Bearer token and a login body: a summary only.
+                            console.error(
+                                'Error when trying to reauthenticate: ',
+                                errorSummary(newError),
+                            );
 
                             if (isAxiosError(newError) && newError.code === 'ERR_NETWORK') {
                                 logger.warn(
