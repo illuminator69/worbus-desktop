@@ -618,36 +618,63 @@ test('aPendingMatchWithNothingLeftToFetchIsLbBotsToSortOut', () => {
     }
 });
 
-test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', () => {
-    // Fix round 4 (2026-11-12), the VM walk's vector: MGMT, tracks [present, present, downloaded
-    // (the pending match's), Harbor Four], "Request 1 track". lb-bot's needs_match bucket outranks
-    // the transfer, so the gap still reads `picking` while Harbor Four is queued. The box read
-    // "Getting 2 tracks … 1 of 2": the downloaded track counted as wanted and as done. The count
-    // uses the stage's tracks to fetch (missing less the pending match's downloaded ones).
-    const fetching = gap({
+test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', async () => {
+    // Fix round 4 (the VM walk's vector) and round 5 (Android's rule, adopted so both clients
+    // agree): the box REMEMBERS which tracks the pending match held as downloaded when the fetch
+    // starts (`heldForMatch`, by disc and position, kept while still downloaded), and the in-flight
+    // count leaves only those out. A track this fetch has just downloaded still counts. A fetch first
+    // seen already running remembers nothing and counts as before; the count is never zero.
+    const mod = (await import('./gap-stage.ts')) as Record<string, unknown>;
+    assert.equal(typeof mod.heldForMatchNext, 'function', 'the box remembers nothing across the fetch');
+    const next = mod.heldForMatchNext as (
+        prev: ReadonlySet<string>,
+        g: GapRecord | null,
+        transferring: boolean,
+    ) => ReadonlySet<string>;
+    const before = gap({
         status: 'picking',
-        tracks: [
-            track(1, 'present'),
-            track(2, 'present'),
-            track(3, 'downloaded'),
-            track(4, 'queued'),
-        ],
+        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'missing')],
     });
-    const stage = gapStage(input({ gap: fetching, view: 'tracks' }));
-    assert.equal(stage.kind, 'active');
-    assert.deepEqual(
-        stage.kind === 'active' ? { done: stage.done, wanted: stage.wanted } : null,
-        { done: 0, wanted: 1 },
-        'the pending match track counts as one of the fetch',
-    );
-    // A plain transfer (no pending match) keeps counting its downloaded tracks as placed.
-    const plain = gap({
+    const held = next(new Set(), before, false);
+    assert.deepEqual([...held], ['1-3']);
+    // The fetch runs: lb-bot's record reads downloading; Harbor Four queued.
+    const queued = gap({
         status: 'downloading',
-        tracks: [track(1, 'present'), track(2, 'downloaded'), track(3, 'downloading')],
+        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'queued')],
     });
-    const p = gapStage(input({ gap: plain }));
-    assert.deepEqual(p.kind === 'active' ? { done: p.done, wanted: p.wanted } : null, {
+    const keep = next(held, queued, true);
+    const count = (g: GapRecord, h: ReadonlySet<string>) => {
+        const stage = gapStage(input({ gap: g, heldForMatch: h, view: 'tracks' } as Partial<GapInput>));
+        return stage.kind === 'active' ? { done: stage.done, wanted: stage.wanted } : stage.kind;
+    };
+    assert.deepEqual(count(queued, keep), { done: 0, wanted: 1 }, 'Getting 2 tracks … 1 of 2');
+    // The caveat case: track 4 downloaded, not yet filed. It is this fetch's: still counted.
+    const landed = gap({
+        status: 'downloading',
+        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'downloaded')],
+    });
+    assert.deepEqual(
+        count(landed, next(keep, landed, true)),
+        { done: 1, wanted: 1 },
+        "the fetch's own downloaded track drops out of the count",
+    );
+    // First seen already running (nothing remembered): every track not present counts, as before.
+    assert.deepEqual(count(queued, new Set()), { done: 1, wanted: 2 });
+    // Never zero: a remembered set that would leave nothing counts what the record says.
+    const odd = gap({
+        status: 'downloading',
+        tracks: [track(1, 'present'), track(3, 'downloaded')],
+    });
+    assert.deepEqual(count({ ...odd, status: 'downloading' } as GapRecord, new Set(['1-3'])), {
         done: 1,
-        wanted: 2,
+        wanted: 1,
     });
+    // A track the match took away (no longer downloaded) leaves the remembered set.
+    const filed = gap({
+        status: 'downloading',
+        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'done'), track(4, 'queued')],
+    });
+    assert.deepEqual([...next(keep, filed, true)], []);
+    // Outside a fetch and with no pending match, nothing is remembered.
+    assert.deepEqual([...next(held, gap(), false)], []);
 });
