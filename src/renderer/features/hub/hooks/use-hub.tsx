@@ -1916,8 +1916,12 @@ export const useHub = () => {
                     // B-329: only the cache's owner's rows go up; a cache filled under another
                     // account (or the P1 shared session's, for anyone but the primary user) is
                     // cleared first. The cache is this user's from here on.
-                    const { owner } = useSavedQueuesStore.getState();
-                    if (savedQueueCacheFor(owner, welcomeUser) === 'clear') sqActions.clearAll();
+                    const { owner, queues: cached } = useSavedQueuesStore.getState();
+                    const cacheFor = savedQueueCacheFor(owner, welcomeUser, {
+                        hubIds: (msg.savedQueues ?? []).map((r: any) => String(r?.id ?? '')),
+                        localIds: cached.map((q) => q.id),
+                    });
+                    if (cacheFor === 'clear') sqActions.clearAll();
                     if (welcomeUser) sqActions.setOwner(welcomeUser.name);
                     const local = useSavedQueuesStore.getState().queues;
                     sqActions.mergeFromHub(

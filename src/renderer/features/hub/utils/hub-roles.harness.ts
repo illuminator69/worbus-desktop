@@ -662,10 +662,7 @@ test('an_unrecorded_cache_that_shares_rows_with_the_users_space_is_that_users', 
     );
     assert.equal(savedQueueCacheFor(null, alice, { hubIds: [], localIds: ['p1'] }), 'clear');
     // A recorded owner still decides alone.
-    assert.equal(
-        savedQueueCacheFor('ilya', alice, { hubIds: ['q1'], localIds: ['q1'] }),
-        'clear',
-    );
+    assert.equal(savedQueueCacheFor('ilya', alice, { hubIds: ['q1'], localIds: ['q1'] }), 'clear');
     const hub = readFileSync(new URL('../hooks/use-hub.tsx', import.meta.url), 'utf8');
     assert.match(hub, /savedQueueCacheFor\(owner, welcomeUser, \{/);
 });
