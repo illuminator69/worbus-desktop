@@ -617,3 +617,32 @@ test('aPendingMatchWithNothingLeftToFetchIsLbBotsToSortOut', () => {
         });
     }
 });
+
+test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', () => {
+    // Fix round 4 (2026-11-12), the VM walk's vector: MGMT, tracks [present, present, downloaded
+    // (the pending match's), Harbor Four], "Request 1 track". lb-bot's needs_match bucket outranks
+    // the transfer, so the gap still reads `picking` while Harbor Four is queued. The box read
+    // "Getting 2 tracks … 1 of 2": the downloaded track counted as wanted and as done. The count
+    // uses the stage's tracks to fetch (missing less the pending match's downloaded ones).
+    const fetching = gap({
+        status: 'picking',
+        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'queued')],
+    });
+    const stage = gapStage(input({ gap: fetching, view: 'tracks' }));
+    assert.equal(stage.kind, 'active');
+    assert.deepEqual(
+        stage.kind === 'active' ? { done: stage.done, wanted: stage.wanted } : null,
+        { done: 0, wanted: 1 },
+        'the pending match track counts as one of the fetch',
+    );
+    // A plain transfer (no pending match) keeps counting its downloaded tracks as placed.
+    const plain = gap({
+        status: 'downloading',
+        tracks: [track(1, 'present'), track(2, 'downloaded'), track(3, 'downloading')],
+    });
+    const p = gapStage(input({ gap: plain }));
+    assert.deepEqual(p.kind === 'active' ? { done: p.done, wanted: p.wanted } : null, {
+        done: 1,
+        wanted: 2,
+    });
+});
