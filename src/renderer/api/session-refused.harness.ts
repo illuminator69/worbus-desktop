@@ -143,3 +143,24 @@ test('a_failed_reauthentication_logs_no_credential', async () => {
     assert.deepEqual(mod.errorSummary('plain'), { message: 'plain' });
     assert.deepEqual(mod.errorSummary(undefined), { message: 'undefined' });
 });
+
+test('after_a_cancel_one_pointer_says_where_to_sign_in', async () => {
+    // Fix round 2 (2026-11-12), review nit: after Cancel every refusal of the same sign-in failed
+    // silently. The first suppressed ask points to the server menu, once per sign-in.
+    const { createPasswordAsk } = await import('../../shared/utils/saved-password.ts');
+    const pointed: string[] = [];
+    const ask = (createPasswordAsk as (...a: unknown[]) => (s: unknown) => boolean)(
+        () => undefined,
+        (s: { id: string }) => pointed.push(s.id),
+    );
+    const server = { credential: 'c1', id: 'nd', url: 'http://nd', username: 'a' };
+    ask(server); // the form
+    ask(server); // suppressed: the pointer
+    ask(server); // suppressed again: nothing more
+    assert.deepEqual(pointed, ['nd'], 'a suppressed ask says nothing');
+    ask({ ...server, credential: 'c2' }); // a new sign-in: the form again
+    ask({ ...server, credential: 'c2' }); // and one pointer for it
+    assert.deepEqual(pointed, ['nd', 'nd']);
+    const utils = read('./utils.ts');
+    assert.match(utils, /createPasswordAsk<ServerListItem>\(\s*\(server\) => askHandler\?\.\(server\),\s*\(\) =>/);
+});
