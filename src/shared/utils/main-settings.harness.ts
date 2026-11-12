@@ -278,3 +278,31 @@ test('the_reset_owes_a_restart_against_what_main_started_on', async () => {
     const main = read('../../main/features/core/settings/index.ts');
     assert.match(main, /resetMirroredIn\(store, STARTED_ON\)/, 'main compares with what it stores');
 });
+
+test('the_session_storage_is_read_inside_the_guard', async () => {
+    // Fix round 2 (2026-11-12), review nit: `window.sessionStorage` was read as an argument, outside
+    // the helpers' try; its getter can throw (blocked site data). The helpers take a getter now.
+    const { noteRestartOwedAfterReset, takeRestartOwedAfterReset } = (await import(
+        '../../renderer/store/reset-restart.ts'
+    )) as Record<string, (s: unknown) => unknown>;
+    const blocked = () => {
+        throw new Error('SecurityError');
+    };
+    assert.doesNotThrow(() => noteRestartOwedAfterReset(blocked));
+    assert.equal(takeRestartOwedAfterReset(blocked), false);
+    const kept = new Map<string, string>();
+    const storage = {
+        getItem: (k: string) => kept.get(k) ?? null,
+        removeItem: (k: string) => void kept.delete(k),
+        setItem: (k: string, v: string) => void kept.set(k, v),
+    };
+    noteRestartOwedAfterReset(() => storage);
+    assert.equal(takeRestartOwedAfterReset(() => storage), true);
+    for (const file of ['../../renderer/app.tsx', '../../renderer/store/settings.store.ts']) {
+        assert.doesNotMatch(
+            read(file),
+            /RestartOwedAfterReset\(window\.sessionStorage\)/,
+            `${file} reads window.sessionStorage outside the guard`,
+        );
+    }
+});
