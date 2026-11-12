@@ -641,7 +641,7 @@ test('the_saved_queue_cache_goes_up_only_to_its_owner', () => {
 /**
  * Fix round 2 (2026-11-12), the coordinator's ruling on the review's major: a shared row id is no
  * proof that an unrecorded cache is this user's. A P2 build's first sign-in already uploaded P1
- * caches into non-primary spaces (BACKLOG B-329: one Feishin queue in all three users' spaces on
+ * caches into non-primary spaces (BACKLOG B-329: one desktop queue in all three users' spaces on
  * the VM), so a P1 cache can share rows with alice's space, and keeping it would upload the rest
  * of it there. No owner recorded and a non-primary user: cleared, whatever the overlap.
  */
