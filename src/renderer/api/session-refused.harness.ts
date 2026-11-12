@@ -108,3 +108,37 @@ test('the_asked_form_closes_only_itself_on_success', () => {
     const ask = read('../features/servers/utils/ask-for-password.tsx');
     assert.match(ask, /onDone=\{\(\) => closeModal\(ASK_FOR_PASSWORD_MODAL\)\}/);
 });
+
+test('a_failed_reauthentication_logs_no_credential', async () => {
+    // Review minor (fix round 2026-11-12): the reauthentication's catch printed the whole AxiosError
+    // to the DevTools console: its `config.headers['x-nd-authorization']` is the Bearer token, and a
+    // failed `/auth/login` POST's `config.data` is the password. Only a safe summary is logged.
+    const nd = read('./navidrome/navidrome-api.ts');
+    const at = nd.indexOf("'Error when trying to reauthenticate");
+    assert.ok(at > 0);
+    const line = nd.slice(at, nd.indexOf('\n', at));
+    assert.doesNotMatch(line, /,\s*newError\)/, 'the whole error object reaches the console');
+    const mod = (await import('../../shared/utils/error-summary.ts').catch(() => null)) as null | {
+        errorSummary: (e: unknown) => unknown;
+    };
+    assert.ok(mod, 'no safe summary to log');
+    const axiosLike = Object.assign(new Error('Request failed with status code 401'), {
+        code: 'ERR_BAD_REQUEST',
+        config: {
+            data: '{"password":"hunter2","username":"a"}',
+            headers: { 'x-nd-authorization': 'Bearer eyJsecret' },
+            url: 'http://nd/auth/login',
+        },
+        isAxiosError: true,
+        response: { data: { error: 'Invalid' }, status: 401 },
+    });
+    const summary = mod.errorSummary(axiosLike);
+    assert.deepEqual(summary, {
+        code: 'ERR_BAD_REQUEST',
+        message: 'Request failed with status code 401',
+        status: 401,
+    });
+    assert.doesNotMatch(JSON.stringify(summary), /hunter2|eyJsecret|Bearer/);
+    assert.deepEqual(mod.errorSummary('plain'), { message: 'plain' });
+    assert.deepEqual(mod.errorSummary(undefined), { message: 'undefined' });
+});
