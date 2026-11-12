@@ -30,13 +30,26 @@ export interface AskedServer {
 }
 
 /**
- * B-338: open the server's sign-in form for a refused session whose saved password cannot be read.
- * Today's rule, moved here unchanged for `session-refused.harness.ts`: every refusal opens it.
+ * B-338: open the server's sign-in form for a refused session whose saved password cannot be read,
+ * once per sign-in. After the person cancels it, later refused requests do not open it again (each
+ * request still fails, nobody is logged out) until that server's sign-in changes: its address,
+ * user name or stored credentials (a sign-in that worked writes new ones), or the app starts again.
+ * The person can still open the form themselves from the server menu.
  */
 export const createPasswordAsk = <S extends AskedServer>(
     open: (server: S) => void,
 ): ((server: S) => boolean) => {
+    // Per server id: the sign-in last asked for. Memory only; never logged.
+    const asked = new Map<string, string>();
     return (server) => {
+        const signIn = JSON.stringify([
+            server.url,
+            server.username,
+            server.credential ?? '',
+            server.ndCredential ?? '',
+        ]);
+        if (asked.get(server.id) === signIn) return false;
+        asked.set(server.id, signIn);
         open(server);
         return true;
     };
