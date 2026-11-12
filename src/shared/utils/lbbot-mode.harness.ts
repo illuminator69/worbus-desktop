@@ -212,3 +212,28 @@ test('progress_only_frame_detected', () => {
     // No mirror cursor yet: every frame is a reason to pull.
     assert.equal(isProgressOnlyFrame({ epoch: 'e1', seq: 40 }, null), false);
 });
+
+test('progress_carries_failed_when_lb_bot_sends_it', () => {
+    // B-332 (fix round 2, 2026-11-12): lb-bot's index progress now carries `failed` (artists whose
+    // MusicBrainz lookup failed; never counted in `unindexed`), passed through by the hub. An older
+    // lb-bot sends none: no key, today's behaviour.
+    assert.deepEqual(parseProgress({ current: '', failed: 3, total: 10, unindexed: 0 }), {
+        current: '',
+        failed: 3,
+        total: 10,
+        unindexed: 0,
+    });
+    assert.deepEqual(parseProgress({ current: '', total: 10, unindexed: 0 }), {
+        current: '',
+        total: 10,
+        unindexed: 0,
+    });
+    // A malformed `failed` is dropped, the rest of the progress kept.
+    for (const failed of [-1, 1.5, '3', true, null]) {
+        assert.deepEqual(parseProgress({ current: '', failed, total: 10, unindexed: 2 }), {
+            current: '',
+            total: 10,
+            unindexed: 2,
+        });
+    }
+});

@@ -82,3 +82,31 @@ test('home_route_does_not_read_the_progress', () => {
     );
     assert.ok(bar.includes('useLbBotIndexProgress('), 'the bar does not read the progress');
 });
+
+test('a_build_that_ended_with_failed_lookups_says_so', () => {
+    // B-332 (fix round 2, 2026-11-12): `unindexed == 0 && failed > 0` is not "done": the bar says
+    // "Couldn't look up {failed} artists" instead of folding away. `failed` absent (an older lb-bot)
+    // or 0: today's behaviour. While artists are still left, the countdown as before.
+    const ended = indexBarState(true, { current: '', failed: 3, total: 120, unindexed: 0 });
+    assert.ok(ended.show, 'a build with failed lookups reads as done');
+    assert.equal(resolve(indexBarText(ended, format)), "Couldn't look up 3 artists");
+    const one = indexBarState(true, { current: '', failed: 1, total: 120, unindexed: 0 });
+    assert.ok(one.show);
+    assert.equal(resolve(indexBarText(one, format)), "Couldn't look up 1 artist");
+    assert.deepEqual(indexBarState(true, { current: '', failed: 0, total: 120, unindexed: 0 }), {
+        show: false,
+    });
+    assert.deepEqual(indexBarState(true, { current: '', total: 120, unindexed: 0 }), {
+        show: false,
+    });
+    const running = indexBarState(true, { current: '', failed: 2, total: 120, unindexed: 30 });
+    assert.ok(running.show);
+    assert.equal(
+        resolve(indexBarText(running, format)),
+        'Indexing your library · 30 of 120 artists left',
+    );
+    // Hidden while lb-bot is gone, as the countdown is.
+    assert.deepEqual(indexBarState(false, { current: '', failed: 3, total: 120, unindexed: 0 }), {
+        show: false,
+    });
+});
