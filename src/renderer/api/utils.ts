@@ -4,6 +4,7 @@ import i18n from '/@/i18n/i18n';
 import { useAuthStore } from '/@/renderer/store';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerListItem } from '/@/shared/types/types';
+import { createPasswordAsk } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -23,8 +24,10 @@ export const setAskForPassword = (ask: (server: ServerListItem) => void): void =
  * B-338: the session was refused and the saved password cannot be read here. Ask for it; log
  * nobody out, keep the saved password, leave the Worbus Server signed in.
  */
+const askOnce = createPasswordAsk<ServerListItem>((server) => askHandler?.(server));
+
 export const askForPasswordAgain = (server: null | ServerListItem): void => {
-    if (server) askHandler?.(server);
+    if (server) askOnce(server);
 };
 
 export const authenticationFailure = (currentServer: null | ServerListItem, message?: string) => {

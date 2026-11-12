@@ -77,3 +77,24 @@ test('asking_again_logs_nobody_out', () => {
     // The session token is not written to the console any more.
     assert.doesNotMatch(utils, /token is expired: \$\{/);
 });
+
+test('a_cancelled_ask_does_not_come_back_until_the_sign_in_changes', async () => {
+    // Review minor (fix round 2026-11-12): Mantine's OPEN is a no-op only while a modal with the
+    // same id is still open. After Cancel the next refused request opened the form again, and
+    // nothing short of typing the password ended the loop.
+    const { createPasswordAsk } = await import('../../shared/utils/saved-password.ts');
+    const opened: string[] = [];
+    const ask = createPasswordAsk((s: { id: string }) => opened.push(s.id));
+    const server = { credential: 'u=a&s=1&t=2', id: 'nd', url: 'http://nd', username: 'a' };
+    ask(server);
+    ask(server); // the next 401 after Cancel
+    ask({ ...server }); // the same entry, read again from the store
+    assert.deepEqual(opened, ['nd'], 'the form reopens on every refusal after a Cancel');
+    // A sign-in that worked wrote new credentials: a later refusal is a new one, and asks.
+    ask({ ...server, credential: 'u=a&s=3&t=4', ndCredential: 'new' });
+    assert.deepEqual(opened, ['nd', 'nd']);
+    // Another server, or this one at another address or user, asks for itself.
+    ask({ ...server, id: 'other' });
+    ask({ ...server, credential: 'u=a&s=3&t=4', ndCredential: 'new', url: 'http://nd2' });
+    assert.deepEqual(opened, ['nd', 'nd', 'other', 'nd']);
+});

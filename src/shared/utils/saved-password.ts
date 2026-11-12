@@ -19,3 +19,25 @@ export const whenSessionRefused = (
     saved: SavedPassword,
 ): 'askAgain' | 'expire' | 'reauthenticate' =>
     saved.kind === 'ok' ? 'reauthenticate' : saved.kind === 'unreadable' ? 'askAgain' : 'expire';
+
+/** The parts of a server entry that say which sign-in an ask is for. */
+export interface AskedServer {
+    credential?: string;
+    id: string;
+    ndCredential?: string;
+    url: string;
+    username: string;
+}
+
+/**
+ * B-338: open the server's sign-in form for a refused session whose saved password cannot be read.
+ * Today's rule, moved here unchanged for `session-refused.harness.ts`: every refusal opens it.
+ */
+export const createPasswordAsk = <S extends AskedServer>(
+    open: (server: S) => void,
+): ((server: S) => boolean) => {
+    return (server) => {
+        open(server);
+        return true;
+    };
+};
