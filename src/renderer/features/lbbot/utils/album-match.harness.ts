@@ -110,3 +110,19 @@ test('a title and artist in any script: found, and not by their Latin remainder'
         '馬と鹿',
     );
 });
+
+/** B-313 amendment 2026-11-12: Navidrome's "BTS (방탄소년단)" is lb-bot's / MusicBrainz's "BTS". */
+test('an artist tagged "A (B)" is the album of A', () => {
+    const asked = { artist: 'BTS', title: 'BE' };
+    assert.equal(
+        pickAlbumCandidate([cand('BTS (방탄소년단)', 'BE')], asked)?.artist,
+        'BTS (방탄소년단)',
+    );
+    assert.equal(
+        pickAlbumCandidate([cand('Nirvana (UK)', 'Local Anaesthetic')], {
+            artist: 'Nirvana (US)',
+            title: 'Local Anaesthetic',
+        }),
+        null,
+    );
+});

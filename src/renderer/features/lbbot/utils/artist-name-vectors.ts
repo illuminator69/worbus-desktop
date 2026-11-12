@@ -14,6 +14,10 @@
  * letter, mark, decimal digit or connector stands beside them, in any script; an empty key is no act,
  * and two credits with no act never match.
  *
+ * Amendment 2026-11-12: an act `A (B)` (one trailing part in `()` or `（）`) also matches a plain act
+ * whose key is A's or B's; B never, when every word of its key is a number or a disambiguator
+ * (`CREDIT_DISAMBIGUATORS` in `album-match.ts`); two bracketed acts match only by their whole keys.
+ *
  * Inputs with characters that do not show are written as escapes.
  */
 
@@ -49,7 +53,7 @@ export const KEY_VECTORS: readonly KeyVector[] = [
     { input: 'ΣΩΚΡΆΤΗΣ', key: 'σωκράτης', note: 'Greek capitals: a final Σ lower-cases to ς' },
     { input: 'Björk', key: 'björk', note: 'precomposed ö is a letter, not folded to o' },
     {
-        input: 'Björk',
+        input: 'Bjo\u0308rk',
         key: 'bjo rk',
         note: 'decomposed (NFD) ö: the combining mark is a separator; no NFC',
     },
@@ -70,14 +74,14 @@ export const KEY_VECTORS: readonly KeyVector[] = [
         note: 'Devanagari vowel signs are marks, so separators (see the pairs)',
     },
     {
-        android: 'daft punk',
-        input: 'Daft Punk',
+        android: 'daft\u00a0punk',
+        input: 'Daft\u00a0Punk',
         key: 'daft punk',
         note: 'a no-break space is a separator; Android keeps it inside the word',
     },
     {
-        android: '米津　玄師',
-        input: '米津　玄師',
+        android: '米津\u3000玄師',
+        input: '米津\u3000玄師',
         key: '米津 玄師',
         note: 'an ideographic space is a separator; Android keeps it inside the word',
     },
@@ -140,18 +144,98 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     },
 
     // Matches the ASCII-only rule made by dropping letters, which the shared rule does not make.
+    { a: 'Joe Hisaishi 久石譲', b: 'Joe Hisaishi', note: 'an alias with no bracket', same: false },
+
+    // Amendment 2026-11-12 (the coordinator's ruling): an act of the form `A (B)`, ONE trailing
+    // bracketed part in round or full-width brackets, also matches `A` alone and `B` alone, each as a
+    // whole key; two bracketed acts match only as wholes; a disambiguator in the bracket is never a
+    // name on its own (it still separates `A (UK)` from `A (US)`).
+    { a: 'BTS (방탄소년단)', android: false, b: 'BTS', note: 'A (B) matches A', same: true },
+    { a: 'BTS (방탄소년단)', android: false, b: '방탄소년단', note: 'A (B) matches B', same: true },
+    {
+        a: 'BTS\uff08방탄소년단\uff09',
+        android: false,
+        b: 'BTS',
+        note: 'full-width brackets, no space before them',
+        same: true,
+    },
+    {
+        a: 'BTS\uff08방탄소년단\uff09',
+        android: false,
+        b: '방탄소년단',
+        note: 'full-width brackets: B',
+        same: true,
+    },
+    { a: 'BTS (방탄소년단)', b: 'BTS (방탄소년단)', note: 'A (B) matches itself', same: true },
+    { a: 'BTS (방탄소년단)', b: 'BTS (防弾少年団)', note: 'A (B) against A (C): no', same: false },
     {
         a: 'BTS (방탄소년단)',
-        b: 'BTS',
-        note: 'a native-script alias in the credit: was "bts" = "bts"',
+        b: '방탄소년단 (BTS)',
+        note: 'two bracketed acts compare as wholes: the swapped form does not match (open question)',
         same: false,
     },
-    { a: 'Joe Hisaishi 久石譲', b: 'Joe Hisaishi', note: 'the same, Han', same: false },
+    {
+        a: 'IU (아이유) & BTS (방탄소년단)',
+        android: false,
+        b: '아이유',
+        note: 'the credit is split first, then each act read',
+        same: true,
+    },
+    { a: 'BTS (방탄소년단)', b: '방탄', note: 'B matches only as a whole key', same: false },
+    { a: 'BTS (방탄소년단)', b: 'BT', note: 'A matches only as a whole key', same: false },
+    {
+        a: 'Nirvana (US)',
+        android: false,
+        b: 'Nirvana',
+        note: 'disambiguated A (B) matches A',
+        same: true,
+    },
+    { a: 'Nirvana (US)', b: 'US', note: 'a disambiguator is not a name', same: false },
+    {
+        a: 'Nirvana (UK)',
+        b: 'Nirvana (US)',
+        note: 'disambiguators still tell two acts apart',
+        same: false,
+    },
+    { a: 'Genesis (band)', b: 'Band', note: 'a disambiguator is not a name', same: false },
+    { a: 'Bush (UK band)', b: 'UK Band', note: 'every word a disambiguator', same: false },
+    {
+        a: 'Nirvana (2)',
+        android: false,
+        b: 'Nirvana',
+        note: 'a Discogs number: A matches',
+        same: true,
+    },
+    { a: 'Nirvana (2)', b: '2', note: 'a number is not a name', same: false },
+    { a: 'Hans Zimmer (composer)', b: 'Composer', note: 'a role word is not a name', same: false },
+    { a: '아이유 (가수)', b: '가수', note: 'a native-script role word is not a name', same: false },
+    {
+        a: 'Robbie Robertson (The Band)',
+        android: false,
+        b: 'The Band',
+        note: 'a name in the bracket is a name, even one made of a disambiguator and "the"',
+        same: true,
+    },
+    { a: 'Foo (Bar) (Baz)', b: 'Foo', note: 'two bracketed parts: not the shape', same: false },
+    { a: 'BTS [방탄소년단]', b: 'BTS', note: 'square brackets: not the shape', same: false },
+    { a: 'BTS (방탄소년단', b: 'BTS', note: 'an unclosed bracket: not the shape', same: false },
+    { a: 'Foo (Bar)', b: 'Foo Bar', note: 'the whole key, as before', same: true },
+    {
+        a: '!!! (Chk Chk Chk)',
+        b: 'Chk Chk Chk',
+        note: 'A has no key: the whole is B, as before',
+        same: true,
+    },
 
     // What the rule does not do (unchanged, both clients).
     { a: 'Björk', b: 'Bjork', note: 'no accent folding', same: false },
-    { a: 'Björk', b: 'Björk', note: 'NFD against NFC: no normalisation form', same: false },
-    { a: 'José', b: 'Jose', note: 'NFD: the mark is a separator, so the accent drops', same: true },
+    { a: 'Bjo\u0308rk', b: 'Björk', note: 'NFD against NFC: no normalisation form', same: false },
+    {
+        a: 'Jose\u0301',
+        b: 'Jose',
+        note: 'NFD: the mark is a separator, so the accent drops',
+        same: true,
+    },
     { a: 'Ｙｏａｓｏｂｉ', b: 'Yoasobi', note: 'no NFKC', same: false },
     {
         a: 'कुमार सानू',
@@ -162,14 +246,14 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
 
     // Where Android differs today.
     {
-        a: 'Daft Punk',
+        a: 'Daft\u00a0Punk',
         android: false,
         b: 'Daft Punk',
         note: 'a no-break space separates words',
         same: true,
     },
     {
-        a: '米津　玄師',
+        a: '米津\u3000玄師',
         android: false,
         b: '米津 玄師',
         note: 'an ideographic space separates words',
