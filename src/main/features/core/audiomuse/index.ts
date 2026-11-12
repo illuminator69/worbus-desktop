@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 
 import { getHubConfig, hubAuth, hubEvents } from '../hub';
+import { fingerprintRequest } from './fingerprint-request';
 
 /**
  * navi-connect Tier-2 AudioMuse-AI core API client (main process).
@@ -125,19 +126,8 @@ ipcMain.handle(
         const auth = hubAuth.state();
         if (!ep.viaHub && (auth.signedIn || auth.needsSignIn)) return [];
         try {
-            const url = new URL(
-                routeUrl(ep, '/sonic/fingerprint', '/api/sonic_fingerprint/generate'),
-            );
-            url.searchParams.set('n', String(args.count));
-            // The core needs Navidrome creds to read play history. Through the hub
-            // they're injected server-side from HUB_ND_USER/HUB_ND_PASS (and a
-            // client-sent one would be dropped), so only the direct route sends them.
-            if (!ep.viaHub) {
-                if (args.ndUser) url.searchParams.set('navidrome_user', args.ndUser);
-                if (args.ndPassword) url.searchParams.set('navidrome_password', args.ndPassword);
-            }
-
-            const res = await fetch(url.toString(), { headers: authHeaders(ep) });
+            const { init, url } = fingerprintRequest(ep, args);
+            const res = await fetch(url, init);
             if (!res.ok) return [];
             return itemIds(await res.json());
         } catch {
