@@ -15,9 +15,21 @@ export interface RadioStopPlan {
     handoffSeekSec: number;
     /** How the player store leaves the queue. */
     queue: 'pause' | 'stop-and-reset';
+    /**
+     * The order the stop runs in: write the handoff, clear the radio state (which mounts the
+     * queue's web player again), leave the queue as `queue` says. Today's order, moved here
+     * unchanged (fix round 6's red).
+     */
+    steps: readonly ('clear' | 'handoff' | 'queue')[];
 }
+
+const STEPS = ['handoff', 'clear', 'queue'] as const;
 
 export const radioStopPlan = (queuePositionSec: number, webPlayer = true): RadioStopPlan =>
     webPlayer
-        ? { handoffSeekSec: queuePositionSec > 0 ? queuePositionSec : -1, queue: 'pause' }
-        : { handoffSeekSec: -1, queue: 'stop-and-reset' };
+        ? {
+              handoffSeekSec: queuePositionSec > 0 ? queuePositionSec : -1,
+              queue: 'pause',
+              steps: STEPS,
+          }
+        : { handoffSeekSec: -1, queue: 'stop-and-reset', steps: STEPS };

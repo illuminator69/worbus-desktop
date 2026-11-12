@@ -43,7 +43,14 @@ test('stopping_a_station_gives_the_queue_back_at_its_position', () => {
     assert.equal(after.barShows, 63.1, "the bar loses the queue's position");
     assert.equal(after.status, 'paused');
     // At 0 s there is nothing to hand over.
-    assert.deepEqual(radioStopPlan(0), { handoffSeekSec: -1, queue: 'pause' });
+    const none = radioStopPlan(0);
+    assert.deepEqual(
+        { handoffSeekSec: none.handoffSeekSec, queue: none.queue },
+        {
+            handoffSeekSec: -1,
+            queue: 'pause',
+        },
+    );
 });
 
 test('the_radio_store_stops_by_the_plan', () => {
@@ -52,4 +59,26 @@ test('the_radio_store_stops_by_the_plan', () => {
     const stop = store.slice(at, store.indexOf('\n    },\n', at));
     assert.match(stop, /radioStopPlan\(/, 'the radio stop resets the queue');
     assert.match(stop, /playerHandoff\.pendingLocalSeek = plan\.handoffSeekSec/);
+});
+
+test('no_report_says_the_queue_plays_while_a_station_stops', async () => {
+    // Fix round 6 (2026-11-12), from the re-walk: stopping a station sent the hub isPlaying=True for
+    // ~5 ms. The stop cleared the radio state before pausing the queue, so for one report the
+    // store still read PLAYING with no station active: the queue playing, by the hub layer's rule.
+    const { queuePlaysHere } = await import('../../hub/utils/queue-playing.ts');
+    for (const web of [true, false]) {
+        const plan = radioStopPlan(63.1, web);
+        let status = 'playing';
+        let radio = true;
+        const reports: boolean[] = [];
+        for (const step of plan.steps) {
+            if (step === 'clear') radio = false;
+            if (step === 'queue') status = plan.queue === 'pause' ? 'paused' : 'stopped';
+            // The hub layer reports on every status change and on every radio change.
+            if (step !== 'handoff') reports.push(queuePlaysHere(status, radio));
+        }
+        assert.deepEqual(reports, [false, false], `web=${web}: a report says the queue plays`);
+        // The handoff is written before the radio state clears (that mounts the queue's player).
+        assert.ok(plan.steps.indexOf('handoff') < plan.steps.indexOf('clear'));
+    }
 });
