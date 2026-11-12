@@ -224,9 +224,10 @@ test('filesWaitingOnLbBotsWorkspaceAreAttentionWhateverTheView', () => {
         kind: 'attention',
         reason: 'Reconcile in lb-bot',
     });
+    // B-231: a pending match is attention only with nothing left to fetch (cases below).
     const awaiting = gap({
         status: 'picking',
-        tracks: [track(1, 'present'), track(2, 'downloaded'), track(3, 'missing')],
+        tracks: [track(1, 'present'), track(2, 'downloaded')],
     });
     // Review minor 12: with no sentence from lb-bot the stage says which kind, so the box can say
     // why in its own fallback words instead of showing a pill alone.
@@ -564,7 +565,9 @@ test('aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded', asyn
         kind: 'searching',
     });
     assert.deepEqual(
-        gapStage(input({ gap: gap({ sources: [good], status: 'picking', tracks }), view: 'sources' })),
+        gapStage(
+            input({ gap: gap({ sources: [good], status: 'picking', tracks }), view: 'sources' }),
+        ),
         { kind: 'choosing', preselected: 0, sources: [good] },
     );
     // The ledger settles a pending match as failed · needs_match (Q-031): that is the match

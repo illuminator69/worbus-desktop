@@ -24,16 +24,17 @@ import {
     type GapBoxGroup,
     gapFillLanded,
     type GapFillRow,
+    gapMatchPending,
     gapPolls,
     gapProgress,
     gapReadGaveUp,
     gapRowsOwed,
     gapStage,
     gapStageFamily,
+    gapTracksToFetch,
     type GapView,
     gapViewOnAsk,
     heldTracks,
-    missingTracks,
     searchProgressLine,
 } from '/@/renderer/features/lbbot/gap-stage';
 import { useKeepTopInView } from '/@/renderer/features/lbbot/hooks/use-keep-top-in-view';
@@ -554,7 +555,8 @@ const GapBox = ({
                   })
             : null;
 
-    const missing = gap ? missingTracks(gap) : [];
+    // The tracks a search or fetch is for (B-231: less those a pending match holds downloaded).
+    const missing = gap ? gapTracksToFetch(gap) : [];
     const showDisc = gapShowsDisc(missing);
     const progress = gapProgress(gap);
     const open = stage.kind === 'tracks';
@@ -566,6 +568,15 @@ const GapBox = ({
         stage.kind === 'folded' ? stage.missing : missing.length || mirroredMissing;
     const selected =
         stage.kind === 'choosing' ? shownSelection(stage.sources, picked, stage.preselected) : null;
+
+    const matchNotice =
+        !!gap &&
+        gapMatchPending(gap) &&
+        (stage.kind === 'folded' ||
+            stage.kind === 'tracks' ||
+            stage.kind === 'searching' ||
+            stage.kind === 'choosing' ||
+            stage.kind === 'noSources');
 
     let content: ReactNode = null;
     if (stage.kind === 'folded' || stage.kind === 'tracks') {
@@ -1030,6 +1041,24 @@ const GapBox = ({
                             {/* Keyed by the stage's family: the line and its list are one, the
                                 sources' three states share their header, and a progress tick never
                                 fades. */}
+                            {/* B-231, PROTOCOL 15.2: a pending match makes Open in lb-bot the
+                                prominent way on, and the stages below still find the rest. */}
+                            {matchNotice && (
+                                <div className={styles.matchPending} data-gap-match-pending="">
+                                    <p className={styles.reason}>
+                                        {t('naviConnect.gapBox.matchPending')}
+                                    </p>
+                                    {openInLbBot && (
+                                        <Button
+                                            onClick={openInLbBot}
+                                            size="compact-sm"
+                                            variant="default"
+                                        >
+                                            {t('naviConnect.gapBox.openInLbBot')}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                             <div className={styles.view} key={family}>
                                 {content}
                             </div>

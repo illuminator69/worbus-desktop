@@ -161,6 +161,31 @@ export const gapProgress = (gap: null | Pick<LbBotGap, 'tracks'> | undefined) =>
 export const missingTracks = (gap: Pick<LbBotGap, 'tracks'>): LbBotGapTrack[] =>
     gap.tracks.filter((track) => !HELD_TRACK_STATES.has(track.state));
 
+/**
+ * B-231, ruling (a): a pending match. lb-bot's `needs_match` bucket for a gap: `picking` with some
+ * track `downloaded`, and not a stalled placement. PROTOCOL §15.2: the box makes Open in lb-bot
+ * prominent (this predicate says when) and still offers search, fetch and Auto for the tracks
+ * `gapTracksToFetch` names. Worbus for Android's `GapStage.kt` keeps the same rule.
+ */
+export const gapMatchPending = (
+    gap: Pick<LbBotGap, 'stalledPlacement' | 'status' | 'tracks'>,
+): boolean =>
+    !gap.stalledPlacement &&
+    gap.status === 'picking' &&
+    gap.tracks.some((track) => track.state === 'downloaded');
+
+/**
+ * The tracks a search or fetch is for: the missing ones, less those a pending match already holds
+ * as `downloaded` (they are on disk, waiting for lb-bot's match; fetching them again would only
+ * bring the same files). Otherwise the same list as `missingTracks`.
+ */
+export const gapTracksToFetch = (
+    gap: Pick<LbBotGap, 'stalledPlacement' | 'status' | 'tracks'>,
+): LbBotGapTrack[] => {
+    const missing = missingTracks(gap);
+    return gapMatchPending(gap) ? missing.filter((track) => track.state !== 'downloaded') : missing;
+};
+
 /** The tracks the album holds by lb-bot's count: what a re-read tracklist should have at least. */
 export const heldTracks = (gap: Pick<LbBotGap, 'tracks'>): number =>
     gap.tracks.filter((track) => HELD_TRACK_STATES.has(track.state)).length;
@@ -237,7 +262,11 @@ export const gapStage = (input: GapInput): GapStage => {
         return { kind: 'absent' };
     }
     const searching = input.searchAsked || SEARCH_IN_FLIGHT.has(gap.sourceTask?.status ?? '');
-    if (gap.stalledPlacement || (!searching && gapAwaitingMatch(gap))) {
+    // B-231, ruling (a): a pending match is lb-bot's alone only when nothing is left to fetch;
+    // otherwise the stages below run over the tracks still to fetch (the box adds the notice).
+    const toFetch = gapTracksToFetch(gap);
+    const matchPending = gapMatchPending(gap);
+    if (gap.stalledPlacement || (!searching && gapAwaitingMatch(gap) && toFetch.length === 0)) {
         return {
             cause: gap.stalledPlacement ? 'stalledPlacement' : 'awaitingMatch',
             kind: 'attention',
@@ -248,7 +277,9 @@ export const gapStage = (input: GapInput): GapStage => {
     // also over the sources it was requested from (the summary drops the source rows, and the
     // sources view with none left and nothing searching read as searching for good). A new search
     // press is the way out.
-    if (fill?.settled && fill.outcome === 'failed' && !input.searchAsked) {
+    // The ledger settles a pending match as failed · needs_match (Q-031): that row is the match
+    // pending, not a fill that failed, and does not take the box off the tracks.
+    if (fill?.settled && fill.outcome === 'failed' && !input.searchAsked && !matchPending) {
         return {
             kind: 'failed',
             mp3WouldHelp: gap.mp3WouldHelp || fill.mp3WouldHelp,
@@ -279,8 +310,11 @@ export const gapStage = (input: GapInput): GapStage => {
         // then, review minor 7) shows the tracks, where Fill gaps asks. Fill gaps itself marks
         // its search as asked, so a press never lands here.
     }
-    if (input.view !== 'folded') return { kind: 'tracks', missing, total: gap.total };
-    return { kind: 'folded', missing: missing.length > 0 ? missing.length : input.mirroredMissing };
+    if (input.view !== 'folded') return { kind: 'tracks', missing: toFetch, total: gap.total };
+    return {
+        kind: 'folded',
+        missing: toFetch.length > 0 ? toFetch.length : input.mirroredMissing,
+    };
 };
 
 /**

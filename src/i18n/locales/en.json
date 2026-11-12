@@ -2000,6 +2000,7 @@
             "inLibrary": "In your library",
             "inLibraryCount": "{{present}} of {{total}} in your library",
             "label": "Missing tracks",
+            "matchPending": "Some tracks arrived and wait for a decision in lb-bot's match workspace. The others can still be found here.",
             "measuredAgainst": "Measured against your album's tagged release, {{album}} ({{count}} tracks).",
             "missing_one": "{{count}} track missing",
             "missing_other": "{{count}} tracks missing",

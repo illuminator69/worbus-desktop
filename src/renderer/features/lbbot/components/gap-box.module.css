@@ -256,6 +256,16 @@
     color: var(--theme-colors-foreground);
 }
 
+/* B-231: a pending match's notice, above the stage that still finds the rest. */
+.match-pending {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 0;
+}
+
 .recovery {
     display: flex;
     flex-direction: column;
