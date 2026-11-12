@@ -19,6 +19,11 @@ export type LbDownloads = 'off' | 'on';
 export interface LbIndexProgress {
     /** The artist lb-bot is reading now, "" when it says none. At most 200 code points. */
     current: string;
+    /**
+     * B-332: artists whose MusicBrainz lookup failed (never counted in `unindexed`). Absent from an
+     * older lb-bot, or when the hub does not pass it on.
+     */
+    failed?: number;
     total: number;
     /** Artists lb-bot will still attempt that have no index row yet. */
     unindexed: number;
@@ -135,7 +140,11 @@ export const parseProgress = (raw: unknown): LbIndexProgress | null => {
     // keep half a surrogate pair.
     const name = current ?? '';
     const cut = name.length > 200 ? Array.from(name).slice(0, 200).join('') : name;
-    return { current: cut, total, unindexed };
+    // B-332: `failed` only when it is a count; a malformed one is dropped, the rest kept.
+    const failed = count(record.failed);
+    return failed === null
+        ? { current: cut, total, unindexed }
+        : { current: cut, failed, total, unindexed };
 };
 
 /**

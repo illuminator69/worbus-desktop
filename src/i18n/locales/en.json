@@ -2039,7 +2039,9 @@
         },
         "indexProgress": {
             "counts": "Indexing your library · {{left}} of {{total}} artists left",
-            "countsWithCurrent": "Indexing your library · {{left}} of {{total}} artists left · {{current}}"
+            "countsWithCurrent": "Indexing your library · {{left}} of {{total}} artists left · {{current}}",
+            "lookupFailed": "Couldn't look up {{failed}} artists",
+            "lookupFailedOne": "Couldn't look up {{failed}} artist"
         },
         "libraryMatches": {
             "intro": "What lb-bot holds on your behalf: the MusicBrainz matches you chose, the ones worth a look, and the tag changes it can undo.",

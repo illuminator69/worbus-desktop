@@ -40,15 +40,22 @@ export const IndexProgressBar = () => {
                 {shown && line && (
                     <div className={styles.banner}>
                         {/* Said once to assistive tech: as the bar's name (Mantine puts
-                            `aria-label` on the progressbar itself), so the line is hidden. */}
-                        <div aria-hidden="true" className={styles.text}>
+                            `aria-label` on the progressbar itself), so the line is hidden. With
+                            no bar (B-332, failed lookups), the line itself is what is read. */}
+                        <div
+                            aria-hidden={'fraction' in shown ? 'true' : undefined}
+                            className={styles.text}
+                        >
                             {t(line.key, line.values)}
                         </div>
-                        <Progress
-                            aria-label={t(line.key, line.values)}
-                            size="sm"
-                            value={shown.fraction * 100}
-                        />
+                        {/* B-332: a build that ended with failed lookups has no bar to fill. */}
+                        {'fraction' in shown ? (
+                            <Progress
+                                aria-label={t(line.key, line.values)}
+                                size="sm"
+                                value={shown.fraction * 100}
+                            />
+                        ) : null}
                     </div>
                 )}
             </div>
