@@ -13,7 +13,7 @@ const ASK_FOR_PASSWORD_MODAL = 'ask-for-password';
  * time: every refused request in the burst lands here, and a second open with the same id is a
  * no-op.
  */
-export const askForPassword = (server: ServerListItem): void => {
+export const askForPassword = (server: ServerListItem, closed: () => void): void => {
     openModal({
         children: (
             <EditServerForm
@@ -26,6 +26,8 @@ export const askForPassword = (server: ServerListItem): void => {
             />
         ),
         modalId: ASK_FOR_PASSWORD_MODAL,
+        // Fix round 4: refusals while it is open join it; once it closes they are pointed out.
+        onClose: closed,
         size: 'sm',
         title: i18n.t('form.updateServer.title') as string,
     });

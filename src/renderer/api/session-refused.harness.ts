@@ -149,22 +149,28 @@ test('after_a_cancel_one_pointer_says_where_to_sign_in', async () => {
     // silently. The first suppressed ask points to the server menu, once per sign-in.
     const { createPasswordAsk } = await import('../../shared/utils/saved-password.ts');
     const pointed: string[] = [];
+    let closeForm: () => void = () => undefined;
     const ask = (createPasswordAsk as (...a: unknown[]) => (s: unknown) => boolean)(
-        () => undefined,
+        // Fix round 4: the form reports its close; a Cancel is modelled by calling it.
+        (_s: unknown, closed: () => void) => {
+            closeForm = closed;
+        },
         (s: { id: string }) => pointed.push(s.id),
     );
     const server = { credential: 'c1', id: 'nd', url: 'http://nd', username: 'a' };
     ask(server); // the form
+    closeForm(); // Cancel
     ask(server); // suppressed: the pointer
     ask(server); // suppressed again: nothing more
     assert.deepEqual(pointed, ['nd'], 'a suppressed ask says nothing');
     ask({ ...server, credential: 'c2' }); // a new sign-in: the form again
+    closeForm(); // Cancel
     ask({ ...server, credential: 'c2' }); // and one pointer for it
     assert.deepEqual(pointed, ['nd', 'nd']);
     const utils = read('./utils.ts');
     assert.match(
         utils,
-        /createPasswordAsk<ServerListItem>\(\s*\(server\) => askHandler\?\.\(server\),\s*\(\) =>/,
+        /createPasswordAsk<ServerListItem>\(\s*\(server, closed\) => askHandler\?\.\(server, closed\),\s*\(\) =>/,
     );
 });
 

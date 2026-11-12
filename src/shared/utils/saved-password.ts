@@ -38,12 +38,12 @@ export interface AskedServer {
  * for a sign-in says so (`pointOnce`).
  */
 export const createPasswordAsk = <S extends AskedServer>(
-    open: (server: S) => void,
+    open: (server: S, closed: () => void) => void,
     pointOnce?: (server: S) => void,
 ): ((server: S) => boolean) => {
-    // Per server id: the sign-in last asked for, and whether its suppression was pointed out.
-    // Memory only; never logged.
-    const asked = new Map<string, { pointed: boolean; signIn: string }>();
+    // Per server id: the sign-in last asked for, whether its form is still open, and whether its
+    // suppression was pointed out. Memory only; never logged.
+    const asked = new Map<string, { open: boolean; pointed: boolean; signIn: string }>();
     return (server) => {
         const signIn = JSON.stringify([
             server.url,
@@ -53,15 +53,19 @@ export const createPasswordAsk = <S extends AskedServer>(
         ]);
         const last = asked.get(server.id);
         if (last?.signIn === signIn) {
-            // Suppressed after a Cancel: the first one says where to sign in (fix round 2).
-            if (!last.pointed) {
+            // Fix round 4: while the form is open, a refusal of the same sign-in joins it (several
+            // 401s arrive together). After it closed, the first one says where to sign in.
+            if (!last.open && !last.pointed) {
                 last.pointed = true;
                 pointOnce?.(server);
             }
             return false;
         }
-        asked.set(server.id, { pointed: false, signIn });
-        open(server);
+        const entry = { open: true, pointed: false, signIn };
+        asked.set(server.id, entry);
+        open(server, () => {
+            entry.open = false;
+        });
         return true;
     };
 };

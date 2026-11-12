@@ -14,9 +14,12 @@ const AUTH_FAILURE_TOAST_ID = 'auth-failure';
  * B-338: what "ask for the password again" opens (the server's sign-in form), registered by the
  * app at start so the API layer does not import the UI.
  */
-let askHandler: ((server: ServerListItem) => void) | null = null;
+let askHandler: ((server: ServerListItem, closed: () => void) => void) | null = null;
 
-export const setAskForPassword = (ask: (server: ServerListItem) => void): void => {
+/** `closed` is called when the form closes, however (Cancel, Escape, a sign-in that worked). */
+export const setAskForPassword = (
+    ask: (server: ServerListItem, closed: () => void) => void,
+): void => {
     askHandler = ask;
 };
 
@@ -27,7 +30,7 @@ export const setAskForPassword = (ask: (server: ServerListItem) => void): void =
 const ASK_POINTER_TOAST_ID = 'password-ask-pointer';
 
 const askOnce = createPasswordAsk<ServerListItem>(
-    (server) => askHandler?.(server),
+    (server, closed) => askHandler?.(server, closed),
     () =>
         toast.warn({
             id: ASK_POINTER_TOAST_ID,
