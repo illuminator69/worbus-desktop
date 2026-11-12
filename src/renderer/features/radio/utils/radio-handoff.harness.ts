@@ -48,7 +48,8 @@ test('stopping_a_station_gives_the_queue_back_at_its_position', () => {
 
 test('the_radio_store_stops_by_the_plan', () => {
     const store = readFileSync(new URL('../hooks/use-radio-player.ts', import.meta.url), 'utf8');
-    const stop = store.slice(store.indexOf('stop: () => {'), store.indexOf('currentStationArt: null,\n    currentStreamUrl'));
+    const at = store.indexOf('stop: () => {');
+    const stop = store.slice(at, store.indexOf('\n    },\n', at));
     assert.match(stop, /radioStopPlan\(/, 'the radio stop resets the queue');
     assert.match(stop, /playerHandoff\.pendingLocalSeek = plan\.handoffSeekSec/);
 });

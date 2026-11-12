@@ -3,8 +3,11 @@ import isElectron from 'is-electron';
 import React, { useEffect } from 'react';
 import { createWithEqualityFn } from 'zustand/traditional';
 
+import { playerHandoff } from '/@/renderer/features/player/audio-player/engine/player-handoff';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
+import { radioStopPlan } from '/@/renderer/features/radio/utils/radio-handoff';
 import { usePlaybackType, usePlayerStoreBase, useSettingsStore } from '/@/renderer/store';
+import { useTimestampStoreBase } from '/@/renderer/store/timestamp.store';
 import { logger } from '/@/renderer/utils/logger';
 import { PlayerStatus, PlayerType } from '/@/shared/types/types';
 
@@ -105,14 +108,27 @@ export const useRadioStore = createWithEqualityFn<RadioStore>((set) => ({
         setStationName: (stationName) => set({ stationName }),
         stop: () => {
             const playbackType = useSettingsStore.getState().playback.type;
+            const usingMpv = playbackType === PlayerType.LOCAL && mpvPlayer;
+            // Fix round 4 (B-349): the station is not the queue. The web player gets the queue
+            // back paused at its position, its remounted element handed that position; the plan
+            // is written before the radio state clears, since clearing it is what mounts the
+            // queue's web player again.
+            const plan = radioStopPlan(
+                useTimestampStoreBase.getState().timestamp || 0,
+                playbackType === PlayerType.WEB,
+            );
+            if (!usingMpv) playerHandoff.pendingLocalSeek = plan.handoffSeekSec;
 
             set({ ...CLEARED_RADIO_STATE });
 
             // When stopping radio with mpv, just pause instead of calling mediaStop
             // This prevents mpv from quitting
-            if (playbackType === PlayerType.LOCAL && mpvPlayer) {
+            if (usingMpv) {
                 logger.debug('Paused radio playback via mpv');
                 mpvPlayer.pause();
+            } else if (plan.queue === 'pause') {
+                logger.debug('Stopped radio playback; the queue is paused at its position');
+                usePlayerStoreBase.getState().mediaPause();
             } else {
                 logger.debug('Stopped radio playback');
                 usePlayerStoreBase.getState().mediaStop();
