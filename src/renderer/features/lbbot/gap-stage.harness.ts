@@ -707,7 +707,8 @@ test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', async () => {
  * still `picking`. The desktop showed "Getting 2 tracks · 0 of 2 · Queued" for ~30 s (the Auto's
  * commit hold, which nothing backed), then the plain missing list, never the reason.
  */
-const autoError = "3 of 3 source(s) rejected the request (closest: '03 - Lantern Three (Cover).flac')";
+const autoError =
+    "3 of 3 source(s) rejected the request (closest: '03 - Lantern Three (Cover).flac')";
 const refusedAuto = () =>
     gap({
         sourceTask: { ...task('error'), error: autoError, id: 'auto-1' },
@@ -719,7 +720,12 @@ test('an_auto_pick_that_ended_in_error_says_lb_bots_reason', () => {
     for (const committed of [true, false]) {
         assert.deepEqual(
             gapStage(
-                input({ committed, fillTaskId: 'auto-1', gap: refusedAuto(), view: 'tracks' } as Partial<GapInput>),
+                input({
+                    committed,
+                    fillTaskId: 'auto-1',
+                    gap: refusedAuto(),
+                    view: 'tracks',
+                } as Partial<GapInput>),
             ),
             { kind: 'failed', mp3WouldHelp: false, reason: autoError },
             `committed=${committed}: the refused Auto reads as a transfer, or as nothing`,
@@ -727,11 +733,16 @@ test('an_auto_pick_that_ended_in_error_says_lb_bots_reason', () => {
     }
     // A task this device did not start is not judged here: the box is as before.
     assert.equal(
-        gapStage(input({ fillTaskId: 'other', gap: refusedAuto(), view: 'tracks' } as Partial<GapInput>)).kind,
+        gapStage(
+            input({ fillTaskId: 'other', gap: refusedAuto(), view: 'tracks' } as Partial<GapInput>),
+        ).kind,
         'tracks',
     );
     // A real transfer is the truth whatever the task says.
-    const moving = { ...refusedAuto(), tracks: [track(1, 'present'), track(2, 'queued'), track(3, 'picked')] };
+    const moving = {
+        ...refusedAuto(),
+        tracks: [track(1, 'present'), track(2, 'queued'), track(3, 'picked')],
+    };
     assert.equal(
         gapStage(input({ fillTaskId: 'auto-1', gap: moving } as Partial<GapInput>)).kind,
         'active',
@@ -739,7 +750,8 @@ test('an_auto_pick_that_ended_in_error_says_lb_bots_reason', () => {
     // An Auto that queued its source ends `complete`: not a failure.
     const queued = { ...refusedAuto(), sourceTask: { ...task('complete'), id: 'auto-1' } };
     assert.notEqual(
-        gapStage(input({ fillTaskId: 'auto-1', gap: queued, view: 'tracks' } as Partial<GapInput>)).kind,
+        gapStage(input({ fillTaskId: 'auto-1', gap: queued, view: 'tracks' } as Partial<GapInput>))
+            .kind,
         'failed',
     );
 });
@@ -763,7 +775,10 @@ test('after_a_walk_on_the_box_names_the_source_that_was_queued', async () => {
     assert.equal(queuedSource([live], live, 9), live);
     // Main carries lb-bot's `sourceIndex` (the id of the source that took the request) to the box.
     const { readFileSync } = await import('node:fs');
-    const main = readFileSync(new URL('../../../main/features/core/lbbot/index.ts', import.meta.url), 'utf8');
+    const main = readFileSync(
+        new URL('../../../main/features/core/lbbot/index.ts', import.meta.url),
+        'utf8',
+    );
     assert.match(main, /queuedSourceId/);
     const box = readFileSync(new URL('./components/gap-box.tsx', import.meta.url), 'utf8');
     assert.match(box, /gapQueuedSource\(/);

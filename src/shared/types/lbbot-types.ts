@@ -71,7 +71,12 @@ export interface LbBotDownloadResult {
  * `taskId`: the source task a search or an auto started, which `/lb/gap`'s `sourceTask.id` names
  * from the moment the POST returns.
  */
-export type LbBotGapAction = LbBotResult<boolean> & { gap?: LbBotGap; taskId?: string };
+export type LbBotGapAction = LbBotResult<boolean> & {
+    gap?: LbBotGap;
+    /** Fix round 7: the card id of the source a fetch was queued from (lb-bot's `sourceIndex`). */
+    queuedSourceId?: number;
+    taskId?: string;
+};
 
 /**
  * One artist of lb-bot's library index as the change feed ships it — the whole

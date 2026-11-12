@@ -2354,12 +2354,17 @@ const gapAction = async (route: string, body: Json): Promise<LbBotGapAction> => 
     const gap =
         ok && result.data?.gap && typeof result.data.gap === 'object' ? result.data.gap : null;
     const taskId = ok ? str(result.data?.task_id) : '';
+    // Fix round 7: a fetch that walked on names the source that took it (a card id).
+    const sourceIndex = ok ? result.data?.sourceIndex : undefined;
+    const queuedSourceId =
+        typeof sourceIndex === 'number' && Number.isInteger(sourceIndex) ? sourceIndex : undefined;
     return {
         ...(code ? { code } : {}),
         data: ok,
         error: ok ? '' : str(result.data?.error) || 'lb-bot refused the request.',
         ...(gap ? { gap: toGap(gap as Json, str(body.group_id)) } : {}),
         ok,
+        ...(queuedSourceId !== undefined ? { queuedSourceId } : {}),
         status: result.status,
         ...(taskId ? { taskId } : {}),
     };

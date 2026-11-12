@@ -20,6 +20,7 @@ import {
 } from '/@/renderer/features/lbbot/components/source-cards-model';
 import {
     GAP_RESULT_HOLD_MS,
+    gapAutoPickFailed,
     gapBoxGroup,
     type GapBoxGroup,
     gapFillLanded,
@@ -27,6 +28,7 @@ import {
     gapMatchPending,
     gapPolls,
     gapProgress,
+    gapQueuedSource,
     gapReadGaveUp,
     gapRowsOwed,
     gapStage,
@@ -39,8 +41,6 @@ import {
     heldTracks,
     searchProgressLine,
 } from '/@/renderer/features/lbbot/gap-stage';
-
-const NOTHING_HELD: ReadonlySet<string> = new Set();
 import { useKeepTopInView } from '/@/renderer/features/lbbot/hooks/use-keep-top-in-view';
 import {
     allowMp3ForAlbum,
@@ -82,6 +82,9 @@ import {
     LbBotGapTrackState,
     LbBotResult,
 } from '/@/shared/types/lbbot-types';
+
+/** B-231 (fix round 5): no tracks held for a pending match. */
+const NOTHING_HELD: ReadonlySet<string> = new Set();
 
 /*
  * navi-connect R11 (B-223): the gaps box on the owned album page, after Worbus for Android's `GapBox`, which
@@ -329,6 +332,7 @@ const GapBox = ({
     const stage = gapStage({
         committed,
         fill,
+        fillTaskId: active?.taskId,
         gap,
         heldForMatch,
         landedAt: landed && unlandedSeen ? now : landedAt,
@@ -352,15 +356,17 @@ const GapBox = ({
     }, [heldFrom]);
 
     // A fetch is held as committed until lb-bot says it is busy, or for 30 s if it never does.
+    // Fix round 7: a refused Auto ends the hold too (lb-bot's task ended in error).
+    const autoRefused = !!gap && gapAutoPickFailed(gap, active?.taskId);
     useEffect(() => {
         if (!committed) return undefined;
-        if (busy) {
+        if (busy || autoRefused) {
             setCommitted(false);
             return undefined;
         }
         const timer = window.setTimeout(() => setCommitted(false), COMMIT_RELEASE_MS);
         return () => window.clearTimeout(timer);
-    }, [committed, busy]);
+    }, [committed, busy, autoRefused]);
 
     // The context menu's "Find N missing tracks" lands here with the box asked open. The ask is
     // taken once per history entry (review minor 10): Back to this album later finds the same
@@ -505,7 +511,8 @@ const GapBox = ({
             }
             startGapWatch(groupId, { album: gap?.album, artist: gap?.artist }, result);
             setCommitted(true);
-            setFetched(source);
+            // Fix round 7: lb-bot may have walked on; name the source that took the request.
+            setFetched(gapQueuedSource(gap?.sources ?? [], source, result.queuedSourceId));
             setView('tracks');
         } finally {
             setWorking(false);

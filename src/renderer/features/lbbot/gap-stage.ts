@@ -54,6 +54,8 @@ export interface GapInput {
     /** A fetch lb-bot accepted that its status does not show yet. */
     committed: boolean;
     fill: GapFillRow | null;
+    /** The task this device's last gap action started (the ledger row's `taskId`); '' if none. */
+    fillTaskId?: string;
     /** lb-bot's record for the group; null until the first read lands. */
     gap: GapRecord | null;
     /** B-231: the pending match's downloaded tracks as this page last saw them (`heldForMatchNext`). */
@@ -172,6 +174,33 @@ export const heldForMatchNext = (
     return next.length === prev.size && next.every((key) => prev.has(key)) ? prev : new Set(next);
 };
 
+/**
+ * Fix round 7: this device's Auto pick ended in error. lb-bot's `sourceTask` (the gap's latest
+ * source task) is the one this device started (its id is the ledger row's `taskId`, from the
+ * action's answer), it ended `error` with a sentence, and nothing is transferring: lb-bot refused
+ * every source and enqueued nothing. The box says lb-bot's sentence instead of a transfer nothing
+ * backs. A task this device did not start is not judged (the id is the only proof).
+ */
+export const gapAutoPickFailed = (gap: GapRecord, fillTaskId: string | undefined): boolean =>
+    !!fillTaskId &&
+    gap.sourceTask?.id === fillTaskId &&
+    gap.sourceTask.status === 'error' &&
+    !!gap.sourceTask.error &&
+    !gapTransferring(gap, false);
+
+/**
+ * Fix round 7: the source a request was queued from. lb-bot walks on when the tapped source
+ * refuses, and its answer names the source that took the request (`sourceIndex`, a card id);
+ * the box names that one. Without it (an older lb-bot), or when it is no longer listed: the
+ * tapped one, as before.
+ */
+export const gapQueuedSource = (
+    sources: readonly LbBotGapSource[],
+    picked: LbBotGapSource,
+    queuedId: number | undefined,
+): LbBotGapSource =>
+    queuedId === undefined ? picked : (sources.find((s) => s.id === queuedId) ?? picked);
+
 /** A transfer in flight for the gap, wherever it was started (the stage's `active`). */
 export const gapTransferring = (gap: GapRecord, committed: boolean): boolean =>
     committed ||
@@ -275,6 +304,14 @@ export const gapStage = (input: GapInput): GapStage => {
         if (input.mirroredMissing <= 0) return { kind: 'absent' };
         if (input.view === 'folded') return { kind: 'folded', missing: input.mirroredMissing };
         return input.readGaveUp ? { kind: 'unreachable' } : { kind: 'loading' };
+    }
+    // Fix round 7: a refused Auto ends the commit hold; it is said, not shown as a transfer.
+    if (gapAutoPickFailed(gap, input.fillTaskId)) {
+        return {
+            kind: 'failed',
+            mp3WouldHelp: gap.mp3WouldHelp,
+            reason: gap.sourceTask?.error ?? '',
+        };
     }
     if (gapTransferring(gap, input.committed)) {
         const progress = gapProgress(gap, input.heldForMatch);
