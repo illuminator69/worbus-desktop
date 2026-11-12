@@ -147,8 +147,20 @@ export const searchProgressLine = (task: GapRecord['sourceTask'] | undefined): s
  * single transfer to report. Measured against the tracks being filled, not the album's length:
  * progress against 17 when only 12 were queued stalls at 12/17 and reads as a hang.
  */
-export const gapProgress = (gap: null | Pick<LbBotGap, 'tracks'> | undefined) => {
-    const wanted = (gap?.tracks ?? []).filter((track) => track.state !== 'present');
+export const gapProgress = (
+    gap:
+        | null
+        | Pick<LbBotGap, 'stalledPlacement' | 'status' | 'tracks'>
+        | Pick<LbBotGap, 'tracks'>
+        | undefined,
+) => {
+    // B-231 (fix round 4): on a pending match the downloaded tracks are not part of a fetch (they
+    // wait for lb-bot's match), the same set `gapTracksToFetch` leaves out. lb-bot's needs_match
+    // bucket outranks a transfer, so the gap still reads `picking` while the fetch runs.
+    const pending = !!gap && 'status' in gap && gapMatchPending(gap);
+    const wanted = (gap?.tracks ?? []).filter(
+        (track) => track.state !== 'present' && !(pending && track.state === 'downloaded'),
+    );
     const done = wanted.filter((track) => SETTLED_TRACK_STATES.has(track.state));
     const failed = wanted.filter((track) => track.state === 'failed');
     return {

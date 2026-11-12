@@ -626,7 +626,12 @@ test('a_fetch_on_a_pending_match_counts_the_tracks_it_fetches', () => {
     // uses the stage's tracks to fetch (missing less the pending match's downloaded ones).
     const fetching = gap({
         status: 'picking',
-        tracks: [track(1, 'present'), track(2, 'present'), track(3, 'downloaded'), track(4, 'queued')],
+        tracks: [
+            track(1, 'present'),
+            track(2, 'present'),
+            track(3, 'downloaded'),
+            track(4, 'queued'),
+        ],
     });
     const stage = gapStage(input({ gap: fetching, view: 'tracks' }));
     assert.equal(stage.kind, 'active');
