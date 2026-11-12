@@ -92,3 +92,12 @@ test('the_bridge_dials_and_probes_that_port', () => {
     assert.doesNotMatch(src, /client\.connect\(this\.host,/, 'castv2 dials the host on 8009');
     assert.doesNotMatch(src, /socket\.connect\(CAST_PORT, /, 'the probe dials 8009');
 });
+
+test('a_re_announcement_with_a_new_port_reaches_the_bridge', () => {
+    // Review nit (fix round 2026-11-12): bonjour-service 1.4.4 answers a re-announcement of a known
+    // record whose SRV changed (host or port) with `srv-update`, never `up`, so a port change at the
+    // same host reached `updateHost` only after the record had gone `down` and come back.
+    const src = readFileSync(new URL('./index.ts', import.meta.url), 'utf8');
+    assert.match(src, /browser\.on\('srv-update', onAnnounced\)/, 'srv-update is not listened to');
+    assert.match(src, /browser\.on\('up', onAnnounced\)/);
+});
