@@ -19,6 +19,8 @@ export const askForPassword = (server: ServerListItem): void => {
             <EditServerForm
                 isUpdate
                 onCancel={() => closeModal(ASK_FOR_PASSWORD_MODAL)}
+                // Only this form: it may have opened over another modal.
+                onDone={() => closeModal(ASK_FOR_PASSWORD_MODAL)}
                 password={null}
                 server={server}
             />

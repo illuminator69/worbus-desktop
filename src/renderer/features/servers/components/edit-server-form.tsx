@@ -30,6 +30,8 @@ const localSettings = isElectron() ? window.api.localSettings : null;
 interface EditServerFormProps {
     isUpdate?: boolean;
     onCancel: () => void;
+    /** After a successful update: what closes the form. Default: every modal (upstream's). */
+    onDone?: () => void;
     password: null | string;
     server: ServerListItem;
 }
@@ -42,7 +44,13 @@ const ModifiedFieldIndicator = () => {
     );
 };
 
-export const EditServerForm = ({ isUpdate, onCancel, password, server }: EditServerFormProps) => {
+export const EditServerForm = ({
+    isUpdate,
+    onCancel,
+    onDone,
+    password,
+    server,
+}: EditServerFormProps) => {
     const { t } = useTranslation();
     const { setCurrentServer, updateServer } = useAuthStoreActions();
     const focusTrapRef = useFocusTrap();
@@ -207,7 +215,7 @@ export const EditServerForm = ({ isUpdate, onCancel, password, server }: EditSer
             return toast.error({ message: err?.message });
         }
 
-        if (isUpdate) closeAllModals();
+        if (isUpdate) (onDone ?? closeAllModals)();
         return setIsLoading(false);
     });
 
