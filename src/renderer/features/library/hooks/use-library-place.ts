@@ -6,6 +6,7 @@ import {
     parseLibraryParams,
     serializeLibraryParams,
 } from '/@/renderer/features/library/library-model';
+import { useEntryKey } from '/@/renderer/hooks/use-entry-key';
 import { useScrollStore } from '/@/renderer/store/scroll.store';
 
 const URL_WRITE_MS = 300;
@@ -16,12 +17,16 @@ const heldPlaces = new Map<string, { q: string; sort: ArtistSort }>();
 
 /**
  * F6 (Call 16): the Artists page keeps your place. The field's text is local state (a URL write per
- * keystroke would change `location.key` for every `useLocation` consumer); the text and sort are
+ * keystroke would re-key the entry for every `useLocation` consumer); the text and sort are
  * written to the URL 300 ms after they settle, replacing the entry, never adding one. When the page is
- * left, the text, sort and list scroll offset are held under the entry's key and restored on Back.
+ * left, the text, sort and list scroll offset are held under the entry's key (`useEntryKey`) and
+ * restored on Back.
  */
 export const useLibraryPlace = () => {
     const location = useLocation();
+    // B-315: the entry's own key (stamped into its history state when the router gave none), so an
+    // unkeyed entry keeps its place and two of them never share one.
+    const entryKey = useEntryKey();
     const navigate = useNavigate();
     const navigationType = useNavigationType();
     const getOffset = useScrollStore((s) => s.getOffset);
@@ -29,10 +34,10 @@ export const useLibraryPlace = () => {
 
     const [initial] = useState(() => {
         const back = navigationType === 'POP';
-        const held = back ? heldPlaces.get(location.key) : undefined;
+        const held = back ? heldPlaces.get(entryKey) : undefined;
         const url = parseLibraryParams(location.search);
         return {
-            offset: back ? getOffset(location.key) : undefined,
+            offset: back ? getOffset(entryKey) : undefined,
             q: held?.q ?? url.q,
             sort: held?.sort ?? url.sort,
         };
@@ -40,16 +45,16 @@ export const useLibraryPlace = () => {
     const [text, setText] = useState(initial.q);
     const [sort, setSort] = useState<ArtistSort>(initial.sort);
 
-    const keyRef = useRef(location.key);
+    const keyRef = useRef(entryKey);
     const pathRef = useRef(location.pathname);
     const searchRef = useRef(location.search);
     const placeRef = useRef({ q: text, sort });
     const offsetRef = useRef(initial.offset ?? 0);
     useEffect(() => {
-        keyRef.current = location.key;
+        keyRef.current = entryKey;
         pathRef.current = location.pathname;
         searchRef.current = location.search;
-    }, [location.key, location.pathname, location.search]);
+    }, [entryKey, location.pathname, location.search]);
     useEffect(() => {
         placeRef.current = { q: text, sort };
     }, [text, sort]);
