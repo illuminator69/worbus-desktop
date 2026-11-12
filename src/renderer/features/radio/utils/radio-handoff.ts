@@ -16,14 +16,15 @@ export interface RadioStopPlan {
     /** How the player store leaves the queue. */
     queue: 'pause' | 'stop-and-reset';
     /**
-     * The order the stop runs in: write the handoff, clear the radio state (which mounts the
-     * queue's web player again), leave the queue as `queue` says. Today's order, moved here
-     * unchanged (fix round 6's red).
+     * The order the stop runs in (fix round 6): write the handoff, leave the queue as `queue`
+     * says (paused or stopped) while the station is still the active thing, then clear the radio
+     * state, which mounts the queue's web player again. Clearing first left one report with the
+     * store still PLAYING and no station: the queue playing, for the hub (`queuePlaysHere`).
      */
     steps: readonly ('clear' | 'handoff' | 'queue')[];
 }
 
-const STEPS = ['handoff', 'clear', 'queue'] as const;
+const STEPS = ['handoff', 'queue', 'clear'] as const;
 
 export const radioStopPlan = (queuePositionSec: number, webPlayer = true): RadioStopPlan =>
     webPlayer
