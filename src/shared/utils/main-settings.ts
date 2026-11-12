@@ -37,13 +37,15 @@ export const MIRRORED_SETTINGS: readonly MirroredSetting[] = [
 ];
 
 /**
- * The other keys the renderer writes to main: kept in main alone (`ignore_cors`, `ignore_ssl`,
- * `mpv_path`, the visualizer consent), or written there and read by nothing in main (`resume`,
- * the two prevent-sleep switches: upstream leftovers, the renderer's copy is the one used).
+ * The other keys the renderer uses in main: kept in main alone (`ignore_cors`, `ignore_ssl`,
+ * `mpv_path`, the visualizer consent), written there and read by nothing in main (`resume`,
+ * the two prevent-sleep switches: upstream leftovers, the renderer's copy is the one used), or
+ * main's own that the preload reads at start (`maximized`, for the window bar's button).
  */
 export const MAIN_ONLY_RENDERER_KEYS: readonly string[] = [
     'ignore_cors',
     'ignore_ssl',
+    'maximized',
     'mpv_path',
     'resume',
     'visualizer_system_audio_consent_granted',
