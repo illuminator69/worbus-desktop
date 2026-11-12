@@ -81,3 +81,30 @@ test('theStampKeepsTheRoutersOwnState', () => {
     );
     assert.deepEqual(keyed.state, { idx: 1, key: 'abc', usr: null });
 });
+
+test('noPlaceIsKeptUnderTheRoutersRawKey', async () => {
+    // Review minor (fix round 2026-11-12): B-315 moved the scroll hooks and the artist page's chip
+    // to `useEntryKey`, but the Artists page (`use-library-place.ts`) still kept its text, sort and
+    // offset under `location.key`: on an entry the router did not key the offset is refused under
+    // "default" (B-208), and the held text and sort of every such entry share that one key, so a
+    // second unkeyed entry could restore another's search.
+    const { execSync } = await import('node:child_process');
+    const { readFileSync } = await import('node:fs');
+    const root = new URL('../../..', import.meta.url);
+    const files = execSync("git ls-files 'src/renderer/*.ts' 'src/renderer/*.tsx'", {
+        cwd: root,
+        encoding: 'utf8',
+    })
+        .split('\n')
+        .filter((f) => f && !f.endsWith('.harness.ts'));
+    const offenders = files.filter((file) => {
+        const code = readFileSync(new URL(file, root), 'utf8');
+        return /\b(?:getOffset|setOffset)\(/.test(code) && /location\.key\b/.test(code);
+    });
+    assert.deepEqual(offenders, []);
+    const place = readFileSync(
+        new URL('src/renderer/features/library/hooks/use-library-place.ts', root),
+        'utf8',
+    );
+    assert.match(place, /useEntryKey\(\)/);
+});
