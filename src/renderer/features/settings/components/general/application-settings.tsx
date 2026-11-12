@@ -131,6 +131,8 @@ export const TextSettings = memo(() => {
                     custom: null,
                 },
             });
+            // Main owns the path (B-328): cleared there too, or the launch adopt brings it back.
+            void localSettings?.setSync('local_font_path', null);
         },
         [fontSettings, setSettings],
     );
