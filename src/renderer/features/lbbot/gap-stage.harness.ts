@@ -575,7 +575,7 @@ test('aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded', asyn
     assert.deepEqual(
         gapStage(
             input({
-                fill: fill('failed', { state: 'needs_match' } as Partial<GapFillRow>),
+                fill: fill('failed', { state: 'needs_match' }),
                 gap: awaiting,
                 view: 'tracks',
             }),
@@ -587,13 +587,13 @@ test('aPendingMatchStillOffersSearchFetchAndAutoForTheTracksNotDownloaded', asyn
     assert.equal(
         gapStage(
             input({
-                fill: fill('failed', { state: 'failed' } as Partial<GapFillRow>),
+                fill: fill('failed', { state: 'failed' }),
                 gap: awaiting,
                 view: 'tracks',
             }),
         ).kind,
         'failed',
-        "a plain failed fill on a pending match shows the tracks; Android shows Failed",
+        'a plain failed fill on a pending match shows the tracks; Android shows Failed',
     );
     // The box shows the prominent Open in lb-bot over those stages: one predicate says when.
     const mod = (await import('./gap-stage.ts')) as Record<string, unknown>;

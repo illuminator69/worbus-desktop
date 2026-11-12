@@ -266,6 +266,7 @@ const GapBox = ({
               outcome: active.outcome ?? (active.settled ? 'gaveUp' : 'running'),
               reason: active.reason ?? '',
               settled: active.settled,
+              state: active.state,
               total: active.total ?? 0,
           }
         : null;

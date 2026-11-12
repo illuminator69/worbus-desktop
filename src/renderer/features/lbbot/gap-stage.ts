@@ -45,6 +45,8 @@ export interface GapFillRow {
     outcome: string;
     reason: string;
     settled: boolean;
+    /** The ledger row's state: `needs_match` is the pending-match settle (Q-031), not a failure. */
+    state?: string;
     total: number;
 }
 
@@ -278,8 +280,10 @@ export const gapStage = (input: GapInput): GapStage => {
     // sources view with none left and nothing searching read as searching for good). A new search
     // press is the way out.
     // The ledger settles a pending match as failed · needs_match (Q-031): that row is the match
-    // pending, not a fill that failed, and does not take the box off the tracks.
-    if (fill?.settled && fill.outcome === 'failed' && !input.searchAsked && !matchPending) {
+    // pending, not a fill that failed, and does not take the box off the tracks. Any other failed
+    // row is a failure, pending match or not (fix round 3, the ruling for both clients).
+    const matchSettle = matchPending && fill?.state === 'needs_match';
+    if (fill?.settled && fill.outcome === 'failed' && !input.searchAsked && !matchSettle) {
         return {
             kind: 'failed',
             mp3WouldHelp: gap.mp3WouldHelp || fill.mp3WouldHelp,
