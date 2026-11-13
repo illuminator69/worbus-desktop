@@ -97,3 +97,99 @@ test('the_native_image_fetches_through_it', async () => {
     const hook = readFileSync(new URL('./use-native-image.ts', import.meta.url), 'utf8');
     assert.match(hook, /fetchImage\(/, 'useNativeImage reads one fetch, any 200 its image');
 });
+
+/**
+ * B-412, the burst (owner re-check of `5201f1416`: Still Summer and The Feeling I… still empty, their
+ * last stored answers empty 200s at 01:26:01Z). Navidrome 0.64.2, read: the 11 songs of In Waves'
+ * disc share ONE resized-cover cache entry (`serveDisc` keys it by disc id, album time and
+ * DiscArtPriority, not by the song); the first request writes it while the others read it as it is
+ * written (`utils/cache/file_caches.go` Get: a reader of an entry in progress). When the writer's
+ * request is cancelled (the desktop aborted it: a row or the player bar re-rendered, a card left the
+ * viewport), its read fails, the writer is closed with nothing in it, and every reader of that entry
+ * ends at a clean EOF: `200`, `Content-Length: 0`. The stand-in models that: one shared entry, the
+ * first request in a wave writes it, a writer whose client goes away leaves the wave's readers empty.
+ * The desktop must not cancel a cover request it has sent (only one still waiting to be sent), and
+ * must not send more than a few at once.
+ */
+const sharedEntryStandIn = async () => {
+    let wave: null | { readers: ((body: Buffer) => void)[] } = null;
+    let inFlight = 0;
+    let maxInFlight = 0;
+    let cancelled = 0;
+    const asked = new Map<string, number>();
+    const server = createServer((req, res) => {
+        const id = new URL(req.url ?? '', 'http://x').searchParams.get('id') ?? '';
+        asked.set(id, (asked.get(id) ?? 0) + 1);
+        inFlight += 1;
+        maxInFlight = Math.max(maxInFlight, inFlight);
+        let done = false;
+        const answer = (body: Buffer) => {
+            if (done) return;
+            done = true;
+            inFlight -= 1;
+            res.setHeader('Cache-Control', 'public, no-cache');
+            if (body.length) res.setHeader('Content-Type', 'image/jpeg');
+            res.setHeader('Content-Length', String(body.length));
+            res.end(body);
+        };
+        req.on('close', () => {
+            if (!done && !res.writableEnded) {
+                cancelled += 1;
+                done = true;
+                inFlight -= 1;
+            }
+        });
+        if (wave) {
+            wave.readers.push(answer);
+            return;
+        }
+        const current: { readers: ((body: Buffer) => void)[] } = { readers: [answer] };
+        wave = current;
+        setTimeout(() => {
+            // The writer's request went away: the entry closes empty for every reader.
+            const writerGone = done;
+            wave = null;
+            for (const reader of current.readers) reader(writerGone ? Buffer.alloc(0) : JPEG);
+        }, 60);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return {
+        asked,
+        base: `http://127.0.0.1:${port}`,
+        close: () => server.close(),
+        stats: () => ({ cancelled, maxInFlight }),
+    };
+};
+
+test('a_row_that_goes_away_does_not_empty_the_other_rows_covers', async () => {
+    const s = await sharedEntryStandIn();
+    try {
+        const fetchImage = (await load())!;
+        const ids = ['still-summer', 'feeling', 'breather', 'all-you', 'every-single', 'falling'];
+        const controllers = ids.map(() => new AbortController());
+        const asks = ids.map((id, i) =>
+            fetchImage(
+                { url: `${s.base}/rest/getCoverArt.view?id=${id}&size=80` },
+                { signal: controllers[i].signal },
+                { delaysMs: [1, 1] },
+            ),
+        );
+        // The first row re-renders 20 ms in: its fetch is aborted while it writes the shared entry.
+        setTimeout(() => controllers[0].abort(), 20);
+        const results = await Promise.allSettled(asks);
+        assert.equal(results[0].status, 'rejected', 'the row that went away gets nothing');
+        for (const r of results.slice(1)) {
+            assert.equal(r.status, 'fulfilled');
+            assert.equal((r as PromiseFulfilledResult<Blob>).value.size, JPEG.length);
+        }
+        const { cancelled, maxInFlight } = s.stats();
+        assert.equal(cancelled, 0, 'a sent cover request was cancelled: its readers got nothing');
+        assert.ok(maxInFlight <= 4, `${maxInFlight} cover requests in flight at once`);
+        for (const id of ids.slice(1)) {
+            assert.equal(s.asked.get(id), 1, `${id}: asked again after an empty answer`);
+        }
+    } finally {
+        s.close();
+    }
+});
