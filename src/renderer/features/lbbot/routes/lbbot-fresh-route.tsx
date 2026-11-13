@@ -131,6 +131,7 @@ const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
             // attach this user's Navidrome or reverse-proxy headers to a third-party
             // request. ItemImage shows the album placeholder where there is none.
             imageUrl={release.coverUrl || null}
+            isBusy={artistLink.isPending(artistRow)}
             isUnowned={!release.releaseOwned}
             itemType={LibraryItem.ALBUM}
             onClick={albumTo ? () => navigate(albumTo) : undefined}

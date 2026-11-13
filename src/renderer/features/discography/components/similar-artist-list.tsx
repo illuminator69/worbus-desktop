@@ -40,6 +40,7 @@ export const SimilarArtistList = ({ mbid, name }: { mbid: string; name: string }
                 };
                 return (
                     <Link
+                        aria-busy={artistLink.isPending(row) || undefined}
                         className={styles.artistRow}
                         key={artist.mbid || artist.name}
                         onClick={

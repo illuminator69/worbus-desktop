@@ -37,7 +37,7 @@ import { LibraryItem } from '/@/shared/types/domain-types';
 export const SimilarArtistsRow = ({ title }: { title: string }) => {
     const openMenu = useLibraryContextMenu();
     // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
-    const { open: openArtist } = useOpenLbBotArtist();
+    const { isPending: pendingArtist, open: openArtist } = useOpenLbBotArtist();
     const { pending: seedPending, seed } = useDiscoverSeedArtist();
     const { data, isLoading } = useLbBotSimilarArtists({
         mbid: seed?.mbid,
@@ -77,6 +77,7 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
                     content: (
                         <DiscoverTile
                             imageId={artist.owned ? artist.artistId : null}
+                            isBusy={pendingArtist(artist)}
                             isRound
                             isUnowned={!artist.owned}
                             itemType={LibraryItem.ALBUM_ARTIST}
@@ -103,7 +104,7 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
                     id: artist.mbid || artist.name,
                 };
             }),
-        [artists, openArtist, openMenu],
+        [artists, openArtist, openMenu, pendingArtist],
     );
 
     return (

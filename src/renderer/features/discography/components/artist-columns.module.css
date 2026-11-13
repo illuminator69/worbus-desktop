@@ -78,6 +78,12 @@
     }
 }
 
+/* B-407 review L1: the row whose library lookup is running. */
+.artist-row[aria-busy='true'] {
+    cursor: progress;
+    opacity: 0.6;
+}
+
 .artist-cover {
     width: 36px;
     height: 36px;

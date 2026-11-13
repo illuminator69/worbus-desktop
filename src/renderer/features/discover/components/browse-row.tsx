@@ -80,7 +80,7 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
     const navigate = useNavigate();
     const openMenu = useLibraryContextMenu();
     // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
-    const { open: openArtist } = useOpenLbBotArtist();
+    const { isPending: pendingArtist, open: openArtist } = useOpenLbBotArtist();
     const { pending, resolve } = useResolveBrowseAlbum();
     const genre = useDiscoverGenre();
     const setGenre = useSetDiscoverGenre();
@@ -227,7 +227,7 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
                             // from, and a chart of unnamed silhouettes is not a
                             // chart anybody reads.
                             imageUrl={artist.owned ? null : artist.imageUrl}
-                            isBusy={switching}
+                            isBusy={switching || pendingArtist(artist)}
                             isRound
                             isUnowned={!artist.owned}
                             itemType={LibraryItem.ALBUM_ARTIST}
@@ -256,7 +256,7 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
             });
 
         return [...albums, ...artists];
-    }, [data, navigate, openAlbum, openArtist, openMenu, pending, switching]);
+    }, [data, navigate, openAlbum, openArtist, openMenu, pending, pendingArtist, switching]);
 
     // A genre the feed answered nothing for. The row would normally render
     // nothing at all, but the chips are the only way back to one that works —

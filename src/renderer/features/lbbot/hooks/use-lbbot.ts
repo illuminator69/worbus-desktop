@@ -61,7 +61,7 @@ import {
     useState,
     useSyncExternalStore,
 } from 'react';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import { api } from '/@/renderer/api';
 import { noteScanStarted } from '/@/renderer/features/discography/hooks/scan-session';
@@ -136,6 +136,7 @@ import {
     planIndexStart,
     planScan,
 } from '/@/renderer/features/lbbot/utils/artist-override';
+import { artistTapKey, createTapGuard } from '/@/renderer/features/lbbot/utils/artist-tap';
 import { artistLinkPath } from '/@/renderer/features/lbbot/utils/external-paths';
 import {
     classifyRefresh,
@@ -3357,12 +3358,12 @@ export const useArtistTarget = (args: {
 
 /**
  * The artist page for a name and an MBID, worked out when it is asked for: the library's
- * own page when the library has an artist of that name (the same search, cached under the
- * same key, as `useArtistTarget`), else the virtual one. For a row of many artists, where
- * a search per row on render would be one request per card.
+ * own page when the library has that artist (`pickLibraryArtist`, review M4), else the
+ * virtual one. For a row of many artists, where a search per row on render would be one
+ * request per card. Review L1: it answers the path; `useOpenLbBotArtist` decides whether the
+ * tap still navigates.
  */
-export const useOpenArtist = () => {
-    const navigate = useNavigate();
+export const useResolveLibraryArtistPath = () => {
     const serverId = useCurrentServerId();
 
     return useCallback(
@@ -3398,30 +3399,54 @@ export const useOpenArtist = () => {
                       .catch(() => [])
                 : [];
             const libraryId = pickLibraryArtist(rows, { mbid: artistMbid, name, owned });
-            const to = artistLinkPath(libraryId || '', artistMbid, name);
-            if (to) navigate(to);
+            return artistLinkPath(libraryId || '', artistMbid, name);
         },
-        [navigate, serverId],
+        [serverId],
     );
 };
 
 /**
  * B-407: an lb-bot row's artist, opened on tap. lb-bot's own match opens the library page; a row
- * it did not match is looked up in the library by name with B-313's rule (`useOpenArtist`, the
+ * it did not match is looked up in the library by name with B-313's rule (`useResolveLibraryArtistPath`, the
  * album page's rule), else the MBID's virtual page (`artistLinkStep`). For a link that also has
  * an href (`artistLinkPath`), `looksUp` says whether the tap must be taken over.
  */
 export const useOpenLbBotArtist = () => {
     const navigate = useNavigate();
-    const openArtist = useOpenArtist();
+    const resolvePath = useResolveLibraryArtistPath();
+    // Review L1: where the tap was made, and whether this caller is still mounted, when the
+    // lookup ends; the busy link is the guard's pending key.
+    const location = useLocation();
+    const here = useRef(location.key);
+    here.current = location.key;
+    const mounted = useRef(true);
+    useEffect(() => {
+        mounted.current = true;
+        return () => {
+            mounted.current = false;
+        };
+    }, []);
+    const pending = useSyncExternalStore(artistTaps.subscribe, artistTaps.pending);
 
     const open = useCallback(
         (artist: LbBotArtistLinkRow) => {
             const step = artistLinkStep(artist.artistId, artist.mbid, artist.name);
+            const token = artistTaps.begin(artistTapKey(artist));
+            if (token === null) return; // a second tap on the link still pending
             if (step === 'lookup') {
-                void openArtist(artist.mbid ?? '', artist.name ?? '', artist.owned);
+                const from = here.current;
+                void resolvePath(artist.mbid ?? '', artist.name ?? '', artist.owned)
+                    .catch(() => undefined)
+                    .then((to) => {
+                        const go = artistTaps.finish(
+                            token,
+                            mounted.current && here.current === from,
+                        );
+                        if (go && to) navigate(to);
+                    });
                 return;
             }
+            artistTaps.finish(token, true); // supersedes a lookup still pending
             const to =
                 step === 'library'
                     ? artistLinkPath(artist.artistId ?? '', '')
@@ -3430,7 +3455,7 @@ export const useOpenLbBotArtist = () => {
                       : undefined;
             if (to) navigate(to);
         },
-        [navigate, openArtist],
+        [navigate, resolvePath],
     );
 
     const looksUp = useCallback(
@@ -3439,8 +3464,17 @@ export const useOpenLbBotArtist = () => {
         [],
     );
 
-    return { looksUp, open };
+    /** Whether this row's tap is the one being looked up (its busy state). */
+    const isPending = useCallback(
+        (artist: LbBotArtistLinkRow) => pending !== null && pending === artistTapKey(artist),
+        [pending],
+    );
+
+    return { isPending, looksUp, open, pending };
 };
+
+/** Review L1: one guard for every lb-bot artist link's tap (`artist-tap.ts`). */
+const artistTaps = createTapGuard();
 
 export interface LbBotArtistLinkRow {
     /** lb-bot's own match to a library artist; empty when it found none. */

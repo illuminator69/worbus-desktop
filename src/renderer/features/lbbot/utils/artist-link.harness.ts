@@ -114,7 +114,7 @@ test('the_lookup_reads_the_rows_mbid_and_never_splits_an_unowned_credit', () => 
 
 test('the_open_uses_the_rule_and_the_rows_ownership', () => {
     const hooks = readFileSync(new URL('../hooks/use-lbbot.ts', import.meta.url), 'utf8');
-    const open = hooks.slice(hooks.indexOf('export const useOpenArtist'));
+    const open = hooks.slice(hooks.indexOf('export const useResolveLibraryArtistPath'));
     assert.match(open.slice(0, open.indexOf('\n};')), /pickLibraryArtist\(/);
 });
 
@@ -155,7 +155,7 @@ test('a_tap_is_one_navigation_the_latest_and_only_where_it_was_made', async () =
     ]) {
         assert.match(
             readFileSync(new URL(file, import.meta.url), 'utf8'),
-            /isBusy=\{[^}]*pending/,
+            /isBusy=\{[^}]*pending/i,
             `${file}: no pending state on the tapped tile`,
         );
     }

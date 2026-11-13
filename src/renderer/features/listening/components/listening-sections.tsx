@@ -70,16 +70,26 @@ const albumPath = (
           : undefined;
 
 const MaybeLink = ({
+    busy,
     children,
     onClick,
     to,
 }: {
+    busy?: boolean;
     children: ReactNode;
     onClick?: (event: MouseEvent) => void;
     to?: string;
 }) =>
     to ? (
-        <Text className={styles.clip} component={Link} isLink onClick={onClick} size="sm" to={to}>
+        <Text
+            aria-busy={busy || undefined}
+            className={busy ? `${styles.clip} ${styles.busy}` : styles.clip}
+            component={Link}
+            isLink
+            onClick={onClick}
+            size="sm"
+            to={to}
+        >
             {children}
         </Text>
     ) : (
@@ -274,7 +284,7 @@ export const TopLists = ({
 }) => {
     const go = useGo();
     // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
-    const { open: openArtist } = useOpenLbBotArtist();
+    const { isPending: pendingArtist, open: openArtist } = useOpenLbBotArtist();
     const openMenu = useLibraryContextMenu();
     const openSongMenu = useHistoryContextMenu();
     return (
@@ -332,6 +342,7 @@ export const TopLists = ({
                         content: (
                             <DiscoverTile
                                 imageId={view.imageId}
+                                isBusy={pendingArtist({ mbid: artist.mbid, name: artist.name })}
                                 isRound
                                 itemType={LibraryItem.ALBUM_ARTIST}
                                 onClick={
@@ -553,7 +564,7 @@ export const UnownedSection = ({
     rows: LbBotUnownedRow[] | undefined;
 }) => {
     // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
-    const { open: openArtist } = useOpenLbBotArtist();
+    const { isPending: pendingArtist, open: openArtist } = useOpenLbBotArtist();
     const openMenu = useLibraryContextMenu();
     const shown = read.kind === 'rows' ? (rows ?? []) : [];
     const cards =
@@ -568,6 +579,7 @@ export const UnownedSection = ({
                   content: (
                       <DiscoverTile
                           imageId={row.artistOwned ? row.artistId : null}
+                          isBusy={pendingArtist({ mbid: row.artistMbid, name: row.artist })}
                           isRound
                           isUnowned={!row.artistOwned}
                           itemType={LibraryItem.ALBUM_ARTIST}
@@ -701,6 +713,10 @@ export const RecentSection = ({
                                 </MaybeLink>
                                 <Group gap={4} wrap="nowrap">
                                     <MaybeLink
+                                        busy={artistLink.isPending({
+                                            mbid: row.artistMbid,
+                                            name: row.artist,
+                                        })}
                                         onClick={(event) => {
                                             const artist = {
                                                 artistId: row.ndArtistId,
