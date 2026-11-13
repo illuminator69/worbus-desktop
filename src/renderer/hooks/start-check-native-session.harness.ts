@@ -108,3 +108,30 @@ test('the_form_drops_the_failed_queries_before_the_sign_in_resets_the_page', () 
         'the cached errors are removed after the sign-in that resets the error page',
     );
 });
+
+/**
+ * B-400 review M3: "expired" was decided from the token's `exp` against this computer's clock. A
+ * clock off by more than Navidrome's session timeout read a good session as expired (with no saved
+ * password: logged out at every start), and a token refused for any other reason (a rotated
+ * secret, a restored database) still passed. Ask Navidrome: one cheap native request at the start
+ * check, and act on its answer.
+ */
+test('the_start_check_asks_navidrome_not_the_clock', () => {
+    const verdict = (
+        savedPassword as unknown as {
+            nativeProbeVerdict?: (status: number | undefined) => 'ok' | 'refused' | 'unknown';
+        }
+    ).nativeProbeVerdict;
+    assert.equal(typeof verdict, 'function', 'the start check reads the clock');
+    assert.equal(verdict!(200), 'ok');
+    assert.equal(verdict!(401), 'refused');
+    assert.equal(verdict!(403), 'refused');
+    // No answer, or the server failing: not a refusal; the start goes on as before.
+    assert.equal(verdict!(500), 'unknown');
+    assert.equal(verdict!(undefined), 'unknown');
+    const hook = read('./use-server-authenticated.ts');
+    assert.doesNotMatch(hook, /nativeSessionExpired\(/, 'the token is judged by the local clock');
+    const probe = hook.indexOf('probeNativeSession(');
+    assert.ok(probe > 0 && probe < hook.indexOf('setReady(AuthState.VALID)'));
+    assert.match(read('../api/navidrome/navidrome-api.ts'), /export const probeNativeSession/);
+});
