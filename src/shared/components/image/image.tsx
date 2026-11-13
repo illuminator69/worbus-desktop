@@ -14,6 +14,7 @@ import {
     useState,
 } from 'react';
 
+import { imageMemoryCache } from './image-memory-cache';
 import styles from './image.module.css';
 import { dropUnder, imageGone, markLoaded, nextShown, type ShownEntry } from './shown-stack';
 import { useNativeImage } from './use-native-image';
@@ -193,6 +194,8 @@ export function BaseImage({
                             onError={
                                 top
                                     ? (event) => {
+                                          // Not kept for the next mount either (B-412 follow-up).
+                                          imageMemoryCache.forget(entry.src);
                                           setUndecodable(entry.src);
                                           onError?.(event);
                                       }
