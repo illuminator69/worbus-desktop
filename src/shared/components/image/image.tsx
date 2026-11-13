@@ -15,7 +15,7 @@ import {
 } from 'react';
 
 import styles from './image.module.css';
-import { dropUnder, markLoaded, nextShown, type ShownEntry } from './shown-stack';
+import { dropUnder, imageGone, markLoaded, nextShown, type ShownEntry } from './shown-stack';
 import { useNativeImage } from './use-native-image';
 
 import { tintHues } from '/@/shared/components/animations/tint-hues';
@@ -140,7 +140,10 @@ export function BaseImage({
     // the loaded element can still show it) until the new one has loaded and faded in over it.
     const [shown, setShown] = useState<ShownEntry[]>([]);
     const displaySrc = nativeImage.displaySrc;
-    const gone = !src || nativeImage.isError;
+    // B-412: the blob the top <img> could not decode. Gone, like a failed fetch: the previous
+    // item's cover is not kept under it.
+    const [undecodable, setUndecodable] = useState<null | string>(null);
+    const gone = imageGone(src, nativeImage.isError, displaySrc, undecodable);
     const nextList = nextShown(shown, displaySrc, gone, fade);
     if (nextList !== shown) setShown(nextList);
     const settle = () => setShown(dropUnder);
@@ -187,7 +190,14 @@ export function BaseImage({
                             fetchPriority={fetchPriority}
                             key={entry.src}
                             onAnimationEnd={top ? settle : undefined}
-                            onError={onError}
+                            onError={
+                                top
+                                    ? (event) => {
+                                          setUndecodable(entry.src);
+                                          onError?.(event);
+                                      }
+                                    : onError
+                            }
                             onLoad={top ? (event) => handleLoad(event, entry.src) : undefined}
                             src={entry.src}
                             {...props}

@@ -38,3 +38,25 @@ export const nextShown = (
     if (displaySrc) return showNext(list, displaySrc, fade);
     return list;
 };
+
+/**
+ * B-412: whether the element has no image to show for this render: no source, the fetch failed, or
+ * the blob it fetched could not be decoded by the <img> (`undecodableSrc`, the blob its `error` named).
+ * Gone clears the stack, so the previous item's cover is not left showing under a broken one.
+ */
+export const imageGone = (
+    src: string | undefined,
+    fetchFailed: boolean,
+    displaySrc: string | undefined,
+    undecodableSrc: null | string,
+): boolean => !src || fetchFailed || (!!displaySrc && displaySrc === undecodableSrc);
+
+/**
+ * B-412: whether a fetched body may be an image. A Subsonic server answers a cover it cannot serve
+ * with an error document under HTTP 200 (XML, or JSON with `f=json`); that is no image. A body with
+ * no type, or a generic one, is left to the <img> to decode (its error counts too: `imageGone`).
+ */
+export const isImageBody = (contentType: string): boolean => {
+    const type = contentType.split(';')[0].trim().toLowerCase();
+    return !(type.startsWith('text/') || type.includes('json') || type.includes('xml'));
+};

@@ -109,7 +109,11 @@ const stack = (await import('./shown-stack.ts')) as unknown as {
 };
 
 test('a_cover_that_cannot_be_decoded_leaves_no_previous_cover', () => {
-    assert.equal(typeof stack.imageGone, 'function', 'an <img> that cannot decode is not the stack’s');
+    assert.equal(
+        typeof stack.imageGone,
+        'function',
+        'an <img> that cannot decode is not the stack’s',
+    );
     const a = markLoaded(showNext([], 'blob-a', false), 'blob-a');
     const b = nextShown(a, 'blob-b', false, true);
     assert.deepEqual(
@@ -151,7 +155,16 @@ test('wired_the_element_and_the_fetch_say_when_there_is_no_image', async () => {
     const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
     const image = read('./image.tsx');
     assert.match(image, /imageGone\(/, 'the stack ignores an <img> that cannot decode');
-    const top = image.slice(image.indexOf('<img'), image.indexOf('/>', image.indexOf('<img')));
-    assert.match(top, /onError=\{top \?/, "the top <img>'s error is passed on and nothing else");
-    assert.match(read('./use-native-image.ts'), /isImageBody\(/, 'a 200 with an XML body is loaded');
+    const at = image.search(/<img\s/);
+    const top = image.slice(at, image.indexOf('/>', at));
+    assert.match(
+        top,
+        /onError=\{\s*top\s*\?/,
+        "the top <img>'s error is passed on and nothing else",
+    );
+    assert.match(
+        read('./use-native-image.ts'),
+        /isImageBody\(/,
+        'a 200 with an XML body is loaded',
+    );
 });

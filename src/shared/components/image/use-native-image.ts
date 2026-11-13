@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { isImageBody } from './shown-stack';
+
 import { ImageRequest } from '/@/shared/types/domain-types';
 
 type FetchPriority = 'auto' | 'high' | 'low';
@@ -107,6 +109,11 @@ export function useNativeImage({
                 }
 
                 const blob = await response.blob();
+
+                // B-412: a Subsonic error document under HTTP 200 is no image.
+                if (!isImageBody(blob.type || response.headers.get('content-type') || '')) {
+                    throw new Error(`Not an image: ${blob.type}`);
+                }
 
                 if (abortController.signal.aborted) {
                     return;
