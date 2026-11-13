@@ -5,6 +5,7 @@ import { Link } from 'react-router';
 import styles from './lbbot-downloads-route.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
+import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import { ResolveLinkBox } from '/@/renderer/features/lbbot/components/resolve-link-box';
 import { activityPageCopy } from '/@/renderer/features/lbbot/components/wishlist-copy';
 import { WishlistList } from '/@/renderer/features/lbbot/components/wishlist-list';
@@ -18,10 +19,17 @@ import {
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { LedgerRow, useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
+import {
+    FILTER_LABEL,
+    FILTER_ORDER,
+    LEDGER_MATCHES,
+    LedgerFilter,
+} from '/@/renderer/features/lbbot/utils/activity-filters';
 import { Fold } from '/@/renderer/features/motion/fold';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
 import { AppRoute } from '/@/renderer/router/routes';
+import { useHubRoles } from '/@/renderer/store/hub.store';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
 import { Progress } from '/@/shared/components/progress/progress';
@@ -119,41 +127,16 @@ const FillRow = ({ now, row }: { now: number; row: LedgerRow }) => {
     );
 };
 
-/** The page's sections: the ledger's four filters, then the wishlist. */
+/** The page's sections: the ledger's filters, then the wishlist. */
 type DownloadsSection = 'wishlist' | LedgerFilter;
 
 /**
- * What a chip asks for. All four are predicates over what the ledger already
- * carries — `outcome` and `settled` — so none of this is new vocabulary and
- * nothing here polls.
- *
- * Deliberately component state rather than a persisted setting: "show me the
- * failures" is a thing you want for the next thirty seconds, and a filter that
- * survives a restart is a downloads page that looks empty for reasons the user
- * has long forgotten choosing.
+ * The ledger's filters (`activity-filters.ts`). Deliberately component state rather than a
+ * persisted setting: "show me the failures" is a thing you want for the next thirty seconds, and a
+ * filter that survives a restart is a downloads page that looks empty for reasons the user has long
+ * forgotten choosing.
  */
-type LedgerFilter = 'all' | 'done' | 'failed' | 'running';
-
-const MATCHES: Record<LedgerFilter, (row: LedgerRow) => boolean> = {
-    all: () => true,
-    done: (row) => row.settled && row.outcome === 'done',
-    // Everything that ended in something other than success, cancellations and
-    // "stopped tracking this one" included: the question the chip answers is
-    // "what didn't I get", not "what errored".
-    failed: (row) => row.settled && row.outcome !== 'done',
-    running: (row) => !row.settled,
-};
-
-// B-406: the chips count downloads, and All says so (the owner read "All (6)" against a badge of
-// 41 that was mostly lb-bot's imports and folders).
-const FILTER_LABEL: Record<LedgerFilter, string> = {
-    all: 'All downloads',
-    done: 'In your library',
-    failed: "Didn't land",
-    running: 'In flight',
-};
-
-const FILTER_ORDER: LedgerFilter[] = ['all', 'running', 'failed', 'done'];
+const MATCHES = LEDGER_MATCHES;
 
 export const LbBotDownloadsPage = ({
     initialSection = 'all',
@@ -173,8 +156,11 @@ export const LbBotDownloadsPage = ({
     // Off, the page is Activity (the sidebar's name) and its empty line says nothing of fetching.
     const { t } = useTranslation();
     const copy = activityPageCopy(downloadsShown);
-    // B-406: lb-bot's To fix moved to Library Matches; while it holds something, say where.
-    const toFix = libraryToFixCount(useLbBotAttention().data, downloadsShown);
+    // B-406: lb-bot's To fix moved to Library Matches; while it holds something, say where. Review
+    // L5: an admin's line, as the page is (a cached answer is not one a non-admin may read).
+    const admin = allows(useHubRoles(), 'needsAttention');
+    const attention = useLbBotAttention().data;
+    const toFix = admin ? libraryToFixCount(attention, downloadsShown) : 0;
 
     const chips = (
         <Group gap="xs">

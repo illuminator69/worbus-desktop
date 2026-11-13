@@ -62,6 +62,36 @@ export const landingSection = (counts: SectionCounts): MatchSection | null => {
     return matchSections(counts)[0]?.id ?? null;
 };
 
+const SECTIONS: readonly MatchSection[] = ORDER;
+
+/**
+ * B-406 review L3: the section a link asks for (`?section=albums`): StillWorking, after an override
+ * job, links to where its result shows rather than to the landing section (To fix first). Null for
+ * none or an unknown name; `currentSection` still falls back when it is not offered.
+ */
+export const sectionFromSearch = (search: string): MatchSection | null => {
+    const asked = new URLSearchParams(search).get('section');
+    return SECTIONS.find((id) => id === asked) ?? null;
+};
+
+/** The link to Library Matches open on `section`. */
+export const sectionSearch = (section: MatchSection): string => `?section=${section}`;
+
+/**
+ * B-406 review L4: the page's line for a hub without the override routes. With To fix offered (it
+ * comes from lb-bot's attention answer, not those routes) the page is not empty, so the line says
+ * which part is missing. Null when the hub has them.
+ */
+export const hubMatchesLine = (
+    overridesSupported: boolean,
+    toFixOffered: boolean,
+): null | string =>
+    overridesSupported
+        ? null
+        : toFixOffered
+          ? 'This hub does not offer artist and album matches yet; To fix is all it can show.'
+          : 'This hub does not offer library matches yet.';
+
 /** The user's choice while it is still offered, else the landing section. */
 export const currentSection = (
     chosen: MatchSection | null,

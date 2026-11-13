@@ -42,7 +42,7 @@ export const CollapsedSidebar = () => {
                     size="25"
                 />
                 {entry.badge ? (
-                    <span aria-hidden className={styles.badgeDot}>
+                    <span aria-hidden className={styles.badgeDot} title={entry.badgeLabel}>
                         {entry.badge}
                     </span>
                 ) : null}
@@ -52,7 +52,10 @@ export const CollapsedSidebar = () => {
         return (
             <CollapsedSidebarItem
                 activeIcon={icon(true)}
-                aria-label={entry.badge ? `${entry.label}, ${entry.badge}` : undefined}
+                // B-406 review L4: what the badge counts, in words, as the expanded sidebar says it.
+                aria-label={
+                    entry.badge ? `${entry.label}, ${entry.badgeLabel ?? entry.badge}` : undefined
+                }
                 component={NavLink}
                 icon={icon(false)}
                 key={entry.id}

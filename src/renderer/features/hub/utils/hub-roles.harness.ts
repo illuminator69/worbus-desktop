@@ -169,7 +169,8 @@ test('non admin sees no admin actions', () => {
     const groups = read('../../sidebar/components/sidebar-groups.tsx');
     assert.match(groups, /admin: allows\(roles, 'needsAttention'\)/);
     const items = read('../../sidebar/components/navi-connect-items.ts');
-    assert.match(items, /overridesSupported && allows\(roles, 'libraryMatches'\)/);
+    // B-406 review L4: the role gate, then the sidebar's own offer (override routes or a to-fix).
+    assert.match(items, /allows\(roles, 'libraryMatches'\) &&\s*libraryMatchesOffered\(/);
     const matches = read('../../library-matches/routes/library-matches-route.tsx');
     // The route itself is gated (walk B7): absent for a non-admin, not "not offered here".
     assert.match(matches, /<RoleGatedRoute gate="libraryMatches">/);

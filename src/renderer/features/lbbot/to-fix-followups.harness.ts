@@ -65,7 +65,8 @@ test('still_working_links_to_the_result_not_to_fix', () => {
     assert.equal(fromSearch!('?section=nonsense'), null);
     assert.equal(matches.currentSection(fromSearch!(''), counts), 'to-fix');
     const still = read('src/renderer/features/lbbot/components/job-failures.tsx');
-    assert.match(still, /section=/, 'StillWorking links to the bare page');
+    assert.match(still, /search: sectionSearch\(section\)/, 'StillWorking links to the bare page');
+    assert.equal(matches.sectionSearch('albums'), '?section=albums');
     assert.match(
         read('src/renderer/features/lbbot/components/album-match-modal.tsx'),
         /<StillWorking section="albums"/,
@@ -127,7 +128,8 @@ test('the_activity_pointer_is_shown_to_an_admin_only', () => {
     const route = read('src/renderer/features/lbbot/routes/lbbot-downloads-route.tsx');
     assert.match(
         route,
-        /allows\([^)]*'needsAttention'\)/,
+        /allows\(useHubRoles\(\), 'needsAttention'\)/,
         'a cached answer shows a non-admin the line',
     );
+    assert.match(route, /admin \? libraryToFixCount\(/, 'the line is not gated on the role');
 });

@@ -1,5 +1,6 @@
-import { Suspense, useState, useSyncExternalStore } from 'react';
+import { Suspense, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router';
 
 import { AlbumMatchRow, ArtistOverrideRow, MergedRow, ToCheckRow } from '../components/match-rows';
 
@@ -25,9 +26,11 @@ import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { sortOverrides } from '/@/renderer/features/lbbot/utils/lbbot-data';
 import {
     currentSection,
+    hubMatchesLine,
     MatchSection,
     matchSections,
     SectionCounts,
+    sectionFromSearch,
 } from '/@/renderer/features/lbbot/utils/matches-page';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
@@ -63,7 +66,12 @@ const LibraryMatchesRoute = () => {
     const list = useLbBotOverrideList();
     const mirror = useSyncExternalStore(subscribeIndexMirror, getIndexMirrorSnapshot);
     const refresh = useMirrorRefresh();
-    const [chosen, setChosen] = useState<MatchSection | null>(null);
+    // B-406 review L3: the section is in the URL (`?section=albums`), so StillWorking's link lands
+    // on the result and a chip's choice is kept per history entry; none is the landing section.
+    const [searchParams, setSearchParams] = useSearchParams();
+    const chosen = sectionFromSearch(`?${searchParams.toString()}`);
+    const setChosen = (id: MatchSection) =>
+        setSearchParams({ section: id }, { preventScrollReset: true, replace: true });
     // B-406 (the owner's ruling, 2026-11-13): lb-bot's To fix lives here. No `/lb/attention` answer
     // (an older hub or lb-bot, lb-bot away) offers no chip: absent is not empty.
     const attention = useLbBotAttention().data;
@@ -117,8 +125,8 @@ const LibraryMatchesRoute = () => {
                     need lb-bot.
                 </Text>
             )}
-            {!overridesSupported && (
-                <Text isMuted>This hub does not offer library matches yet.</Text>
+            {hubMatchesLine(overridesSupported, counts.toFix !== null) && (
+                <Text isMuted>{hubMatchesLine(overridesSupported, counts.toFix !== null)}</Text>
             )}
             {overridesSupported && older && (
                 <Text isMuted>This lb-bot is older and cannot store overrides yet.</Text>

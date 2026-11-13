@@ -239,7 +239,7 @@ export const ArtistMergeBlock = ({ ndId }: { ndId: string }) => {
                             lb-bot no longer has this merge.
                         </Text>
                     )}
-                    {phase === 'timeout' && <StillWorking />}
+                    {phase === 'timeout' && <StillWorking section="merged" />}
                     {/* Whenever the row failed or carries any problem, merge and undo alike. */}
                     {row && <JobFailures failures={row.failures} />}
                     {phase === 'failed' && !isUndo && (

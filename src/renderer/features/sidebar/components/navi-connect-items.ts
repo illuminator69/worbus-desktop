@@ -2,11 +2,14 @@ import { useDiscoverCapabilities } from '/@/renderer/features/discover/use-disco
 import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     useHubSupports,
+    useLbBotAttention,
     useLbBotAvailable,
     useLbBotDownloadsShown,
     useListeningSupported,
     useOverridesSupported,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
+import { libraryMatchesOffered } from '/@/renderer/features/sidebar/utils/sidebar-groups';
 import { AppRoute } from '/@/renderer/router/routes';
 import { useHubConnected, useHubRoles } from '/@/renderer/store/hub.store';
 import { SidebarItemType } from '/@/renderer/store/settings.store';
@@ -35,6 +38,7 @@ export const useNaviConnectSidebarItems = (): SidebarItemType[] => {
     const overridesSupported = useOverridesSupported();
     const wishlistSupported = useHubSupports('GET /lb/wishlist');
     const { hasSources } = useDiscoverCapabilities();
+    const attention = useLbBotAttention().data;
 
     const items: SidebarItemType[] = [];
     // Discover is not lb-bot-gated: it also carries AudioMuse mood search and
@@ -84,7 +88,17 @@ export const useNaviConnectSidebarItems = (): SidebarItemType[] => {
         // advertises the artist-override routes (`useOverridesSupported`). Each
         // section inside then hides itself for an lb-bot that lacks its list.
         // Worbus P2: an admin's page; listening and downloads gate in their own hooks.
-        if (overridesSupported && allows(roles, 'libraryMatches')) {
+        // B-406 review L4: and whenever lb-bot has something to fix, as the sidebar offers it
+        // (`libraryMatchesOffered`: To fix lives there, even on a hub without the override routes).
+        if (
+            allows(roles, 'libraryMatches') &&
+            libraryMatchesOffered({
+                admin: allows(roles, 'needsAttention'),
+                lbBotAvailable,
+                overridesSupported,
+                toFixCount: libraryToFixCount(attention, downloadsShown),
+            })
+        ) {
             items.push({
                 disabled: false,
                 id: 'LibraryMatches',

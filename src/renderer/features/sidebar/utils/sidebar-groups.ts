@@ -134,17 +134,16 @@ export const sidebarGroups = (
 
     // B-406: Library Matches holds the To fix list too, with its own badge.
     const toFix = admin ? (ctx.toFixCount ?? 0) : 0;
-    const libraryTools: SidebarEntry[] =
-        lb && admin && (ctx.overridesSupported || toFix > 0)
-            ? [
-                  {
-                      id: 'libraryMatches',
-                      label: 'Library Matches',
-                      route: routes.libraryMatches,
-                      ...(toFix > 0 ? { badge: toFix } : {}),
-                  },
-              ]
-            : [];
+    const libraryTools: SidebarEntry[] = libraryMatchesOffered(ctx)
+        ? [
+              {
+                  id: 'libraryMatches',
+                  label: 'Library Matches',
+                  route: routes.libraryMatches,
+                  ...(toFix > 0 ? { badge: toFix } : {}),
+              },
+          ]
+        : [];
 
     const app: SidebarEntry[] = [{ id: 'settings', label: 'Settings', route: routes.settings }];
 
@@ -165,6 +164,27 @@ export const sidebarGroups = (
     return { groups: present([...upper, ...lower]), more: [] };
 };
 
-/** Settled fills the user has to act on: failed, or waiting for a pick. */
+/**
+ * B-406: Library Matches is offered to an admin while lb-bot is there and either the hub has the
+ * override routes or lb-bot has something to fix. The sidebar and the command palette both ask this.
+ */
+export const libraryMatchesOffered = (ctx: {
+    admin?: boolean;
+    lbBotAvailable: boolean;
+    overridesSupported: boolean;
+    toFixCount?: number;
+}): boolean =>
+    ctx.lbBotAvailable &&
+    ctx.admin !== false &&
+    (ctx.overridesSupported || (ctx.toFixCount ?? 0) > 0);
+
+/**
+ * A settled fill the user has to act on: failed, or waiting for a pick. Activity's badge counts
+ * these, and so does its Need you chip (review L2: one set, one number).
+ */
+export const needsYou = (row: { outcome: string; settled: boolean }): boolean =>
+    row.settled && (row.outcome === 'failed' || row.outcome === 'needsPick');
+
+/** Settled fills the user has to act on (`needsYou`). */
 export const attentionCount = (rows: readonly { outcome: string; settled: boolean }[]): number =>
-    rows.filter((r) => r.settled && (r.outcome === 'failed' || r.outcome === 'needsPick')).length;
+    rows.filter(needsYou).length;

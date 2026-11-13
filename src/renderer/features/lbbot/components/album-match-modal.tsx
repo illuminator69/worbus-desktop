@@ -612,7 +612,7 @@ const AlbumMatchModal = ({
                                     lb-bot no longer has this change.
                                 </Text>
                             )}
-                            {phase === 'timeout' && <StillWorking />}
+                            {phase === 'timeout' && <StillWorking section="albums" />}
                             {/* Whenever the row failed or carries any problem, for both
                             kinds: lb-bot's reasons say what a second Undo will do. */}
                             {row && <JobFailures failures={row.failures} />}
