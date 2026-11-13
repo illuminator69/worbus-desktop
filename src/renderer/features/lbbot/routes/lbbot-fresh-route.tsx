@@ -95,6 +95,7 @@ const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
         artistId: release.artistOwned ? release.artistId : '',
         mbid: release.artistMbids[0] ?? '',
         name: release.artist,
+        owned: release.artistOwned,
     };
 
     // An album the library holds opens the library album, full stop. This used

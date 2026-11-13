@@ -578,6 +578,7 @@ export const UnownedSection = ({
                                             artistId: row.artistOwned ? row.artistId : '',
                                             mbid: row.artistMbid,
                                             name: row.artist,
+                                            owned: row.artistOwned,
                                         })
                                   : undefined
                           }

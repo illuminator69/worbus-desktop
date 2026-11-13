@@ -292,3 +292,36 @@ export const artistLinkStep = (
     name: null | string | undefined,
 ): 'external' | 'library' | 'lookup' | null =>
     artistId ? 'library' : name?.trim() ? 'lookup' : mbid ? 'external' : null;
+
+/**
+ * B-407 review M4: which library artist (of a name search's rows) an lb-bot row opens, or none.
+ * An MBID on both sides that differs is another act (Nirvana UK is not the library's Nirvana US);
+ * an equal one is the artist. Then an exact whole name, then B-313's `A (B)` shape on the whole
+ * credit. A credit split (`sameArtist`: "Earth, Wind & Fire" holds "Fire") only for a row lb-bot
+ * says is owned: an unowned row must not open an owned artist by a part of a credit.
+ */
+export const pickLibraryArtist = (
+    rows: readonly { id: string; mbz: null | string; name: string }[],
+    row: { mbid?: null | string; name: string; owned?: boolean },
+): null | string => {
+    const mbid = row.mbid?.trim() ?? '';
+    const candidates = mbid ? rows.filter((r) => !r.mbz || r.mbz === mbid) : rows;
+    if (mbid) {
+        const same = candidates.find((r) => r.mbz === mbid);
+        if (same) return same.id;
+    }
+    const key = normalizeArtistName(row.name);
+    if (!key) return null;
+    const exact = candidates.find((r) => normalizeArtistName(r.name) === key);
+    if (exact) return exact.id;
+    const whole = creditedAct(row.name);
+    const shaped =
+        whole &&
+        candidates.find((r) => {
+            const act = creditedAct(r.name);
+            return act !== null && sameAct(act, whole);
+        });
+    if (shaped) return shaped.id;
+    if (row.owned !== true) return null;
+    return candidates.find((r) => sameArtist(r.name, row.name))?.id ?? null;
+};

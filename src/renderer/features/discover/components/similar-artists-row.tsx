@@ -85,6 +85,7 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
                                     artistId: artist.artistId,
                                     mbid: artist.mbid,
                                     name: artist.name,
+                                    owned: artist.owned,
                                 })
                             }
                             onContextMenu={(event) =>

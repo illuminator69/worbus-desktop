@@ -111,6 +111,7 @@ import {
     fieldedAlbumQuery,
     normalizeAlbumTitle,
     pickAlbumCandidate,
+    pickLibraryArtist,
     rankAlbumCandidates,
     sameAlbumTitle,
     sameArtist,
@@ -3365,10 +3366,12 @@ export const useOpenArtist = () => {
     const serverId = useCurrentServerId();
 
     return useCallback(
-        async (artistMbid: string, name: string) => {
-            const libraryId = serverId
+        async (artistMbid: string, name: string, owned?: boolean) => {
+            // B-407 review M4: the search's rows are cached (not one answer per name), and the
+            // row's MBID and ownership pick among them (`pickLibraryArtist`).
+            const rows = serverId
                 ? await queryClient
-                      .fetchQuery<null | string>({
+                      .fetchQuery<{ id: string; mbz: null | string; name: string }[]>({
                           gcTime: 5 * 60 * 1000,
                           queryFn: async () => {
                               const found = await api.controller
@@ -3383,16 +3386,18 @@ export const useOpenArtist = () => {
                                       },
                                   })
                                   .catch(() => null);
-                              return (
-                                  (found?.items ?? []).find((row) => sameArtist(row.name, name))
-                                      ?.id ?? null
-                              );
+                              return (found?.items ?? []).map((row) => ({
+                                  id: row.id,
+                                  mbz: row.mbz ?? null,
+                                  name: row.name,
+                              }));
                           },
-                          queryKey: ['lbbot', 'artist-target', serverId, name],
+                          queryKey: ['lbbot', 'artist-search', serverId, name],
                           staleTime: 5 * 60 * 1000,
                       })
-                      .catch(() => null)
-                : null;
+                      .catch(() => [])
+                : [];
+            const libraryId = pickLibraryArtist(rows, { mbid: artistMbid, name, owned });
             const to = artistLinkPath(libraryId || '', artistMbid, name);
             if (to) navigate(to);
         },
@@ -3414,7 +3419,7 @@ export const useOpenLbBotArtist = () => {
         (artist: LbBotArtistLinkRow) => {
             const step = artistLinkStep(artist.artistId, artist.mbid, artist.name);
             if (step === 'lookup') {
-                void openArtist(artist.mbid ?? '', artist.name ?? '');
+                void openArtist(artist.mbid ?? '', artist.name ?? '', artist.owned);
                 return;
             }
             const to =
@@ -3442,6 +3447,9 @@ export interface LbBotArtistLinkRow {
     artistId?: null | string;
     mbid?: null | string;
     name?: null | string;
+    /** lb-bot's word on ownership, where the row has one (review M4: only an owned row's credit
+     *  may be split to find the library artist). */
+    owned?: boolean;
 }
 
 export const useResolveBrowseAlbum = () => {

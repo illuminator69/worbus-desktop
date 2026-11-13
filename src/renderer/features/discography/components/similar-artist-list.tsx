@@ -32,7 +32,12 @@ export const SimilarArtistList = ({ mbid, name }: { mbid: string; name: string }
             <h2 className={styles.sideLabel}>{t('naviConnect.artistPage.similar')}</h2>
             {rows.map((artist) => {
                 const [a, b] = tintHues(artist.mbid || artist.name);
-                const row = { artistId: artist.artistId, mbid: artist.mbid, name: artist.name };
+                const row = {
+                    artistId: artist.artistId,
+                    mbid: artist.mbid,
+                    name: artist.name,
+                    owned: artist.owned,
+                };
                 return (
                     <Link
                         className={styles.artistRow}

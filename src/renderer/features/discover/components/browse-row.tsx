@@ -236,6 +236,7 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
                                     artistId: artist.artistId,
                                     mbid: artist.mbid,
                                     name: artist.name,
+                                    owned: artist.owned,
                                 })
                             }
                             onContextMenu={(event) =>
