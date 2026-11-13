@@ -58,3 +58,62 @@ test('every_lbbot_artist_link_takes_the_shared_step', () => {
         "My Listening's artist links go by lb-bot's own match",
     );
 });
+
+/**
+ * B-407 review M4: the tap-time lookup matched names only. A row lb-bot identifies by MBID as one
+ * of two same-named acts (Nirvana UK) opened the library's other one (Nirvana US), where the MBID
+ * page was right; and `sameArtist` splits credits, so an unowned "Fire" opened the library's
+ * "Earth, Wind & Fire". Rule: an MBID on both sides that differs is not the artist; an equal one
+ * is; then an exact whole name; then the `A (B)` bracket rule on the whole credit; a credit split
+ * only for a row lb-bot says is owned.
+ */
+type LibraryRow = { id: string; mbz: null | string; name: string };
+const pick = (
+    albumMatch as unknown as {
+        pickLibraryArtist?: (
+            rows: LibraryRow[],
+            row: { mbid?: null | string; name: string; owned?: boolean },
+        ) => null | string;
+    }
+).pickLibraryArtist;
+
+test('the_lookup_reads_the_rows_mbid_and_never_splits_an_unowned_credit', () => {
+    assert.equal(typeof pick, 'function', 'the lookup is by name alone');
+    const nirvanaUs = { id: 'nd-us', mbz: 'mb-us', name: 'Nirvana' };
+    assert.equal(
+        pick!([nirvanaUs], { mbid: 'mb-uk', name: 'Nirvana' }),
+        null,
+        'Nirvana UK opens Nirvana US',
+    );
+    assert.equal(pick!([nirvanaUs], { mbid: 'mb-us', name: 'Nirvana' }), 'nd-us');
+    assert.equal(pick!([nirvanaUs], { name: 'Nirvana' }), 'nd-us', 'no MBID on the row: the name');
+    // A library artist with no MBID tag is no evidence against the row's.
+    assert.equal(pick!([{ ...nirvanaUs, mbz: null }], { mbid: 'mb-uk', name: 'Nirvana' }), 'nd-us');
+
+    const ewf = { id: 'nd-ewf', mbz: null, name: 'Earth, Wind & Fire' };
+    assert.equal(pick!([ewf], { name: 'Fire' }), null, '"Fire" opens "Earth, Wind & Fire"');
+    assert.equal(pick!([ewf], { name: 'Fire', owned: false }), null);
+    assert.equal(pick!([ewf], { name: 'Fire', owned: true }), 'nd-ewf', 'owned: the split stands');
+    assert.equal(
+        pick!([{ ...ewf, mbz: 'mb-ewf' }], { mbid: 'mb-fire', name: 'Fire', owned: true }),
+        null,
+    );
+
+    // An exact whole name before anything wider.
+    const rows = [
+        { id: 'feat', mbz: null, name: 'Daft Punk feat. Julian Casablancas' },
+        { id: 'dp', mbz: null, name: 'Daft Punk' },
+    ];
+    assert.equal(pick!(rows, { name: 'Daft Punk', owned: true }), 'dp');
+    // B-313's bracket shape is one credit, not a split: it stands for every row.
+    assert.equal(
+        pick!([{ id: 'bts', mbz: null, name: 'BTS (방탄소년단)' }], { name: 'BTS' }),
+        'bts',
+    );
+});
+
+test('the_open_uses_the_rule_and_the_rows_ownership', () => {
+    const hooks = readFileSync(new URL('../hooks/use-lbbot.ts', import.meta.url), 'utf8');
+    const open = hooks.slice(hooks.indexOf('export const useOpenArtist'));
+    assert.match(open.slice(0, open.indexOf('\n};')), /pickLibraryArtist\(/);
+});
