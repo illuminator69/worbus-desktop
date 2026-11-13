@@ -98,6 +98,7 @@ import {
     adoptLbBotWelcome,
     applyFillFrame,
     clearLbBotStatus,
+    invalidateLbBotActivity,
     invalidateLbBotOwnership,
     markLbBotUnreachable,
     refreshLbBotOverrides,
@@ -286,6 +287,17 @@ const savedQueueToHubRecord = (q: SavedQueue): Record<string, unknown> => ({
 });
 
 const hub = isElectron() ? window.api.hub : null;
+
+/** A `fill` frame in one of these states moves what `/lb/activity` lists (PROTOCOL §15.6). */
+const ACTIVITY_MOVES = new Set<unknown>([
+    'cancelled',
+    'complete',
+    'failed',
+    'picking',
+    'placed',
+    'searching',
+    'verified',
+]);
 
 /**
  * Worbus P2: following a change of Navidrome account (design §6.5), one change at a time (review
@@ -2095,6 +2107,12 @@ export const useHub = () => {
                 // uses (PROTOCOL §15.1).
                 if (typeof msg.key === 'string' && typeof msg.kind === 'string') {
                     applyFillFrame(msg);
+                }
+                // Need you counts every client's requests (`/lb/activity`): re-read it when a
+                // fill settles or starts - the frames the hub drops that cache for (PROTOCOL
+                // §15.6) - never on a progress frame, which arrive every few seconds.
+                if (ACTIVITY_MOVES.has(msg.state) || ACTIVITY_MOVES.has(msg.status)) {
+                    invalidateLbBotActivity();
                 }
             } else if (msg.t === 'lb') {
                 // The hub's own probe changed its verdict on lb-bot (R18) —

@@ -41,6 +41,7 @@ import type {
     LbBotUnowned,
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
+import type { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
 import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import {
@@ -3707,6 +3708,33 @@ export const useLbBotAttention = () => {
         staleTime: 60 * 1000,
     });
     return useShownWithHub(query);
+};
+
+/**
+ * Activity's Need you (the owner, 2026-11-13): every client's requests lb-bot's ledger holds,
+ * `/lb/activity` (PROTOCOL §15.6). Admin only, as the badge is; null data (an older hub or lb-bot,
+ * not read yet) leaves Need you to this device's ledger (`needYouItems`). Re-read on a `fill`
+ * frame (`invalidateLbBotActivity`), on focus, and at most every 30 s otherwise while shown.
+ */
+export const useLbBotActivity = () => {
+    const available = useLbBotAvailable();
+    const supported = useHubSupports('GET /lb/activity');
+    const admin = allows(useHubRoles(), 'needsAttention');
+    const query = useQuery<LbBotActivityRequest[] | null>({
+        enabled: !!lbBot && available && supported && admin,
+        gcTime: 5 * 60 * 1000,
+        queryFn: () => lbBot!.activity(),
+        queryKey: ['lbbot', 'activity'],
+        refetchInterval: 60 * 1000,
+        refetchOnWindowFocus: true,
+        staleTime: 30 * 1000,
+    });
+    return useShownWithHub(query);
+};
+
+/** A fill moved (a `fill` frame): what lb-bot's ledger lists may have too. */
+export const invalidateLbBotActivity = (): void => {
+    void queryClient.invalidateQueries({ queryKey: ['lbbot', 'activity'] });
 };
 
 export const useLbBotWishlist = () => {

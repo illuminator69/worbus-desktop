@@ -85,6 +85,7 @@ import { indexArtistBody } from './index-artist-body';
 
 import { getMainWindow } from '/@/main/index';
 import { toFindIt } from '/@/shared/utils/find-it';
+import { activityRequests, type LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
 import {
     albumDownloadBody,
     mergePreviewParams,
@@ -2661,6 +2662,14 @@ ipcMain.handle(
             foldersCut: attentionFoldersCut(data),
         };
     },
+);
+
+// Activity's Need you (the owner, 2026-11-13: every client's requests): `/lb/activity`'s requests,
+// allowlisted (`activityRequests`); its transfers are not read. null (an older hub or lb-bot, a
+// refusal, a non-admin) leaves Need you to this device's ledger.
+ipcMain.handle(
+    'lbbot-activity',
+    async (): Promise<LbBotActivityRequest[] | null> => activityRequests(await get('/lb/activity')),
 );
 
 ipcMain.handle('lbbot-wishlist', async (): Promise<LbBotWishlist> => {

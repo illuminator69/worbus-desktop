@@ -42,6 +42,7 @@ import type {
     LbBotUnowned,
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
+import type { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
 import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import { ipcRenderer } from 'electron';
@@ -407,7 +408,12 @@ const attentionCounts = (): Promise<null | {
     foldersCut: number;
 }> => ipcRenderer.invoke('lbbot-attention-counts');
 
+/** Activity's Need you: `/lb/activity`'s requests, every client's, allowlisted; null when lb-bot
+ *  did not answer. */
+const activity = (): Promise<LbBotActivityRequest[] | null> => ipcRenderer.invoke('lbbot-activity');
+
 export const lbBot = {
+    activity,
     albumCovers,
     albumCoverSet,
     albumLookup,

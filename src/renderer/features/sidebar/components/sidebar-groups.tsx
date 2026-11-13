@@ -8,6 +8,7 @@ import styles from './sidebar-groups.module.css';
 import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     useHubSupports,
+    useLbBotActivity,
     useLbBotAttention,
     useLbBotAvailable,
     useLbBotDownloadsShown,
@@ -16,10 +17,10 @@ import {
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
+import { needYouCount } from '/@/renderer/features/lbbot/utils/need-you';
 import { LIBRARY_FRAME_ROUTES } from '/@/renderer/features/library/library-routes';
 import { SidebarIcon } from '/@/renderer/features/sidebar/components/sidebar-icon';
 import { SidebarItem } from '/@/renderer/features/sidebar/components/sidebar-item';
-import { attentionCount } from '/@/renderer/features/sidebar/utils/sidebar-groups';
 import {
     type SidebarEntry,
     type SidebarGroup,
@@ -108,13 +109,15 @@ export const useSidebarModel = (options?: {
     // B-406 (the owner's ruling): Activity's badge is the downloads that need you; lb-bot's imports
     // and folders to file are Library Matches' badge, where its To fix list is.
     const attention = useLbBotAttention().data;
+    // The owner, 2026-11-13: Need you is every client's requests, not this device's alone.
+    const activity = useLbBotActivity().data ?? null;
     const downloadsOn = useLbBotDownloadsShown();
     const counts = useMemo(
         () => ({
-            attentionCount: attentionCount(ledger),
+            attentionCount: needYouCount(ledger, activity),
             toFixCount: libraryToFixCount(attention, downloadsOn),
         }),
-        [ledger, attention, downloadsOn],
+        [ledger, activity, attention, downloadsOn],
     );
 
     return useMemo(() => {

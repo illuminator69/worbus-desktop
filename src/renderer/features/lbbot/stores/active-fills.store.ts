@@ -521,6 +521,9 @@ export interface LedgerRow {
     outcome: FillOutcome;
     percent: number;
     reason: string;
+    /** The release lb-bot fetched (an album fill); "" for a gap. How lb-bot's `/lb/activity` row
+     *  is joined to this one (Need you). */
+    releaseMbid: string;
     /** Whether a plain Retry is worth offering. True for a gap fill and for any
      *  row predating the field — absent means unknown, and hiding the only
      *  action on a guess is worse than offering one that may not help. */
@@ -578,6 +581,7 @@ const toRow = (entry: ActiveFill | ActiveGap, isGap: boolean): LedgerRow => ({
     outcome: entry.outcome ?? (entry.settled ? 'gaveUp' : 'running'),
     percent: entry.percent ?? 0,
     reason: entry.reason ?? '',
+    releaseMbid: isGap ? '' : (entry as ActiveFill).releaseMbid || '',
     retryable: isGap ? true : ((entry as ActiveFill).retryable ?? true),
     retryAt: isGap ? 0 : ((entry as ActiveFill).retryAt ?? 0),
     rgid: isGap ? '' : (entry as ActiveFill).rgid,

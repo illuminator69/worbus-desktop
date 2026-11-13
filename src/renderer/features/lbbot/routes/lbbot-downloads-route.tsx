@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link } from 'react-router';
+import { generatePath, Link } from 'react-router';
 
 import styles from './lbbot-downloads-route.module.css';
 
@@ -13,6 +13,7 @@ import { describeFill } from '/@/renderer/features/lbbot/fill-vocabulary';
 import { useFillActions } from '/@/renderer/features/lbbot/hooks/use-fill-actions';
 import {
     caaCoverUrl,
+    useLbBotActivity,
     useLbBotAttention,
     useLbBotDownloadsShown,
     useLbBotWishlist,
@@ -25,6 +26,7 @@ import {
     LEDGER_MATCHES,
     LedgerFilter,
 } from '/@/renderer/features/lbbot/utils/activity-filters';
+import { needYouItems } from '/@/renderer/features/lbbot/utils/need-you';
 import { Fold } from '/@/renderer/features/motion/fold';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
@@ -37,6 +39,7 @@ import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
 import { LibraryItem } from '/@/shared/types/domain-types';
+import { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
 
 /**
  * navi-connect: everything lb-bot has been asked to fetch from Soulseek, in flight
@@ -127,6 +130,93 @@ const FillRow = ({ now, row }: { now: number; row: LedgerRow }) => {
     );
 };
 
+/**
+ * A request lb-bot lists that this device never made (another client's): drawn with the ledger's
+ * own words (`describeFill`), and with Open album alone - no Retry, Cancel or Dismiss, as PROTOCOL
+ * §15.6 says of a row only lb-bot knows.
+ */
+const ledgerRowOfRequest = (req: LbBotActivityRequest): LedgerRow => ({
+    album: req.album,
+    allFiles: false,
+    artist: req.artist,
+    attempts: 0,
+    bytesDone: 0,
+    bytesTotal: 0,
+    cancellable: false,
+    done: 0,
+    failed: 0,
+    failureKind: req.failureKind as LedgerRow['failureKind'],
+    groupId: req.groupId,
+    isGap: req.gapFill,
+    key: req.releaseMbid || req.groupId,
+    lastCheckedAt: 0,
+    lastError: '',
+    lastErrorTicks: 0,
+    lastSourcePeer: '',
+    leftOut: 0,
+    mp3WouldHelp: false,
+    otherSourceExcludes: [],
+    outcome: req.state === 'picking' ? 'needsPick' : 'failed',
+    percent: 0,
+    reason: req.reason,
+    releaseMbid: req.releaseMbid,
+    retryable: req.retryable,
+    retryAt: 0,
+    rgid: req.rgid,
+    settled: true,
+    sortAt: req.updatedAt * 1000,
+    speedBps: 0,
+    stalledPlacement: false,
+    state: req.state,
+    total: 0,
+    verifyGaveUp: false,
+});
+
+const ServerRow = ({ now, req }: { now: number; req: LbBotActivityRequest }) => {
+    const row = ledgerRowOfRequest(req);
+    const view = describeFill(row, now, true);
+    const to = req.albumId
+        ? generatePath(AppRoute.LIBRARY_ALBUMS_DETAIL, { albumId: req.albumId })
+        : req.rgid
+          ? generatePath(AppRoute.EXTERNAL_ALBUM_DETAIL, { rgid: req.rgid })
+          : null;
+    return (
+        <div className={styles.row}>
+            <ItemImage
+                className={styles.image}
+                containerClassName={styles.cover}
+                itemType={LibraryItem.ALBUM}
+                src={req.rgid ? caaCoverUrl(req.rgid) : null}
+                type="table"
+            />
+            <Stack className={styles.body} gap="0.15rem">
+                <Text isNoSelect lineClamp={1}>
+                    {req.album || req.artist || row.key}
+                </Text>
+                <Text size="sm">
+                    {req.artist && req.album ? `${req.artist} — ` : ''}
+                    {view.headline}
+                </Text>
+                {view.sublines.map((line, index) => (
+                    <Text isMuted key={index} lineClamp={3} size="sm">
+                        {line}
+                    </Text>
+                ))}
+                <Text isMuted size="sm">
+                    Requested from another device.
+                </Text>
+            </Stack>
+            <Group gap="xs">
+                {to && (
+                    <Button component={Link} to={to} variant="subtle">
+                        Open album
+                    </Button>
+                )}
+            </Group>
+        </div>
+    );
+};
+
 /** The page's sections: the ledger's filters, then the wishlist. */
 type DownloadsSection = 'wishlist' | LedgerFilter;
 
@@ -149,6 +239,11 @@ export const LbBotDownloadsPage = ({
     const wishlistCount = wishlist.data?.entries.length;
     const filter: LedgerFilter = section === 'wishlist' ? 'all' : section;
     const shown = rows.filter(MATCHES[filter]);
+    // The owner, 2026-11-13: Need you is every client's requests lb-bot lists as failed or waiting
+    // on a pick, plus this device's rows lb-bot no longer lists - the sidebar badge's set.
+    const activity = useLbBotActivity().data ?? null;
+    const needYou = needYouItems(rows, activity);
+    const shownCount = filter === 'needsYou' ? needYou.length : shown.length;
     const now = useNow();
     // Worbus P1: with downloading off the ledger is history to read: no paste-a-link box (a pasted
     // link is an acquisition); the rows lose their fetching buttons (`useFillActions`).
@@ -165,7 +260,7 @@ export const LbBotDownloadsPage = ({
     const chips = (
         <Group gap="xs">
             {FILTER_ORDER.map((id) => {
-                const count = rows.filter(MATCHES[id]).length;
+                const count = id === 'needsYou' ? needYou.length : rows.filter(MATCHES[id]).length;
                 return (
                     <Button
                         disabled={count === 0 && id !== 'all'}
@@ -188,7 +283,7 @@ export const LbBotDownloadsPage = ({
 
     return (
         <ForkListPage
-            count={section === 'wishlist' ? (wishlistCount ?? null) : shown.length}
+            count={section === 'wishlist' ? (wishlistCount ?? null) : shownCount}
             countLoading={section === 'wishlist' && wishlist.isLoading}
             filters={chips}
             title={t(copy.title.key)}
@@ -225,17 +320,31 @@ export const LbBotDownloadsPage = ({
                     <Fold name="resolve-link" open={downloadsShown}>
                         <ResolveLinkBox />
                     </Fold>
-                    {rows.length === 0 ? (
+                    {rows.length === 0 && shownCount === 0 ? (
                         <Text isMuted>{t(copy.empty.key)}</Text>
-                    ) : shown.length === 0 ? (
+                    ) : shownCount === 0 ? (
                         // A filter that hides everything must say it was the
                         // filter, not that there is nothing here.
                         <Text isMuted>{`Nothing matches "${FILTER_LABEL[filter]}".`}</Text>
                     ) : (
                         <Stack gap="sm">
-                            {shown.map((row) => (
-                                <FillRow key={row.key} now={now} row={row} />
-                            ))}
+                            {filter === 'needsYou'
+                                ? needYou.map((item) =>
+                                      item.ledger ? (
+                                          <FillRow
+                                              key={item.ledger.key}
+                                              now={now}
+                                              row={item.ledger}
+                                          />
+                                      ) : (
+                                          <ServerRow
+                                              key={`lb:${item.server!.releaseMbid || item.server!.groupId}`}
+                                              now={now}
+                                              req={item.server!}
+                                          />
+                                      ),
+                                  )
+                                : shown.map((row) => <FillRow key={row.key} now={now} row={row} />)}
                         </Stack>
                     )}
                 </>
