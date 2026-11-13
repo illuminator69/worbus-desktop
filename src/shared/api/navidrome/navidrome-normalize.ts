@@ -1,5 +1,6 @@
 import z from 'zod';
 
+import { navidromeVersionedImageId } from '/@/shared/api/navidrome/navidrome-image-id';
 import { ndType } from '/@/shared/api/navidrome/navidrome-types';
 import { coerceYear, parsePartialIsoDate } from '/@/shared/api/partial-iso-date';
 import { ssType } from '/@/shared/api/subsonic/subsonic-types';
@@ -281,7 +282,7 @@ const normalizeSong = (
             songCount: null,
         })),
         id,
-        imageId: id,
+        imageId: navidromeVersionedImageId(id, item.imageHash),
         imageUrl: null,
         lastPlayedAt: normalizePlayDate(item),
         libraryId: item.libraryId ?? null,
@@ -404,7 +405,7 @@ const normalizeAlbum = (
             songCount: null,
         })),
         id: item.id,
-        imageId: item.coverArtId || item.id,
+        imageId: navidromeVersionedImageId(item.coverArtId || item.id, item.imageHash),
         imageUrl: null,
         isCompilation: item.compilation,
         lastPlayedAt: normalizePlayDate(item),

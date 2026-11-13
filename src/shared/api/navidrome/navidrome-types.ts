@@ -608,6 +608,8 @@ const song = z.object({
     hasCoverArt: z.boolean(),
     id: z.string(),
     imageFiles: z.string().optional(),
+    /** B-428: the cover's version (its ETag); changes when the cover does. */
+    imageHash: z.string().optional(),
     largeImageUrl: z.string().optional(),
     libraryId: z.number().optional(),
     libraryName: z.string().optional(),

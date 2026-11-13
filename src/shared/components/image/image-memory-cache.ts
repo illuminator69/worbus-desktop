@@ -97,6 +97,8 @@ export class ImageMemoryCache {
     private readonly maxEntries: number;
     private readonly maxKeptBodyBytes: number;
     private readonly pinMs: number;
+    /** B-428: per key, the forget `version` its last revalidating fetch answered. */
+    private readonly revalidatedAt = new Map<string, number>();
     private smallBytes = 0;
     private readonly urls: UrlApi;
     private version = 0;
@@ -147,6 +149,18 @@ export class ImageMemoryCache {
     /** A version to pass to `put` as `since`: taken before a fetch starts (M2). */
     mark(): number {
         return this.version;
+    }
+
+    /**
+     * B-428: a Navidrome cover id carries its version (`<id>&_=<imageHash>`) and Navidrome answers
+     * the current one `immutable`, so Chromium's HTTP cache answers an old version's URL from disk.
+     * After `forgetItems` the cover is asked again under the id the app holds, which may still be
+     * the old version (the queue's songs, a list not refetched yet): its first fetch per key must
+     * revalidate. Returns the forget version to revalidate against, or 0 for an ordinary fetch.
+     */
+    mustRevalidate(key: string): number {
+        const forgot = this.forgottenAt.get(itemIdOf(key)) ?? 0;
+        return forgot > (this.revalidatedAt.get(key) ?? 0) ? forgot : 0;
     }
 
     /** Review M2: told the item ids `forgetItems` dropped. Returns the unsubscribe. */
@@ -222,6 +236,11 @@ export class ImageMemoryCache {
         if (entry.holders > 0) return;
         if (entry.detached) this.free(entry);
         else this.trim();
+    }
+
+    /** B-428: `key` was fetched revalidating since forget `version` (`mustRevalidate`). */
+    revalidated(key: string, version: number) {
+        if (version > (this.revalidatedAt.get(key) ?? 0)) this.revalidatedAt.set(key, version);
     }
 
     size() {
@@ -316,7 +335,9 @@ export const loadCachedImage = async (
     const kept = cache.take(key);
     if (kept) return kept;
     const since = cache.mark();
-    const blob = await fetchImage(request, init, {
+    // B-428: the first fetch of a forgotten cover revalidates (`mustRevalidate`).
+    const revalidate = cache.mustRevalidate(key);
+    const blob = await fetchImage(request, revalidate ? { ...init, cache: 'no-cache' } : init, {
         ...options,
         onLateImage: (late) => {
             const url = cache.put(key, late, { since });
@@ -325,5 +346,6 @@ export const loadCachedImage = async (
     });
     const url = cache.put(key, blob, { since });
     if (!url) throw new Error('Not an image');
+    if (revalidate) cache.revalidated(key, revalidate);
     return url;
 };
