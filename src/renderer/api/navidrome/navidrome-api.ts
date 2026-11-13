@@ -582,3 +582,22 @@ export const ndApiClient = (args: {
         jsonQuery: false,
     });
 };
+
+/**
+ * B-400 review M3: whether Navidrome takes this app's own session (`ndCredential`), asked with one
+ * cheap native request (one song, any user may list songs). The answer's status; undefined when
+ * there was none. A 401 goes through the interceptor above like any refused request (a readable
+ * saved password signs in again and the request is retried; an unreadable one asks for it).
+ */
+export const probeNativeSession = async (
+    server: ServerListItemWithCredential,
+): Promise<number | undefined> => {
+    try {
+        const res = await ndApiClient({ server }).getSongList({
+            query: { _end: 1, _order: 'ASC', _start: 0 },
+        });
+        return res.status;
+    } catch {
+        return undefined;
+    }
+};

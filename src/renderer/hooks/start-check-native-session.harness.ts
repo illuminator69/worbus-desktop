@@ -22,7 +22,6 @@ import * as savedPassword from '../../shared/utils/saved-password.ts';
 const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
 
 const rule = savedPassword as unknown as {
-    nativeSessionExpired?: (ndCredential: string | undefined, nowMs: number) => boolean;
     signInKey?: (server: {
         credential?: string;
         ndCredential?: string;
@@ -31,32 +30,9 @@ const rule = savedPassword as unknown as {
     }) => string;
 };
 
-const b64url = (value: object) =>
-    Buffer.from(JSON.stringify(value)).toString('base64url').replace(/=+$/, '');
-const jwt = (claims: object) => `${b64url({ alg: 'HS256', typ: 'JWT' })}.${b64url(claims)}.sig`;
-const NOW = Date.UTC(2026, 10, 12, 22, 25);
-
-test('an_expired_navidrome_session_reads_as_expired', () => {
-    assert.equal(typeof rule.nativeSessionExpired, 'function', 'no rule reads the native session');
-    const expired = jwt({ exp: Math.floor(NOW / 1000) - 3600, sub: 'icher' });
-    const live = jwt({ exp: Math.floor(NOW / 1000) + 3600, sub: 'icher' });
-    assert.equal(rule.nativeSessionExpired!(expired, NOW), true);
-    assert.equal(rule.nativeSessionExpired!(live, NOW), false);
-    // What cannot be read is not called expired: the server decides then, as before.
-    assert.equal(rule.nativeSessionExpired!(undefined, NOW), false);
-    assert.equal(rule.nativeSessionExpired!('not-a-jwt', NOW), false);
-    assert.equal(rule.nativeSessionExpired!(jwt({ sub: 'icher' }), NOW), false);
-});
-
-test('the_start_check_asks_about_the_session_the_library_uses', () => {
-    const hook = read('./use-server-authenticated.ts');
-    const valid = hook.indexOf('setReady(AuthState.VALID)');
-    const asked = hook.indexOf('nativeSessionExpired(');
-    assert.ok(
-        asked > 0 && asked < valid,
-        'the start check reads only getUserInfo (Subsonic) and declares the session valid',
-    );
-});
+// Review M3 (2026-11-13): the token's `exp` against the local clock was replaced by asking Navidrome
+// (`the_start_check_asks_navidrome_not_the_clock` below); the two clock tests that stood here went
+// with `nativeSessionExpired`.
 
 test('asking_for_the_password_keeps_the_library_unmounted', () => {
     const hook = read('./use-server-authenticated.ts');

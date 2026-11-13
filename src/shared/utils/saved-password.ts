@@ -42,24 +42,17 @@ export const signInKey = (server: Omit<AskedServer, 'id'>): string =>
     ]);
 
 /**
- * B-400: Navidrome's own session (`ndCredential`, a JWT the library pages send) has expired by its
- * `exp` claim. The start check asks the Subsonic API, whose token outlives it: a profile copied or
- * left closed past the session's lifetime passed that check and then had every library query
- * refused. A credential that cannot be read (absent, not a JWT, no `exp`) is not called expired;
- * the server decides then, as before.
+ * B-400 (review M3): what one native request's answer says about this app's Navidrome session. The
+ * start check asks Navidrome (`probeNativeSession`) rather than reading the token's expiry against
+ * this computer's clock: 401 or 403 is a refusal, for whatever reason; 2xx is a session; anything
+ * else (no answer, a server error) says nothing, and the start goes on as before.
  */
-export const nativeSessionExpired = (ndCredential: string | undefined, nowMs: number): boolean => {
-    const payload = ndCredential?.split('.')[1];
-    if (!payload) return false;
-    try {
-        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-        const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
-        const claims = JSON.parse(atob(padded)) as { exp?: unknown };
-        return typeof claims.exp === 'number' && claims.exp * 1000 <= nowMs;
-    } catch {
-        return false;
-    }
-};
+export const nativeProbeVerdict = (status: number | undefined): 'ok' | 'refused' | 'unknown' =>
+    status === 401 || status === 403
+        ? 'refused'
+        : status !== undefined && status >= 200 && status < 300
+          ? 'ok'
+          : 'unknown';
 
 /**
  * B-338: open the server's sign-in form for a refused session whose saved password cannot be read,

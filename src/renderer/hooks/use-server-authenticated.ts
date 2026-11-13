@@ -7,6 +7,7 @@ import { useNavigate } from 'react-router';
 
 import { api } from '/@/renderer/api';
 import { controller } from '/@/renderer/api/controller';
+import { probeNativeSession } from '/@/renderer/api/navidrome/navidrome-api';
 import { askForPasswordAgain } from '/@/renderer/api/utils';
 import { AppRoute } from '/@/renderer/router/routes';
 import {
@@ -19,11 +20,7 @@ import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { ServerType } from '/@/shared/types/domain-types';
 import { AuthState } from '/@/shared/types/types';
-import {
-    nativeSessionExpired,
-    signInKey,
-    whenSessionRefused,
-} from '/@/shared/utils/saved-password';
+import { nativeProbeVerdict, signInKey, whenSessionRefused } from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -107,14 +104,15 @@ export const useServerAuthenticated = () => {
                     }
 
                     // B-400: getUserInfo asks the Subsonic API, whose token outlives Navidrome's own
-                    // session; the library pages use the latter. An expired one is a refused
-                    // session, handled below like a 401, before anything is mounted.
+                    // session; the library pages use the latter. Ask it once (review M3: not the
+                    // token's expiry against this clock); a refusal is handled below like a 401,
+                    // before anything is mounted.
                     if (
                         serverWithAuth.type === ServerType.NAVIDROME &&
-                        nativeSessionExpired(serverWithAuth.ndCredential, Date.now())
+                        nativeProbeVerdict(await probeNativeSession(serverWithAuth)) === 'refused'
                     ) {
                         throw Object.assign(
-                            new Error('Unauthorized: the Navidrome session has expired'),
+                            new Error('Unauthorized: Navidrome refused the session'),
                             { response: { status: 401 } },
                         );
                     }
