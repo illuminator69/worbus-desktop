@@ -46,7 +46,7 @@ test('imports_counted_in_to_fix', () => {
     // The badge reads it.
     assert.match(
         read('src/renderer/features/sidebar/components/sidebar-groups.tsx'),
-        /toFixCount\(ledger, attention\)/,
+        /toFixCount\(ledger, attention, downloadsOn\)/,
     );
 });
 
@@ -130,8 +130,13 @@ test('the row says the fixed sentences, and its button opens the system browser'
     const row = read('src/renderer/features/lbbot/components/imports-row.tsx');
     // A `_blank` window is handed to shell.openExternal by main's setWindowOpenHandler.
     assert.match(row, /target="_blank"/);
+    // B-406: the row is the To fix section's first, on the Downloads page.
+    assert.match(
+        read('src/renderer/features/lbbot/components/to-fix-section.tsx'),
+        /<ImportsRow \/>/,
+    );
     assert.match(
         read('src/renderer/features/lbbot/routes/lbbot-downloads-route.tsx'),
-        /<ImportsRow \/>/,
+        /<ToFixSection \/>/,
     );
 });

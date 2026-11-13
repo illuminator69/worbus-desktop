@@ -1,3 +1,5 @@
+import type { LbBotAttentionFolder } from '../../../shared/utils/lbbot-attention.ts';
+
 import { hostOfAddress } from '../../../shared/utils/hub-addresses.ts';
 import { attentionCount } from '../sidebar/utils/sidebar-groups.ts';
 
@@ -22,12 +24,33 @@ export const lbPageLink = (
     activeAddress: null | string | undefined,
     isPrivate: (address: string) => boolean,
 ): null | string => {
+    const base = lbPageBase(webUrl, activeAddress, isPrivate);
+    return base ? `${base}${IMPORTS_PATH}` : null;
+};
+
+/** lb-bot's page, by `lbPageLink`'s rule, with no path; null: nowhere to open. */
+const lbPageBase = (
+    webUrl: null | string | undefined,
+    activeAddress: null | string | undefined,
+    isPrivate: (address: string) => boolean,
+): null | string => {
     const web = (webUrl ?? '').trim().replace(/\/+$/, '');
-    if (/^https?:\/\/[^/]/i.test(web)) return `${web}${IMPORTS_PATH}`;
+    if (/^https?:\/\/[^/]/i.test(web)) return web;
     if (!activeAddress || !isPrivate(activeAddress)) return null;
     const host = hostOfAddress(activeAddress);
     if (!host) return null;
-    return `http://${host.includes(':') ? `[${host}]` : host}:${LB_PAGE_PORT}${IMPORTS_PATH}`;
+    return `http://${host.includes(':') ? `[${host}]` : host}:${LB_PAGE_PORT}`;
+};
+
+/** B-406: where a folder waiting to be filed opens: lb-bot's Placement on it (PROTOCOL §15.6). */
+export const lbPlaceLink = (
+    webUrl: null | string | undefined,
+    activeAddress: null | string | undefined,
+    isPrivate: (address: string) => boolean,
+    id: string,
+): null | string => {
+    const base = lbPageBase(webUrl, activeAddress, isPrivate);
+    return base && id ? `${base}/#/place/${encodeURIComponent(id)}` : null;
 };
 
 /**
@@ -42,11 +65,68 @@ export const attentionImports = (answer: unknown): number => {
     return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : 0;
 };
 
-/** The to-fix number (the sidebar's badge): the ledger's own failures, plus the imports. */
+/**
+ * `counts.folders` from a `/lb/attention` answer (B-406): the download folders waiting to be
+ * filed; a whole number at or above 0, else 0.
+ */
+export const attentionFolderCount = (answer: unknown): number => {
+    const counts =
+        answer && typeof answer === 'object' ? (answer as Record<string, unknown>).counts : null;
+    const n =
+        counts && typeof counts === 'object' ? (counts as Record<string, unknown>).folders : 0;
+    return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : 0;
+};
+
+/**
+ * The to-fix number (the sidebar's badge): the ledger's own failures, plus the imports and (B-406,
+ * the phone's units) the folders waiting to be filed, while downloading is on (off, the page lists
+ * no folder: filing one is a download's last step).
+ */
 export const toFixCount = (
     ledger: readonly { outcome: string; settled: boolean }[],
     attention: unknown,
-): number => attentionCount(ledger) + attentionImports(attention);
+    downloadsOn = true,
+): number =>
+    attentionCount(ledger) +
+    attentionImports(attention) +
+    (downloadsOn ? attentionFolderCount(attention) : 0);
+
+/**
+ * B-406: the To fix section, as the phone has it: its number is lb-bot's `imports + folders`
+ * (counts, not the rows listed), the folders listed as main allowlisted them, `moreFolders` the
+ * rows lb-bot's cap cut. Downloading off: no folder is listed or counted.
+ */
+export const toFixSection = (
+    attention: unknown,
+    downloadsOn: boolean,
+): { count: number; folders: LbBotAttentionFolder[]; imports: number; moreFolders: number } => {
+    const imports = attentionImports(attention);
+    const a =
+        attention && typeof attention === 'object' ? (attention as Record<string, unknown>) : {};
+    const listed = Array.isArray(a.folders) ? (a.folders as LbBotAttentionFolder[]) : [];
+    const folders = downloadsOn ? listed : [];
+    const cut = typeof a.foldersCut === 'number' && a.foldersCut > 0 ? a.foldersCut : 0;
+    const counted = downloadsOn ? attentionFolderCount(attention) : 0;
+    return {
+        count: imports + counted,
+        folders,
+        imports,
+        moreFolders: downloadsOn ? Math.max(cut, counted - folders.length, 0) : 0,
+    };
+};
+
+/** B-406: what a folder is: lb-bot's "Artist - Album" when it identified one. */
+export const folderTitle = (folder: LbBotAttentionFolder): string =>
+    (folder.identified && folder.matchLabel.trim()) || 'Unidentified folder';
+
+/** B-406: how many files and lb-bot's word for their format ("11 files · FLAC"). */
+export const folderDetail = (folder: LbBotAttentionFolder): string =>
+    [
+        `${folder.fileCount} ${folder.fileCount === 1 ? 'file' : 'files'}`,
+        folder.formats.trim().toUpperCase(),
+    ]
+        .filter(Boolean)
+        .join(' · ');
 
 /** The row, shown only when there is something to fix. */
 export const importsRow = (

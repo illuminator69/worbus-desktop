@@ -98,6 +98,11 @@ import {
     toPreview,
     toSiblingGroups,
 } from '/@/shared/utils/lbbot-album-wire';
+import {
+    attentionFolders,
+    attentionFoldersCut,
+    type LbBotAttentionFolder,
+} from '/@/shared/utils/lbbot-attention';
 import { describeFailure, isOlderScanRefusal, refusalCode } from '/@/shared/utils/lbbot-failure';
 import { LB_ANSWERED } from '/@/shared/utils/lbbot-mode';
 import { hasMetaFields, normalizeLbBotWebUrl } from '/@/shared/utils/lbbot-wire';
@@ -2632,19 +2637,31 @@ const toWishlistEntry = (row: unknown): LbBotWishlistEntry[] => {
 // an empty wishlist is a perfectly ordinary state, so the page would simply have
 // said "nothing on the wishlist" forever.
 
-// Worbus P4 (design §6.5): Needs attention reads only `counts` from `/lb/attention` (its
-// `imports`, the albums lb-bot could not finish filing). Only the numbers cross to the renderer;
-// null (an older hub or lb-bot, a refusal, a non-admin) reads as no imports.
-ipcMain.handle('lbbot-attention-counts', async (): Promise<null | Record<string, number>> => {
-    const data = await get('/lb/attention');
-    const counts = data?.counts;
-    if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
-    return Object.fromEntries(
-        Object.entries(counts as Json).filter(
-            (entry): entry is [string, number] => typeof entry[1] === 'number',
-        ),
-    );
-});
+// Worbus P4 (design §6.5): Needs attention reads `counts` from `/lb/attention` (its `imports`, the
+// albums lb-bot could not finish filing) and, B-406, the folders waiting to be filed, allowlisted
+// (`attentionFolders`: never a folder's name or path). null (an older hub or lb-bot, a refusal, a
+// non-admin) reads as nothing to fix.
+ipcMain.handle(
+    'lbbot-attention-counts',
+    async (): Promise<null | {
+        counts: Record<string, number>;
+        folders: LbBotAttentionFolder[];
+        foldersCut: number;
+    }> => {
+        const data = await get('/lb/attention');
+        const counts = data?.counts;
+        if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
+        return {
+            counts: Object.fromEntries(
+                Object.entries(counts as Json).filter(
+                    (entry): entry is [string, number] => typeof entry[1] === 'number',
+                ),
+            ),
+            folders: attentionFolders(data),
+            foldersCut: attentionFoldersCut(data),
+        };
+    },
+);
 
 ipcMain.handle('lbbot-wishlist', async (): Promise<LbBotWishlist> => {
     const data = await get('/lb/wishlist');

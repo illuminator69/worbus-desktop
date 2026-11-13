@@ -41,6 +41,7 @@ import type {
     LbBotUnowned,
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
+import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import {
     keepPreviousData,
@@ -3618,12 +3619,25 @@ export const useLbBotAttention = () => {
     const available = useLbBotAvailable();
     const supported = useHubSupports('GET /lb/attention');
     const admin = allows(useHubRoles(), 'needsAttention');
-    const query = useQuery<null | { counts: Record<string, number> }>({
+    const query = useQuery<null | {
+        counts: Record<string, number>;
+        folders: LbBotAttentionFolder[];
+        foldersCut: number;
+    }>({
         enabled: !!lbBot && available && supported && admin,
         gcTime: 5 * 60 * 1000,
         queryFn: async () => {
-            const counts = await lbBot!.attentionCounts();
-            return counts ? { counts } : null;
+            const answer: unknown = await lbBot!.attentionCounts();
+            if (!answer || typeof answer !== 'object') return null;
+            // B-406: the counts with the folders; a main from before them sent the counts alone.
+            const a = answer as Record<string, unknown>;
+            return 'counts' in a
+                ? (answer as {
+                      counts: Record<string, number>;
+                      folders: LbBotAttentionFolder[];
+                      foldersCut: number;
+                  })
+                : { counts: a as Record<string, number>, folders: [], foldersCut: 0 };
         },
         queryKey: ['lbbot', 'attention-counts'],
         refetchOnWindowFocus: true,

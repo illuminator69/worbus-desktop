@@ -42,6 +42,7 @@ import type {
     LbBotUnowned,
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
+import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import { ipcRenderer } from 'electron';
 
@@ -398,9 +399,13 @@ const wishlistAdd = (args: {
 const wishlistRemove = (rgid: string): Promise<LbBotResult<boolean>> =>
     ipcRenderer.invoke('lbbot-wishlist-remove', { rgid });
 
-/** Worbus P4: `/lb/attention`'s `counts` (numbers only), or null when lb-bot did not answer. */
-const attentionCounts = (): Promise<null | Record<string, number>> =>
-    ipcRenderer.invoke('lbbot-attention-counts');
+/** Worbus P4: `/lb/attention`'s `counts` (numbers only) and (B-406) its folders, allowlisted; null
+ *  when lb-bot did not answer. */
+const attentionCounts = (): Promise<null | {
+    counts: Record<string, number>;
+    folders: LbBotAttentionFolder[];
+    foldersCut: number;
+}> => ipcRenderer.invoke('lbbot-attention-counts');
 
 export const lbBot = {
     albumCovers,

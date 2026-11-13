@@ -98,9 +98,14 @@ export const useSidebarModel = (options?: {
     const sidebarItems = useSidebarItems();
     // Worbus P2: `hub.store.user`; no user (an older hub) shows everything, as today.
     const roles = useHubRoles();
-    // Worbus P4: lb-bot's imports that need you count in the badge with the ledger's failures.
+    // Worbus P4: lb-bot's imports that need you count in the badge with the ledger's failures;
+    // B-406: so do the folders waiting to be filed, while downloading is on.
     const attention = useLbBotAttention().data;
-    const count = useMemo(() => toFixCount(ledger, attention), [ledger, attention]);
+    const downloadsOn = useLbBotDownloadsShown();
+    const count = useMemo(
+        () => toFixCount(ledger, attention, downloadsOn),
+        [ledger, attention, downloadsOn],
+    );
 
     return useMemo(() => {
         const label = (id: string, fallback?: string) =>

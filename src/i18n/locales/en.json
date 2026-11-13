@@ -2039,6 +2039,12 @@
             "title_one": "{{count}} import needs you",
             "title_other": "{{count}} imports need you"
         },
+        "toFix": {
+            "folderAway": "Open lb-bot's page on your home network to file it.",
+            "folderOpen": "Open in lb-bot",
+            "more": "and {{count}} more in lb-bot",
+            "title": "To fix ({{count}})"
+        },
         "indexProgress": {
             "counts": "Indexing your library · {{left}} of {{total}} artists left",
             "countsWithCurrent": "Indexing your library · {{left}} of {{total}} artists left · {{current}}",
