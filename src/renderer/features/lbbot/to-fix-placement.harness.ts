@@ -126,7 +126,7 @@ test('the_section_moved_and_says_what_it_counts', () => {
     assert.match(page, /<ToFixSection/, 'Library Matches has no To fix');
     const sidebar = read('src/renderer/features/sidebar/components/sidebar-groups.tsx');
     // The owner, 2026-11-13: every client's requests (need-you.harness.ts).
-    assert.match(sidebar, /attentionCount: needYouCount\(ledger, activity\)/);
+    assert.match(sidebar, /attentionCount: needYou\.length/);
     assert.match(sidebar, /toFixCount: libraryToFixCount\(attention, downloadsOn\)/);
     const en = JSON.parse(read('src/i18n/locales/en.json'));
     // The badge's own words, on hover and to a screen reader.
