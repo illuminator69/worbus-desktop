@@ -17,7 +17,11 @@ import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/
 import { useSongUrl } from '/@/renderer/features/player/audio-player/hooks/use-stream-url';
 import { PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
-import { webEngineReady } from '/@/renderer/features/player/hooks/startup-seek';
+import {
+    createHeldSeek,
+    engineTakesSeekNow,
+    webEngineReady,
+} from '/@/renderer/features/player/hooks/startup-seek';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
 import {
     playPosition,
@@ -38,6 +42,16 @@ import { CrossfadeStyle, PlayerRepeat, PlayerStatus, PlayerStyle } from '/@/shar
 const PLAY_PAUSE_FADE_DURATION = 300;
 const PLAY_PAUSE_FADE_INTERVAL = 10;
 
+/** B-402: a stream URL as the element reports its `src` (resolved against the page). */
+const absoluteUrl = (url: string | undefined): string | undefined => {
+    if (!url) return undefined;
+    try {
+        return new URL(url, window.location.href).href;
+    } catch {
+        return url;
+    }
+};
+
 export function WebPlayer() {
     const playerRef = useRef<null | WebPlayerEngineHandle>(null);
     const { t } = useTranslation();
@@ -55,6 +69,8 @@ export function WebPlayer() {
     const transcode = useEffectiveTranscode();
 
     const pendingLocalSeekRef = useRef(-1);
+    // B-402: a seek sent before this player's element is up (a fresh start), held for its ready.
+    const heldSeekRef = useRef(createHeldSeek());
 
     const [localPlayerStatus, setLocalPlayerStatus] = useState<PlayerStatus>(() => {
         if (playerHandoff.pendingLocalSeek > 0) {
@@ -334,17 +350,23 @@ export function WebPlayer() {
                     }
                 }
 
-                let type: 'fraction' | 'seconds' | undefined = undefined;
+                const toElement = (at: number) => {
+                    let type: 'fraction' | 'seconds' | undefined = undefined;
 
-                if (timestamp < 1) {
-                    type = 'seconds';
-                }
+                    if (at < 1) {
+                        type = 'seconds';
+                    }
 
-                if (num === 1) {
-                    playerRef.current?.player1()?.ref?.seekTo(timestamp, type);
-                } else {
-                    playerRef.current?.player2()?.ref?.seekTo(timestamp, type);
-                }
+                    if (num === 1) {
+                        playerRef.current?.player1()?.ref?.seekTo(at, type);
+                    } else {
+                        playerRef.current?.player2()?.ref?.seekTo(at, type);
+                    }
+                };
+
+                // B-402: before the element is up, the seek went to a null ref and was lost (a
+                // transfer to a fresh desktop played from 0 s); it is held for the element's ready.
+                heldSeekRef.current.send(timestamp, engineTakesSeekNow(true), toElement);
             },
             onPlayerStatus: async (properties) => {
                 setIsTransitioning(false);
@@ -536,8 +558,16 @@ export function WebPlayer() {
 
     const applyPendingSeekIfNeeded = useCallback(
         (reactPlayer: ReactPlayer, activeSlot: 1 | 2) => {
-            if (pendingLocalSeekRef.current <= 0) return;
             if (activeSlot !== num) return;
+            // B-402: a seek held before the element was up, for this element if it is the current
+            // song's source (not the previous song's finishing its load).
+            const internal = reactPlayer.getInternalPlayer() as HTMLMediaElement | undefined;
+            heldSeekRef.current.ready(
+                internal?.src || undefined,
+                absoluteUrl(activeSlot === 1 ? player1Url : player2Url),
+                (at) => reactPlayer.seekTo(at, 'seconds'),
+            );
+            if (pendingLocalSeekRef.current <= 0) return;
             const seekTo = pendingLocalSeekRef.current;
             pendingLocalSeekRef.current = -1;
             reactPlayer.seekTo(seekTo, 'seconds');
@@ -546,7 +576,7 @@ export function WebPlayer() {
                 setLocalPlayerStatus(PlayerStatus.PLAYING);
             }
         },
-        [num, status, volume],
+        [num, player1Url, player2Url, status, volume],
     );
 
     const handlePlayer1Start = useCallback(

@@ -115,3 +115,40 @@ export const onWebEngineReady = (listener: (() => void) | null): void => {
 export const webEngineReady = (): void => {
     readyListener?.();
 };
+
+/**
+ * B-402: a seek for the web player's playing element. Up (`engineUp`, engineTakesSeekNow): sent at
+ * once, and anything held is dropped (the newer word). Not up yet (a fresh start: react-player not
+ * loaded or its element never ready): held, and applied when the element of the current song's
+ * source reports ready, before it plays. A ready from another source (the previous song's element
+ * finishing its load) leaves it held. Only the latest seek is held.
+ */
+export interface HeldSeek {
+    ready: (
+        readySrc: string | undefined,
+        currentSrc: string | undefined,
+        seek: (sec: number) => void,
+    ) => void;
+    send: (sec: number, engineUp: boolean, seek: (sec: number) => void) => void;
+}
+
+export const createHeldSeek = (): HeldSeek => {
+    let held: null | number = null;
+    return {
+        ready: (readySrc, currentSrc, seek) => {
+            if (held === null) return;
+            if (readySrc && currentSrc && readySrc !== currentSrc) return;
+            const at = held;
+            held = null;
+            seek(at);
+        },
+        send: (sec, engineUp, seek) => {
+            if (engineUp) {
+                held = null;
+                seek(sec);
+                return;
+            }
+            held = sec;
+        },
+    };
+};
