@@ -160,3 +160,17 @@ test('a_tap_is_one_navigation_the_latest_and_only_where_it_was_made', async () =
         );
     }
 });
+
+test('an_artist_on_others_albums_only_is_found_too', () => {
+    // VM walk edge (2026-11-13): a row with the SAME MBID as the library's Guest Star, who is only a
+    // track artist on The Hosts' album, stayed on the MusicBrainz page: the lookup searched album
+    // artists only, so `pickLibraryArtist` never saw a candidate. On a miss, Navidrome's artists of
+    // every role are asked too.
+    const hooks = readFileSync(new URL('../hooks/use-lbbot.ts', import.meta.url), 'utf8');
+    const resolve = hooks.slice(hooks.indexOf('export const useResolveLibraryArtistPath'));
+    assert.match(
+        resolve.slice(0, resolve.indexOf('\n};')),
+        /getArtistList\(/,
+        'only album artists are searched',
+    );
+});
