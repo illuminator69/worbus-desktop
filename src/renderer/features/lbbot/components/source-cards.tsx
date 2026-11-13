@@ -8,7 +8,7 @@ import { ReleasePill } from '/@/renderer/features/discography/components/release
 import {
     type CoverageText,
     coverageText,
-    folderName,
+    folderLabel,
     isSourceVerified,
     qualityLine,
     sourceRank,
@@ -238,7 +238,7 @@ export const SourceCards = ({
                                         ))}
                                     </span>
                                     <span className={styles.folder} title={source.folder}>
-                                        {folderName(source)}
+                                        {folderLabel(source)}
                                     </span>
                                     <span
                                         className={styles.coverage}

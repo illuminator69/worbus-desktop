@@ -105,6 +105,17 @@ export const folderName = (source: Pick<LbBotGapSource, 'folder' | 'peer'>): str
     source.folder.split(/[\\/]/).filter(Boolean).pop() || source.peer;
 
 /**
+ * B-418: what a card names a folder by: its last two path segments ("Debut Live / CD1"), since on
+ * Soulseek the last one is often a disc or format folder and its parent carries the words that tell
+ * folders apart. A share root (`@@…`) is not a name. The card's hover shows the full path. lb-bot
+ * sends a non-admin the last segment alone, which is shown as it is.
+ */
+export const folderLabel = (source: Pick<LbBotGapSource, 'folder' | 'peer'>): string => {
+    const parts = source.folder.split(/[\\/]/).filter((part) => part && !part.startsWith('@@'));
+    return parts.slice(-2).join(' / ') || source.peer;
+};
+
+/**
  * lb-bot's machine-readable reasons for refusing a Request because the card's list is gone (its
  * `/api/gaps/<id>/fetch`): `stale_source` (409), the card's folder is not in the list lb-bot holds
  * now (a newer search replaced it; B-360, source ids are folder identities); `no_sources`, there is
