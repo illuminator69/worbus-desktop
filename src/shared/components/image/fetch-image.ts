@@ -21,8 +21,17 @@ import { isImageBody } from './shown-stack.ts';
  * - **The wait grows** (1, 2, 4, 8, 16, then 30 s): a cover is asked again until it gets an image or
  *   a real error, for about two minutes (9 asks), then it is a failure. The re-walk of
  *   `a96a9de17` lost two rows to the old three asks in ~4 s.
+ * - **Every cover ends** (review M1): a re-ask unanswered after `REASK_TIMEOUT_MS` is cancelled
+ *   (it is not a working writer of the shared entry by then) and counts as one more empty answer;
+ *   a row that goes away gives the lane back at once; and the whole cover, waiting for the lane
+ *   included, has `GIVE_UP_AFTER_MS`, after which it is a failure (the empty-art icon). One stalled
+ *   re-ask used to hold the lane for good and leave every other emptied row on that server loading.
  */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000];
+/** A re-ask with no answer after this is cancelled and counts as empty (review M1). */
+export const REASK_TIMEOUT_MS = 20_000;
+/** A cover with no image after this, its waits and lane waiting included, is a failure. */
+export const GIVE_UP_AFTER_MS = 150_000;
 const MAX_IN_FLIGHT = 4;
 const MAX_REASKS_IN_FLIGHT = 1;
 
@@ -92,14 +101,18 @@ const acquire = (
         server.waiting.push(waiter);
     });
 
-type Answer = { blob: Blob | null; ok: boolean; status: number; type: string };
+type Answer = { blob: Blob | null; ok: boolean; status: number; timedOut?: boolean; type: string };
 
-/** One request, sent in a slot and run to its end whatever the caller does. */
+/**
+ * One request, sent in a slot and run to its end whatever the caller does; `timeoutMs` (a re-ask's,
+ * or the budget for a first ask) is the one thing that cancels it.
+ */
 const ask = async (
     request: { credentials?: RequestCredentials; headers?: HeadersInit; url: string },
     init: Omit<RequestInit, 'signal'>,
     reload: boolean,
-    signal: AbortSignal | null | undefined,
+    signal: AbortSignal,
+    timeoutMs: number,
 ): Promise<Answer> => {
     const origin = new URL(request.url).origin;
     // A re-ask waits for the server's re-ask lane first, then for one of its slots.
@@ -111,10 +124,17 @@ const ask = async (
         releaseLane?.();
         throw error;
     }
+    // Review M1: a row that goes away (or a cover past its budget) gives the lane back now; its
+    // request runs on in its slot until it ends or times out.
+    const onGone = () => releaseLane?.();
+    signal.addEventListener('abort', onGone, { once: true });
     const release = () => {
+        signal.removeEventListener('abort', onGone);
         releaseSlot();
         releaseLane?.();
     };
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), timeoutMs);
     const sent = (async (): Promise<Answer> => {
         try {
             const response = await fetch(request.url, {
@@ -122,11 +142,17 @@ const ask = async (
                 ...(reload ? { cache: 'reload' as RequestCache } : {}),
                 credentials: request.credentials,
                 headers: request.headers,
+                signal: timeout.signal,
             });
             const blob = response.ok ? await response.blob() : null;
             const type = blob?.type || response.headers.get('content-type') || '';
             return { blob, ok: response.ok, status: response.status, type };
+        } catch (error) {
+            if (timeout.signal.aborted)
+                return { blob: null, ok: false, status: 0, timedOut: true, type: '' };
+            throw error;
         } finally {
+            clearTimeout(timer);
             release();
         }
     })();
@@ -138,23 +164,42 @@ const ask = async (
 export const fetchImage = async (
     request: { credentials?: RequestCredentials; headers?: HeadersInit; url: string },
     init: RequestInit & { priority?: 'auto' | 'high' | 'low' },
-    options: { delaysMs?: number[] } = {},
+    options: { budgetMs?: number; delaysMs?: number[]; reaskTimeoutMs?: number } = {},
 ): Promise<Blob> => {
     const delays = options.delaysMs ?? RETRY_DELAYS_MS;
-    const { signal, ...rest } = init;
-    for (let attempt = 0; ; attempt += 1) {
-        const answer = await ask(request, rest, attempt > 0, signal);
-        const transient = answer.status === 429 || answer.status >= 500;
-        if (!answer.ok && !transient) {
-            throw new Error(`Failed to load image: ${answer.status}`);
+    const budgetMs = options.budgetMs ?? GIVE_UP_AFTER_MS;
+    const reaskTimeoutMs = options.reaskTimeoutMs ?? REASK_TIMEOUT_MS;
+    const { signal: callerSignal, ...rest } = init;
+    // Review M1: the cover's budget, from its first ask; lane and slot waiting count in it.
+    const budget = new AbortController();
+    const budgetTimer = setTimeout(
+        () => budget.abort(new Error(`No image within ${budgetMs} ms`)),
+        budgetMs,
+    );
+    const signal = callerSignal ? AbortSignal.any([callerSignal, budget.signal]) : budget.signal;
+    try {
+        for (let attempt = 0; ; attempt += 1) {
+            const answer = await ask(
+                request,
+                rest,
+                attempt > 0,
+                signal,
+                attempt > 0 ? reaskTimeoutMs : budgetMs,
+            );
+            const transient = answer.status === 429 || answer.status >= 500 || !!answer.timedOut;
+            if (!answer.ok && !transient) {
+                throw new Error(`Failed to load image: ${answer.status}`);
+            }
+            if (answer.blob && answer.blob.size > 0 && isImageBody(answer.type)) return answer.blob;
+            // A document under 200 (a Subsonic error) is the server's answer, not a hiccup.
+            if (answer.blob && answer.blob.size > 0)
+                throw new NotAnImage(`Not an image: ${answer.type}`);
+            if (attempt >= delays.length) {
+                throw new Error(`No image after ${attempt + 1} answers (${answer.status}, empty)`);
+            }
+            await sleep(delays[attempt], signal);
         }
-        if (answer.blob && answer.blob.size > 0 && isImageBody(answer.type)) return answer.blob;
-        // A document under 200 (a Subsonic error) is the server's answer, not a hiccup.
-        if (answer.blob && answer.blob.size > 0)
-            throw new NotAnImage(`Not an image: ${answer.type}`);
-        if (attempt >= delays.length) {
-            throw new Error(`No image after ${attempt + 1} answers (${answer.status}, empty)`);
-        }
-        await sleep(delays[attempt], signal);
+    } finally {
+        clearTimeout(budgetTimer);
     }
 };
