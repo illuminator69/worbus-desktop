@@ -225,3 +225,218 @@ test('the_native_image_reads_the_memory_cache', () => {
     const image = readFileSync(new URL('./image.tsx', import.meta.url), 'utf8');
     assert.match(image, /imageMemoryCache\.forget\(/, 'a cover that will not decode is not kept');
 });
+
+type CacheM1 = Cache & { size: () => { bytes: number; entries: number; largeBytes: number } };
+/**
+ * Review of `99477e450` (REVIEW-second-rewalk-desktop-2026-11-13), M1: the full-screen player asks
+ * for every song's cover at its original size (`imageRes.fullScreenPlayer: 0`, no `size`), and
+ * originals run to megabytes. In one byte budget they pushed out hundreds of list covers, so
+ * scroll-back blanked and asked again: the owner's complaint, back.
+ */
+type Limits = {
+    largeBodyBytes?: number;
+    largeMaxBytes?: number;
+    maxBytes?: number;
+    maxEntries?: number;
+    maxKeptBodyBytes?: number;
+    pinMs?: number;
+};
+
+test('full_size_and_very_large_covers_do_not_flush_list_covers', async () => {
+    const m = (await load()) as unknown as null | {
+        ImageMemoryCache: new (limits?: Limits) => CacheM1;
+    };
+    assert.ok(m, 'no memory cache');
+    const image = (n: number) => new Blob([Buffer.alloc(n, 1)], { type: 'image/jpeg' });
+    const list = (i: number) => ['subsonic', 'srv', '', `G${i}`, 80].join(':');
+    const original = (id: string) => ['subsonic', 'srv', '', id, ''].join(':');
+
+    // The reviewer's probe: 400 released 100 KB grid covers, then one held 40 MiB cover.
+    const cache = new m.ImageMemoryCache();
+    for (let i = 0; i < 400; i += 1) cache.release(cache.put(list(i), image(100_000))!);
+    const big = cache.put(original('song-big'), image(40 * 1024 * 1024));
+    assert.ok(big, 'a very large cover is still shown');
+    assert.ok(alive(big!), 'and alive while its element holds it');
+    let kept = 0;
+    for (let i = 0; i < 400; i += 1) if (cache.peek(list(i))) kept += 1;
+    assert.equal(kept, 400, `list covers kept after one 40 MiB cover: ${kept} of 400`);
+    cache.release(big!);
+    assert.equal(cache.peek(original('song-big')), undefined, 'a 40 MiB body is not kept');
+    assert.ok(!alive(big!), 'and its bytes go when its element lets go');
+
+    // A listening session with the full-screen player: a dozen originals of a few MiB each.
+    for (let s = 0; s < 12; s += 1) {
+        cache.release(cache.put(original(`song-${s}`), image(5 * 1024 * 1024))!);
+    }
+    kept = 0;
+    for (let i = 0; i < 400; i += 1) if (cache.peek(list(i))) kept += 1;
+    assert.equal(kept, 400, `list covers kept after 12 full-size covers: ${kept} of 400`);
+    assert.ok(cache.peek(original('song-11')), 'the newest original is kept (its own budget)');
+    assert.ok(cache.size().largeBytes <= 32 * 1024 * 1024, `large ${cache.size().largeBytes}`);
+
+    // An unsized (full-size) cover is in the small budget even when its body is small.
+    const tiny = new m.ImageMemoryCache({ largeMaxBytes: 1000, maxBytes: 1_000_000 });
+    for (let s = 0; s < 5; s += 1) tiny.release(tiny.put(original(`o${s}`), image(400))!);
+    assert.ok(tiny.size().largeBytes <= 1000);
+    assert.equal(tiny.peek(original('o0')), undefined, 'the oldest original went');
+});
+
+/**
+ * Review L1: a remount's first render showed a URL nobody held (`peek`); another row's `put` before
+ * the effect could revoke it under the <img>. `pin` holds it until the element's effect takes it,
+ * and lets go by itself if no effect ever comes (a render React threw away).
+ */
+test('a_cover_on_a_first_render_is_not_revoked_before_its_effect_holds_it', async () => {
+    const m = (await load()) as unknown as null | {
+        ImageMemoryCache: new (limits?: Limits) => Cache & {
+            holdCount: () => number;
+            pin: (key: string) => undefined | { unpin: () => void; url: string };
+        };
+    };
+    assert.ok(m, 'no memory cache');
+    const image = () => new Blob([Buffer.alloc(10, 1)], { type: 'image/jpeg' });
+    const cache = new m.ImageMemoryCache({ maxEntries: 2, pinMs: 30 });
+    assert.equal(typeof cache.pin, 'function', 'no pin: the first render holds nothing');
+    const onScreen = cache.put('x', image())!;
+    const shownBefore = cache.put('a', image())!;
+    cache.release(shownBefore);
+    const pinned = cache.pin('a')!; // the remount's first render: <img src=pinned.url>
+    assert.equal(pinned.url, shownBefore);
+    cache.release(cache.put('y', image())!); // another row's fetch lands before the effect
+    assert.ok(alive(pinned.url), 'pinned: not revoked under the first render');
+    const taken = cache.take('a');
+    assert.equal(taken, pinned.url, 'the effect takes the same cover');
+    pinned.unpin();
+    pinned.unpin(); // idempotent
+    cache.release(taken!);
+    cache.release(onScreen);
+    // A render thrown away: nobody takes it, and the pin lets go by itself.
+    cache.release(cache.put('b', image())!);
+    const orphan = cache.pin('b')!;
+    assert.equal(cache.holdCount(), 1);
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    assert.equal(cache.holdCount(), 0, 'an orphaned pin lets go');
+    assert.ok(orphan.url);
+});
+
+/**
+ * Review L3: a row that left mid-fetch rejected its caller, while the sent request ran to its end
+ * (B-412's rule) and its bytes were dropped; scroll-back asked again. A late image is kept.
+ */
+test('a_request_that_ends_after_its_row_left_is_kept', async () => {
+    let asked = 0;
+    const server = createServer((_req, res) => {
+        asked += 1;
+        setTimeout(() => {
+            res.setHeader('Cache-Control', 'public, no-cache');
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.end(JPEG);
+        }, 150);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    try {
+        const m = await load();
+        assert.ok(m, 'no memory cache');
+        const cache = new m.ImageMemoryCache();
+        const request = cover(`http://127.0.0.1:${port}`, 'G07', 'late');
+        const row = new AbortController();
+        const pending = m.loadCachedImage(request, { signal: row.signal }, {}, cache);
+        setTimeout(() => row.abort(), 40); // the row scrolls away while the cover is in flight
+        await assert.rejects(pending);
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        assert.ok(cache.peek(request.cacheKey), 'the late image is kept');
+        const again = await m.loadCachedImage(request, {}, {}, cache);
+        assert.equal(asked, 1, 'scroll-back asks nothing');
+        cache.release(again);
+    } finally {
+        server.close();
+    }
+});
+
+/**
+ * Review M2: a cover changed from inside the app (lb-bot's album override "cover only", an override,
+ * an undo) kept its old image all session. Navidrome 0.64.2 answers a cover `Cache-Control: public,
+ * no-cache` with an ETag that carries the album's update time (measured on the VM's stand-in), so
+ * before the memory cache every remount revalidated and picked the new one up. `forgetItems` drops
+ * every size of the named items, tells the elements showing them, and a fetch that was in flight
+ * when they were forgotten is shown but not kept.
+ */
+test('a_changed_cover_is_forgotten_at_every_size', async () => {
+    const m = (await load()) as unknown as null | {
+        ImageMemoryCache: new (limits?: Limits) => Cache & {
+            forgetItems: (ids: Iterable<string>) => void;
+            holdCount: () => number;
+            onForget: (listener: (ids: ReadonlySet<string>) => void) => () => void;
+        };
+        loadCachedImage: Module['loadCachedImage'];
+    };
+    assert.ok(m, 'no memory cache');
+    const cache = new m.ImageMemoryCache();
+    assert.equal(typeof cache.forgetItems, 'function', 'nothing forgets a changed cover');
+    const image = () => new Blob([Buffer.alloc(10, 1)], { type: 'image/jpeg' });
+    const key = (id: string, size: number | string) =>
+        ['subsonic', 'srv', 'http://nd:4533', id, size].join(':');
+    const held = cache.put(key('AL1', 300), image())!;
+    for (const k of [key('AL1', 80), key('AL1', ''), key('SONG1', 80), key('AL2', 80)]) {
+        cache.release(cache.put(k, image())!);
+    }
+    const heard: string[][] = [];
+    const stop = cache.onForget((ids) => heard.push([...ids]));
+    cache.forgetItems(['AL1', 'SONG1']);
+    stop();
+    for (const k of [key('AL1', 80), key('AL1', ''), key('AL1', 300), key('SONG1', 80)]) {
+        assert.equal(cache.peek(k), undefined, `${k} forgotten`);
+    }
+    assert.ok(cache.peek(key('AL2', 80)), 'another album is kept');
+    assert.deepEqual(heard, [['AL1', 'SONG1']], 'the elements are told');
+    assert.ok(alive(held), 'still on screen: not revoked under its element');
+    cache.release(held);
+    assert.ok(!alive(held));
+
+    // In flight when forgotten: shown, not kept (it may be the old cover).
+    let answer: (() => void) | undefined;
+    const server = createServer((_req, res) => {
+        answer = () => {
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.end(JPEG);
+        };
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    try {
+        const request = cover(`http://127.0.0.1:${port}`, 'AL3', 'x');
+        const pending = m.loadCachedImage(request, {}, {}, cache);
+        while (!answer) await new Promise((resolve) => setTimeout(resolve, 5));
+        cache.forgetItems(['AL3']);
+        answer();
+        const url = await pending;
+        assert.ok(alive(url), 'shown');
+        assert.equal(cache.peek(request.cacheKey), undefined, 'not kept');
+        cache.release(url);
+        assert.ok(!alive(url));
+        assert.equal(cache.holdCount(), 0);
+    } finally {
+        server.close();
+    }
+});
+
+/**
+ * M2's callers: the album override dialog's cover-only save, the end of an override or undo job
+ * (from the dialog or Library Matches), and the `library` frame lb-bot sends once Navidrome has
+ * rescanned the album (`albumIndexed` with its id).
+ */
+test('a_cover_changed_in_the_app_is_forgotten_where_it_changes', () => {
+    const read = (file: string) => readFileSync(new URL(file, import.meta.url), 'utf8');
+    const modal = read('../../../renderer/features/lbbot/components/album-match-modal.tsx');
+    const save = modal.slice(modal.indexOf('const saveCoverOnly'), modal.indexOf('const undo'));
+    assert.match(save, /forgetAlbumCovers\(\[albumId\]\)/, 'the cover-only save');
+    assert.match(
+        read('../../../renderer/features/lbbot/utils/leave-album.ts'),
+        /forgetAlbumCovers\(/,
+        'the end of an override or undo job',
+    );
+    const lbbot = read('../../../renderer/features/lbbot/hooks/use-lbbot.ts');
+    const refresh = lbbot.slice(lbbot.indexOf('export const useLbBotLibraryRefresh'));
+    assert.match(refresh, /forgetAlbumCovers\(ids\)/, "the library frame's albums");
+});

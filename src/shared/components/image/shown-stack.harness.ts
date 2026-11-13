@@ -168,3 +168,22 @@ test('wired_the_element_and_the_fetch_say_when_there_is_no_image', async () => {
         'a 200 with an XML body is loaded',
     );
 });
+
+/**
+ * Review L2 of `99477e450`: with the memory cache a cover keeps its URL, so an element flipped
+ * A → B → A gets A back while A's <img> (same key) is still mounted and loaded: it fires no new
+ * `load`. It must stay loaded, or the next change (C) has nothing to keep underneath and flashes.
+ */
+test('aBackToALoadedImageStaysLoaded', () => {
+    let list = markLoaded(showNext([], 'A', false), 'A');
+    list = showNext(list, 'B', false);
+    list = showNext(list, 'A', false);
+    assert.deepEqual(list, [{ fade: false, loaded: true, src: 'A' }]);
+    assert.deepEqual(
+        showNext(list, 'C', false).map((entry) => [entry.src, entry.loaded]),
+        [
+            ['A', true],
+            ['C', false],
+        ],
+    );
+});
