@@ -12,6 +12,7 @@ export interface SidebarContext {
      * admin surfaces; Activity follows `downloadsShown` (B-374).
      */
     admin?: boolean;
+    /** Activity's badge: the downloads that need you (the ledger's failures and picks). */
     attentionCount: number;
     /**
      * Worbus P1: lb-bot can download (its mode is not "off"; unknown = an older peer = true).
@@ -27,12 +28,20 @@ export interface SidebarContext {
     narrow: boolean;
     overridesSupported: boolean;
     routes: SidebarRoutes;
+    /**
+     * B-406 (the owner's ruling, 2026-11-13): Library Matches' badge, lb-bot's imports + folders to
+     * file (`libraryToFixCount`). It also offers Library Matches on a hub without the override
+     * routes, so the To fix list is never unreachable. Absent is 0.
+     */
+    toFixCount?: number;
     /** Worbus P1 (F3): the hub proxies `GET /lb/wishlist`. */
     wishlistSupported: boolean;
 }
 
 export interface SidebarEntry {
     badge?: number;
+    /** B-406: what the badge counts, in words (the component's i18n; hover and screen reader). */
+    badgeLabel?: string;
     id: string;
     label: string;
     route: string;
@@ -98,10 +107,10 @@ export const sidebarGroups = (
     if (lb) main.push({ id: 'fresh', label: 'Fresh', route: routes.fresh });
 
     const you: SidebarEntry[] = [];
-    // B-374: one entry for the one page (/downloads, its Needs attention section first). The
-    // attention count is an admin's, so it is their badge. Downloading off: nothing new is
-    // fetched, so Activity stays only for an admin while the ledger holds failures from an
-    // earlier "on" period, which would otherwise be unreachable.
+    // B-374: one entry for the one page (/downloads). The attention count (B-406: the downloads
+    // that need you, nothing of lb-bot's own to-fix) is an admin's, so it is their badge.
+    // Downloading off: nothing new is fetched, so Activity stays only for an admin while the
+    // ledger holds failures from an earlier "on" period, which would otherwise be unreachable.
     const admin = ctx.admin !== false;
     const attention = admin && ctx.attentionCount > 0;
     if (lb && (ctx.downloadsShown || attention)) {
@@ -123,9 +132,18 @@ export const sidebarGroups = (
     }
     listening.push({ id: 'savedQueues', label: 'Saved queues', route: routes.savedQueues });
 
+    // B-406: Library Matches holds the To fix list too, with its own badge.
+    const toFix = admin ? (ctx.toFixCount ?? 0) : 0;
     const libraryTools: SidebarEntry[] =
-        lb && admin && ctx.overridesSupported
-            ? [{ id: 'libraryMatches', label: 'Library Matches', route: routes.libraryMatches }]
+        lb && admin && (ctx.overridesSupported || toFix > 0)
+            ? [
+                  {
+                      id: 'libraryMatches',
+                      label: 'Library Matches',
+                      route: routes.libraryMatches,
+                      ...(toFix > 0 ? { badge: toFix } : {}),
+                  },
+              ]
             : [];
 
     const app: SidebarEntry[] = [{ id: 'settings', label: 'Settings', route: routes.settings }];

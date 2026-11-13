@@ -879,6 +879,12 @@
             "statistics": "Statistics",
             "savedQueues": "Saved queues",
             "libraryMatches": "Library Matches",
+            "badge": {
+                "activity_one": "{{count}} download needs you",
+                "activity_other": "{{count}} downloads need you",
+                "libraryMatches_one": "{{count}} to fix in lb-bot",
+                "libraryMatches_other": "{{count}} to fix in lb-bot"
+            },
             "you": "You",
             "listening": "Listening",
             "libraryTools": "Library tools",
@@ -2044,8 +2050,16 @@
             "files_other": "{{count}} files",
             "folderAway": "Open lb-bot's page on your home network to file it.",
             "folderOpen": "Open in lb-bot",
+            "folders_one": "{{count}} downloaded folder to file",
+            "folders_other": "{{count}} downloaded folders to file",
+            "imports_one": "{{count}} import",
+            "imports_other": "{{count}} imports",
+            "intro": "What lb-bot could not finish on its own. Each one opens in lb-bot, where it is fixed.",
             "more": "and {{count}} more in lb-bot",
-            "title": "To fix ({{count}})",
+            "movedHere": "Imports and downloaded folders to fix are in Library Matches.",
+            "movedOpen": "Open Library Matches",
+            "nothing": "Nothing to fix.",
+            "summary": "{{count}} to fix: {{parts}}",
             "unidentified": "Unidentified folder"
         },
         "indexProgress": {

@@ -14,11 +14,12 @@ import {
     useListeningSupported,
     useOverridesSupported,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
-import { toFixCount } from '/@/renderer/features/lbbot/lb-page-link';
+import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { LIBRARY_FRAME_ROUTES } from '/@/renderer/features/library/library-routes';
 import { SidebarIcon } from '/@/renderer/features/sidebar/components/sidebar-icon';
 import { SidebarItem } from '/@/renderer/features/sidebar/components/sidebar-item';
+import { attentionCount } from '/@/renderer/features/sidebar/utils/sidebar-groups';
 import {
     type SidebarEntry,
     type SidebarGroup,
@@ -72,6 +73,12 @@ const LABEL_KEYS: Record<string, string> = {
     you: 'page.sidebar.you',
 };
 
+// B-406: what each badge counts, said on hover and to a screen reader.
+const BADGE_KEYS: Record<string, string> = {
+    activity: 'page.sidebar.badge.activity',
+    libraryMatches: 'page.sidebar.badge.libraryMatches',
+};
+
 // Rows whose route is empty or shared get their glyph by name (SidebarIcon's default is Home's).
 const ICON_NAMES: Record<string, 'activity' | 'library'> = {
     activity: 'activity',
@@ -98,12 +105,15 @@ export const useSidebarModel = (options?: {
     const sidebarItems = useSidebarItems();
     // Worbus P2: `hub.store.user`; no user (an older hub) shows everything, as today.
     const roles = useHubRoles();
-    // Worbus P4: lb-bot's imports that need you count in the badge with the ledger's failures;
-    // B-406: so do the folders waiting to be filed, while downloading is on.
+    // B-406 (the owner's ruling): Activity's badge is the downloads that need you; lb-bot's imports
+    // and folders to file are Library Matches' badge, where its To fix list is.
     const attention = useLbBotAttention().data;
     const downloadsOn = useLbBotDownloadsShown();
-    const count = useMemo(
-        () => toFixCount(ledger, attention, downloadsOn),
+    const counts = useMemo(
+        () => ({
+            attentionCount: attentionCount(ledger),
+            toFixCount: libraryToFixCount(attention, downloadsOn),
+        }),
         [ledger, attention, downloadsOn],
     );
 
@@ -112,11 +122,14 @@ export const useSidebarModel = (options?: {
             LABEL_KEYS[id] ? t(LABEL_KEYS[id]) : fallback;
         const relabel = (entry: SidebarEntry): SidebarEntry => ({
             ...entry,
+            ...(entry.badge && BADGE_KEYS[entry.id]
+                ? { badgeLabel: t(BADGE_KEYS[entry.id], { count: entry.badge }) }
+                : {}),
             label: label(entry.id, entry.label) as string,
         });
         const model = sidebarGroups({
             admin: allows(roles, 'needsAttention'),
-            attentionCount: count,
+            attentionCount: counts.attentionCount,
             downloadsShown,
             lbBotAvailable,
             libraryItems: sidebarItems ?? [],
@@ -125,6 +138,7 @@ export const useSidebarModel = (options?: {
             narrow,
             overridesSupported,
             routes: ROUTES,
+            toFixCount: counts.toFixCount,
             wishlistSupported,
         });
         return {
@@ -136,7 +150,7 @@ export const useSidebarModel = (options?: {
             more: model.more.map(relabel),
         };
     }, [
-        count,
+        counts,
         downloadsShown,
         lbBotAvailable,
         listeningSupported,
@@ -168,7 +182,9 @@ const EntryRow = ({ entry }: { entry: SidebarEntry }) => {
 
     return (
         <SidebarItem
-            aria-label={entry.badge ? `${entry.label}, ${entry.badge}` : undefined}
+            aria-label={
+                entry.badge ? `${entry.label}, ${entry.badgeLabel ?? entry.badge}` : undefined
+            }
             className={clsx(styles.row, { [styles.selected]: active })}
             selectedRoutes={entry.selectedRoutes}
             selectedTo={entry.selectedRoute}
@@ -183,7 +199,7 @@ const EntryRow = ({ entry }: { entry: SidebarEntry }) => {
                 />
                 <span className={styles.rowLabel}>{entry.label}</span>
                 {entry.badge ? (
-                    <span aria-hidden className={styles.badge}>
+                    <span aria-hidden className={styles.badge} title={entry.badgeLabel}>
                         {entry.badge}
                     </span>
                 ) : null}
@@ -210,14 +226,27 @@ export const SidebarGroups = ({ groups }: { groups: SidebarGroup[] }) => (
 export const SidebarMore = ({ entries }: { entries: SidebarEntry[] }) => {
     const { t } = useTranslation();
     const isSelected = useIsSelected();
+    // B-406: a badge folded into More still shows: a dot on More, the number on its entry.
+    const badged = entries.filter((entry) => entry.badge);
 
     return (
         <DropdownMenu position="right-end">
             <DropdownMenu.Target>
-                <button className={styles.row} type="button">
+                <button
+                    aria-label={
+                        badged.length
+                            ? `${t('page.sidebar.more')}, ${badged
+                                  .map((entry) => entry.badgeLabel ?? entry.badge)
+                                  .join(', ')}`
+                            : undefined
+                    }
+                    className={styles.row}
+                    type="button"
+                >
                     <span className={styles.rowInner}>
                         <Icon icon="ellipsisHorizontal" size="lg" />
                         <span className={styles.rowLabel}>{t('page.sidebar.more')}</span>
+                        {badged.length > 0 && <span aria-hidden className={styles.moreDot} />}
                         <Icon className={styles.moreChevron} icon="arrowRightS" size="md" />
                     </span>
                 </button>
@@ -234,6 +263,13 @@ export const SidebarMore = ({ entries }: { entries: SidebarEntry[] }) => {
                                 route={entry.route}
                                 size="18"
                             />
+                        }
+                        rightSection={
+                            entry.badge ? (
+                                <span className={styles.badge} title={entry.badgeLabel}>
+                                    {entry.badge}
+                                </span>
+                            ) : undefined
                         }
                         to={entry.route}
                     >

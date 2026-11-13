@@ -140,10 +140,11 @@ test('the_badge_counts_the_folders_and_the_page_shows_them', () => {
     ) => number;
     assert.equal(toFixCount(ledger, ANSWER), 1 + 16 + 25, 'the badge leaves the folders out');
     assert.equal(toFixCount(ledger, ANSWER, false), 1 + 16);
+    // B-406's ruling (2026-11-13): the section is Library Matches' now (to-fix-placement.harness.ts).
     assert.match(
-        read('src/renderer/features/lbbot/routes/lbbot-downloads-route.tsx'),
+        read('src/renderer/features/library-matches/routes/library-matches-route.tsx'),
         /<ToFixSection/,
-        'the Downloads page shows the imports row alone',
+        'no page shows the folders',
     );
 });
 

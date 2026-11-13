@@ -4,9 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { AlbumMatchRow, ArtistOverrideRow, MergedRow, ToCheckRow } from '../components/match-rows';
 
 import { RoleGatedRoute } from '/@/renderer/features/hub/components/role-gated-route';
+import { ToFixSection } from '/@/renderer/features/lbbot/components/to-fix-section';
 import {
     useAlbumOverrideControls,
+    useLbBotAttention,
     useLbBotAvailable,
+    useLbBotDownloadsShown,
     useLbBotOverrideList,
     useMergeControls,
     useOverrideControls,
@@ -18,6 +21,7 @@ import {
     getIndexMirrorSnapshot,
     subscribeIndexMirror,
 } from '/@/renderer/features/lbbot/index-mirror/index-mirror';
+import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { sortOverrides } from '/@/renderer/features/lbbot/utils/lbbot-data';
 import {
     currentSection,
@@ -37,8 +41,8 @@ import { Text } from '/@/shared/components/text/text';
  * navi-connect: Library Matches (I-024) - what lb-bot holds on this app's behalf and
  * the ways to correct it, moved here from the "lb-bot data" settings section.
  *
- * Four switchable sections as filter chips with their counts (the Downloads page's
- * pattern): artists lb-bot is unsure about, the MusicBrainz artist overrides, the
+ * Switchable sections as filter chips with their counts (the Downloads page's pattern):
+ * B-406's To fix (lb-bot's imports and downloaded folders to file), artists lb-bot is unsure about, the MusicBrainz artist overrides, the
  * album matches lb-bot rewrote, and merged artist names. Each section shows only
  * what this hub and lb-bot can serve: nothing for a hub that does not advertise the
  * routes, no "To check" for an lb-bot that sends no `toCheck` (older - absent is
@@ -60,6 +64,10 @@ const LibraryMatchesRoute = () => {
     const mirror = useSyncExternalStore(subscribeIndexMirror, getIndexMirrorSnapshot);
     const refresh = useMirrorRefresh();
     const [chosen, setChosen] = useState<MatchSection | null>(null);
+    // B-406 (the owner's ruling, 2026-11-13): lb-bot's To fix lives here. No `/lb/attention` answer
+    // (an older hub or lb-bot, lb-bot away) offers no chip: absent is not empty.
+    const attention = useLbBotAttention().data;
+    const downloadsOn = useLbBotDownloadsShown();
 
     const data = list.data;
     const overrides = data ? sortOverrides(data.byNdId) : [];
@@ -74,6 +82,7 @@ const LibraryMatchesRoute = () => {
         artists: usable && data ? overrides.length : null,
         merges: mergeControls && merges !== null ? merges.length : null,
         toCheck: usable && toCheck !== null ? toCheck.length : null,
+        toFix: attention ? libraryToFixCount(attention, downloadsOn) : null,
     };
     const sections = matchSections(counts);
     const section = currentSection(chosen, counts);
@@ -127,6 +136,8 @@ const LibraryMatchesRoute = () => {
                     )}
                 </>
             )}
+
+            {section === 'to-fix' && <ToFixSection />}
 
             {section === 'to-check' && toCheck && (
                 <Stack gap="sm">

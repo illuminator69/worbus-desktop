@@ -43,10 +43,11 @@ test('imports_counted_in_to_fix', () => {
     assert.equal(toFixCount([SETTLED_FAILED, RUNNING], answer), 4);
     assert.equal(toFixCount([SETTLED_FAILED], null), 1, 'no answer: the ledger alone');
     assert.equal(toFixCount([], { counts: { failedGaps: 4 } }), 0, 'an older lb-bot: no imports');
-    // The badge reads it.
+    // B-406 (the owner's ruling, 2026-11-13): the badges read the two halves apart: Activity the
+    // ledger's, Library Matches lb-bot's imports and folders (to-fix-placement.harness.ts).
     assert.match(
         read('src/renderer/features/sidebar/components/sidebar-groups.tsx'),
-        /toFixCount\(ledger, attention, downloadsOn\)/,
+        /toFixCount: libraryToFixCount\(attention, downloadsOn\)/,
     );
 });
 
@@ -130,13 +131,13 @@ test('the row says the fixed sentences, and its button opens the system browser'
     const row = read('src/renderer/features/lbbot/components/imports-row.tsx');
     // A `_blank` window is handed to shell.openExternal by main's setWindowOpenHandler.
     assert.match(row, /target="_blank"/);
-    // B-406: the row is the To fix section's first, on the Downloads page.
+    // B-406: the row is the To fix section's, on Library Matches (the owner's ruling, 2026-11-13).
     assert.match(
         read('src/renderer/features/lbbot/components/to-fix-section.tsx'),
         /<ImportsRow \/>/,
     );
     assert.match(
-        read('src/renderer/features/lbbot/routes/lbbot-downloads-route.tsx'),
+        read('src/renderer/features/library-matches/routes/library-matches-route.tsx'),
         /<ToFixSection \/>/,
     );
 });

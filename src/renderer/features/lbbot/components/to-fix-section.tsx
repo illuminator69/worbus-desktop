@@ -24,9 +24,13 @@ import { isPrivateAddress } from '/@/shared/utils/hub-addresses';
  * B-406 (the desktop half): the phone's "To fix" (PROTOCOL §15.6): the imports row, then the
  * download folders lb-bot is waiting to have filed, each as what lb-bot identified it as and how
  * many files (never a name or a path) with Open in lb-bot on its Placement (`#/place/<id>`), since
- * filing moves and retags files. The heading's number is lb-bot's `imports + folders`, the phone's.
- * Nothing here writes to lb-bot. Not built: the phone's Albums section (failed gaps and requests,
- * picks) and its artists to check.
+ * filing moves and retags files. Nothing here writes to lb-bot. Not built: the phone's Albums
+ * section (failed gaps and requests, picks) and its artists to check.
+ *
+ * Since the owner's ruling (2026-11-13) it is Library Matches' To fix section, not Activity's. Its
+ * number is the chip's and the page header's (lb-bot's `imports + folders`, `libraryToFixCount`),
+ * and the first line says what it is made of: "41 to fix: 16 imports, 25 downloaded folders to
+ * file". Activity's own counts are downloads.
  */
 export const ToFixSection = () => {
     const { t } = useTranslation();
@@ -36,11 +40,28 @@ export const ToFixSection = () => {
     const activeAddress = useHubStore((s) => s.server?.activeAddress ?? null);
     const section = toFixSection(attention, downloadsOn);
 
-    if (section.count === 0) return <ImportsRow />;
+    const parts = [
+        section.imports > 0 ? t('naviConnect.toFix.imports', { count: section.imports }) : '',
+        section.count > section.imports
+            ? t('naviConnect.toFix.folders', { count: section.count - section.imports })
+            : '',
+    ].filter(Boolean);
 
     return (
         <Stack data-to-fix="" gap="sm">
-            <Text fw={600}>{t('naviConnect.toFix.title', { count: section.count })}</Text>
+            <Text isMuted size="sm">
+                {t('naviConnect.toFix.intro')}
+            </Text>
+            {section.count === 0 ? (
+                <Text isMuted>{t('naviConnect.toFix.nothing')}</Text>
+            ) : (
+                <Text fw={600}>
+                    {t('naviConnect.toFix.summary', {
+                        count: section.count,
+                        parts: parts.join(', '),
+                    })}
+                </Text>
+            )}
             <ImportsRow />
             {section.folders.map((folder) => {
                 const link = lbPlaceLink(webUrl, activeAddress, isPrivateAddress, folder.id);

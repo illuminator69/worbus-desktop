@@ -4,7 +4,7 @@
  * it is a link. `matches-page.harness.ts` runs it without React.
  */
 
-export type MatchSection = 'albums' | 'artists' | 'merged' | 'to-check';
+export type MatchSection = 'albums' | 'artists' | 'merged' | 'to-check' | 'to-fix';
 
 /**
  * How many rows each list holds, or null when lb-bot did not send the list (an
@@ -16,6 +16,12 @@ export interface SectionCounts {
     artists: null | number;
     merges: null | number;
     toCheck: null | number;
+    /**
+     * B-406: lb-bot's imports + folders to file (`libraryToFixCount`); null when there is no
+     * `/lb/attention` answer (an older hub or lb-bot, lb-bot away). Optional for the callers from
+     * before it: absent is null.
+     */
+    toFix?: null | number;
 }
 
 const LABELS: Record<MatchSection, string> = {
@@ -23,18 +29,21 @@ const LABELS: Record<MatchSection, string> = {
     artists: 'Artists',
     merged: 'Merged names',
     'to-check': 'To check',
+    'to-fix': 'To fix',
 };
 
 const countOf = (counts: SectionCounts, id: MatchSection): null | number =>
-    id === 'to-check'
-        ? counts.toCheck
-        : id === 'artists'
-          ? counts.artists
-          : id === 'albums'
-            ? counts.albums
-            : counts.merges;
+    id === 'to-fix'
+        ? (counts.toFix ?? null)
+        : id === 'to-check'
+          ? counts.toCheck
+          : id === 'artists'
+            ? counts.artists
+            : id === 'albums'
+              ? counts.albums
+              : counts.merges;
 
-const ORDER: readonly MatchSection[] = ['to-check', 'artists', 'albums', 'merged'];
+const ORDER: readonly MatchSection[] = ['to-fix', 'to-check', 'artists', 'albums', 'merged'];
 
 export const matchSections = (
     counts: SectionCounts,
@@ -44,9 +53,10 @@ export const matchSections = (
         return count === null ? [] : [{ count, id, label: LABELS[id] }];
     });
 
-/** The section the page opens on: the first that has something to do - To check
- *  when it is not empty, else Artists - else whatever is offered. */
+/** The section the page opens on: the first that has something to do - To fix (B-406), then To
+ *  check, when not empty, else Artists - else whatever is offered. */
 export const landingSection = (counts: SectionCounts): MatchSection | null => {
+    if ((counts.toFix ?? 0) > 0) return 'to-fix';
     if ((counts.toCheck ?? 0) > 0) return 'to-check';
     if (counts.artists !== null) return 'artists';
     return matchSections(counts)[0]?.id ?? null;

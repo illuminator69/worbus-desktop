@@ -1,24 +1,27 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import styles from './lbbot-downloads-route.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
 import { ResolveLinkBox } from '/@/renderer/features/lbbot/components/resolve-link-box';
-import { ToFixSection } from '/@/renderer/features/lbbot/components/to-fix-section';
 import { activityPageCopy } from '/@/renderer/features/lbbot/components/wishlist-copy';
 import { WishlistList } from '/@/renderer/features/lbbot/components/wishlist-list';
 import { describeFill } from '/@/renderer/features/lbbot/fill-vocabulary';
 import { useFillActions } from '/@/renderer/features/lbbot/hooks/use-fill-actions';
 import {
     caaCoverUrl,
+    useLbBotAttention,
     useLbBotDownloadsShown,
     useLbBotWishlist,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { LedgerRow, useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { Fold } from '/@/renderer/features/motion/fold';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
+import { AppRoute } from '/@/renderer/router/routes';
 import { Button } from '/@/shared/components/button/button';
 import { Group } from '/@/shared/components/group/group';
 import { Progress } from '/@/shared/components/progress/progress';
@@ -141,8 +144,10 @@ const MATCHES: Record<LedgerFilter, (row: LedgerRow) => boolean> = {
     running: (row) => !row.settled,
 };
 
+// B-406: the chips count downloads, and All says so (the owner read "All (6)" against a badge of
+// 41 that was mostly lb-bot's imports and folders).
 const FILTER_LABEL: Record<LedgerFilter, string> = {
-    all: 'All',
+    all: 'All downloads',
     done: 'In your library',
     failed: "Didn't land",
     running: 'In flight',
@@ -168,6 +173,8 @@ export const LbBotDownloadsPage = ({
     // Off, the page is Activity (the sidebar's name) and its empty line says nothing of fetching.
     const { t } = useTranslation();
     const copy = activityPageCopy(downloadsShown);
+    // B-406: lb-bot's To fix moved to Library Matches; while it holds something, say where.
+    const toFix = libraryToFixCount(useLbBotAttention().data, downloadsShown);
 
     const chips = (
         <Group gap="xs">
@@ -204,10 +211,24 @@ export const LbBotDownloadsPage = ({
                 <WishlistList />
             ) : (
                 <>
-                    {/* Worbus P4: lb-bot's imports that need you (Needs attention's own row),
-                        whatever the filter: they are not fills, and the chips do not count them.
-                        B-406: with the folders waiting to be filed, under the phone's To fix. */}
-                    <ToFixSection />
+                    {/* B-406 (the owner's ruling, 2026-11-13): lb-bot's imports and the
+                        folders waiting to be filed are Library Matches' To fix, not fills; one
+                        line here says where they went while there are any. */}
+                    {toFix > 0 && (
+                        <Group gap="sm" justify="space-between" wrap="nowrap">
+                            <Text isMuted size="sm">
+                                {t('naviConnect.toFix.movedHere')}
+                            </Text>
+                            <Button
+                                component={Link}
+                                size="compact-sm"
+                                to={AppRoute.LIBRARY_MATCHES}
+                                variant="subtle"
+                            >
+                                {t('naviConnect.toFix.movedOpen')}
+                            </Button>
+                        </Group>
+                    )}
                     {/* The one entry point into this surface that does not start
                         from something the library already knows about. It sits
                         here rather than on Discover because a pasted link is an

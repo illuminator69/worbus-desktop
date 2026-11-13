@@ -78,18 +78,23 @@ export const attentionFolderCount = (answer: unknown): number => {
 };
 
 /**
- * The to-fix number (the sidebar's badge): the ledger's own failures, plus the imports and (B-406,
- * the phone's units) the folders waiting to be filed, while downloading is on (off, the page lists
- * no folder: filing one is a download's last step).
+ * B-406 (the owner's ruling, 2026-11-13): Library Matches' to-fix number (its sidebar badge and its
+ * To fix chip): lb-bot's imports plus, while downloading is on, the folders waiting to be filed (the
+ * phone's units; off, no folder is listed: filing one is a download's last step). The ledger's own
+ * failures are Activity's badge (`attentionCount`) and are not added here: one number per thing.
+ */
+export const libraryToFixCount = (attention: unknown, downloadsOn: boolean): number =>
+    attentionImports(attention) + (downloadsOn ? attentionFolderCount(attention) : 0);
+
+/**
+ * The to-fix number as it was before B-406's ruling: the ledger's failures plus lb-bot's imports and
+ * folders. Kept for the P4 harness's arithmetic; no surface shows it any more.
  */
 export const toFixCount = (
     ledger: readonly { outcome: string; settled: boolean }[],
     attention: unknown,
     downloadsOn = true,
-): number =>
-    attentionCount(ledger) +
-    attentionImports(attention) +
-    (downloadsOn ? attentionFolderCount(attention) : 0);
+): number => attentionCount(ledger) + libraryToFixCount(attention, downloadsOn);
 
 /**
  * B-406: the To fix section, as the phone has it: its number is lb-bot's `imports + folders`
