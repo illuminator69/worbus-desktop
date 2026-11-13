@@ -281,3 +281,59 @@ test('a_newer_held_seek_wins_over_the_radio_handoff', () => {
     const start = player.slice(player.indexOf('const applyPendingSeekIfNeeded'));
     assert.match(start.slice(0, start.indexOf('const handlePlayer1Start')), /seekAtReady\(/);
 });
+
+/**
+ * B-402 review M1, VM walk 2026-11-13 (`RESULTS-owner-walk-vmcheck-2026-11-13.md`, 2 of 5 runs):
+ * Next sent 150 ms after a transfer to a fresh desktop started Gamma 03 at 94 s, and Next at 50 ms
+ * started Gamma 04 at 99 s, the hub saying pos=0 both times. The held seek is bound to the song at
+ * its send, but two seeks are sent by TIMERS armed for the transferred song: use-hub's landing seek
+ * (150 ms after that song became current) and setQueue's QUEUE_RESTORED seek (100 ms after the
+ * load). When Next comes first, the timer sends the old position while the next song is current,
+ * and the hold binds it to that song. A timed seek must still be for the song it was armed for.
+ */
+const timed = startupSeekModule as unknown as {
+    scheduledSeekApplies?: (
+        armedFor: null | string | undefined,
+        currentNow: null | string | undefined,
+    ) => boolean;
+};
+
+const transferThenNext = (timer: 'landing' | 'restore') => {
+    const d = freshDesktop();
+    // The transfer loads Gamma 02 at 94 s; the timer is armed for it (its _uniqueId).
+    d.changeSong('u-g02', 'song-g02');
+    const armedFor = d.engine.song;
+    // Next before the timer fires (50 ms for the restore seek, 150 ms for the landing seek).
+    d.changeSong('u-g03', 'song-g03');
+    // The timer fires: today it seeks whatever is current.
+    const applies = timed.scheduledSeekApplies?.(armedFor, d.engine.song) ?? true;
+    if (applies) d.engineSeek(timer === 'landing' ? 94 : 99);
+    d.ready('song-g03', 'song-g03');
+    return d.engine.position;
+};
+
+test('a_timed_seek_for_the_transferred_song_never_lands_on_the_next', () => {
+    assert.equal(transferThenNext('landing'), 0, 'Gamma 03 started at 94 s (the landing seek)');
+    assert.equal(transferThenNext('restore'), 0, 'Gamma 04 started at 99 s (the restore seek)');
+    // On its own song the timer still seeks.
+    assert.equal(timed.scheduledSeekApplies?.('u-g02', 'u-g02'), true);
+    hooks.onWebEngineReady?.(null);
+});
+
+test('wired_both_timers_check_their_song', () => {
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    const restore = read('./use-queue-restore.ts');
+    const restored = restore.slice(restore.indexOf('onQueueRestored'));
+    assert.match(
+        restored.slice(0, restored.indexOf('[],')),
+        /scheduledSeekApplies\(/,
+        "setQueue's restore seek seeks whatever song is current 100 ms later",
+    );
+    const hub = read('../../hub/hooks/use-hub.tsx');
+    const landing = hub.slice(hub.indexOf('const fires = landingSeekFires'));
+    assert.match(
+        landing.slice(0, landing.indexOf('mediaSeekToTimestamp(pending.sec)')),
+        /scheduledSeekApplies\(/,
+        'the landing seek seeks whatever song is current 150 ms later',
+    );
+});
