@@ -50,3 +50,57 @@ export const attentionFoldersCut = (answer: unknown): number => {
     const n = cut && typeof cut === 'object' ? (cut as Record<string, unknown>).folders : 0;
     return typeof n === 'number' && Number.isInteger(n) && n > 0 ? n : 0;
 };
+
+/**
+ * One album lb-bot's `/lb/attention` lists (`_attention_view` `albums`): a review group whose own
+ * status is `failed` or `picking` now (`kind: gap`), or a failed whole-album request (`kind:
+ * request`) - every client's. Need you takes another client's pick from here: the fill ledger
+ * (`/lb/activity`) never holds a `picking` state. Allowlisted; no cover URL, no counts.
+ */
+export interface LbBotAttentionAlbum {
+    album: string;
+    /** The Navidrome album id, when lb-bot knows it; "" otherwise. */
+    albumId: string;
+    artist: string;
+    groupId: string;
+    kind: 'gap' | 'request';
+    releaseMbid: string;
+    rgid: string;
+    state: string;
+    /** Epoch seconds, lb-bot's clock. */
+    updatedAt: number;
+}
+
+/**
+ * The `albums` of a `/lb/attention` answer, allowlisted; null when the answer has none (an
+ * lb-bot from before the rows). A row of another kind, with no state, or with neither a group
+ * nor a release to join it by, is dropped.
+ */
+export const attentionAlbums = (answer: unknown): LbBotAttentionAlbum[] | null => {
+    const rows =
+        answer && typeof answer === 'object' ? (answer as Record<string, unknown>).albums : null;
+    if (!Array.isArray(rows)) return null;
+    return rows.flatMap((row): LbBotAttentionAlbum[] => {
+        if (!row || typeof row !== 'object') return [];
+        const r = row as Record<string, unknown>;
+        const kind = r.kind;
+        const state = str(r.state);
+        const groupId = str(r.groupId);
+        const releaseMbid = str(r.releaseMbid);
+        if ((kind !== 'gap' && kind !== 'request') || !state) return [];
+        if (!groupId && !releaseMbid) return [];
+        return [
+            {
+                album: str(r.album),
+                albumId: str(r.albumId),
+                artist: str(r.artist),
+                groupId,
+                kind,
+                releaseMbid,
+                rgid: str(r.rgid),
+                state,
+                updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : 0,
+            },
+        ];
+    });
+};

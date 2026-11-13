@@ -56,3 +56,28 @@ export const activityRequests = (answer: unknown): LbBotActivityRequest[] | null
         ];
     });
 };
+
+/** What main's request helper answers (`LbBotResult`), as far as a screen read needs it. */
+export interface ScreenReadResult {
+    code?: string;
+    data: unknown;
+    ok: boolean;
+    status: number;
+}
+
+/**
+ * A screen read (`/lb/activity`, `/lb/attention`) as the renderer's query takes it (review L2):
+ * the parsed answer; `null` only when the route is not there to ask - a 404 with no `code` (an
+ * hub or lb-bot older than the route) or `lbbot_too_old` (this hub will not use that lb-bot);
+ * and a THROW for anything else that failed (a hub 502/504, lb-bot's 500, a timeout, no hub),
+ * so the query keeps its last good answer instead of taking a failure for "nothing listed"
+ * (§15.2: a failed poll is not an answer).
+ */
+export const screenRead = <T>(
+    result: ScreenReadResult,
+    parse: (data: unknown) => null | T,
+): null | T => {
+    if (result.ok) return parse(result.data);
+    if ((result.status === 404 && !result.code) || result.code === 'lbbot_too_old') return null;
+    throw new Error(`lb-bot read failed (${result.status}${result.code ? ` ${result.code}` : ''})`);
+};

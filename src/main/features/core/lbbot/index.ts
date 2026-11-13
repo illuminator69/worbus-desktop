@@ -85,7 +85,11 @@ import { indexArtistBody } from './index-artist-body';
 
 import { getMainWindow } from '/@/main/index';
 import { toFindIt } from '/@/shared/utils/find-it';
-import { activityRequests, type LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
+import {
+    activityRequests,
+    type LbBotActivityRequest,
+    screenRead,
+} from '/@/shared/utils/lbbot-activity';
 import {
     albumDownloadBody,
     mergePreviewParams,
@@ -100,13 +104,16 @@ import {
     toSiblingGroups,
 } from '/@/shared/utils/lbbot-album-wire';
 import {
+    attentionAlbums,
     attentionFolders,
     attentionFoldersCut,
+    type LbBotAttentionAlbum,
     type LbBotAttentionFolder,
 } from '/@/shared/utils/lbbot-attention';
 import { describeFailure, isOlderScanRefusal, refusalCode } from '/@/shared/utils/lbbot-failure';
 import { LB_ANSWERED } from '/@/shared/utils/lbbot-mode';
 import { hasMetaFields, normalizeLbBotWebUrl } from '/@/shared/utils/lbbot-wire';
+import { singleFlight } from '/@/shared/utils/single-flight';
 
 /**
  * navi-connect lb-bot client (main process).
@@ -2642,34 +2649,49 @@ const toWishlistEntry = (row: unknown): LbBotWishlistEntry[] => {
 // albums lb-bot could not finish filing) and, B-406, the folders waiting to be filed, allowlisted
 // (`attentionFolders`: never a folder's name or path). null (an older hub or lb-bot, a refusal, a
 // non-admin) reads as nothing to fix.
+// Review L4 (both reads below): one read in flight; a burst of fill frames shares one follow-up.
 ipcMain.handle(
     'lbbot-attention-counts',
-    async (): Promise<null | {
-        counts: Record<string, number>;
-        folders: LbBotAttentionFolder[];
-        foldersCut: number;
-    }> => {
-        const data = await get('/lb/attention');
-        const counts = data?.counts;
-        if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
-        return {
-            counts: Object.fromEntries(
-                Object.entries(counts as Json).filter(
-                    (entry): entry is [string, number] => typeof entry[1] === 'number',
-                ),
-            ),
-            folders: attentionFolders(data),
-            foldersCut: attentionFoldersCut(data),
-        };
-    },
+    singleFlight(
+        async (): Promise<null | {
+            albums: LbBotAttentionAlbum[] | null;
+            counts: Record<string, number>;
+            folders: LbBotAttentionFolder[];
+            foldersCut: number;
+        }> => {
+            const result = await request('GET', '/lb/attention');
+            // Review L2: a failed read rejects (the renderer keeps its last answer); only a route
+            // that is not there reads as nothing to fix.
+            return screenRead(result, (data) => {
+                const counts = (data as Json | null)?.counts;
+                if (!counts || typeof counts !== 'object' || Array.isArray(counts)) return null;
+                return {
+                    // Need you: another client's failed gaps and picks (the owner, 2026-11-13).
+                    albums: attentionAlbums(data),
+                    counts: Object.fromEntries(
+                        Object.entries(counts as Json).filter(
+                            (entry): entry is [string, number] => typeof entry[1] === 'number',
+                        ),
+                    ),
+                    folders: attentionFolders(data),
+                    foldersCut: attentionFoldersCut(data),
+                };
+            });
+        },
+    ),
 );
 
 // Activity's Need you (the owner, 2026-11-13: every client's requests): `/lb/activity`'s requests,
-// allowlisted (`activityRequests`); its transfers are not read. null (an older hub or lb-bot, a
-// refusal, a non-admin) leaves Need you to this device's ledger.
+// allowlisted (`activityRequests`); its transfers are not read. null (an older hub or lb-bot)
+// leaves Need you to this device's ledger and `/lb/attention`'s albums.
 ipcMain.handle(
     'lbbot-activity',
-    async (): Promise<LbBotActivityRequest[] | null> => activityRequests(await get('/lb/activity')),
+    singleFlight(
+        async (): Promise<LbBotActivityRequest[] | null> =>
+            // Review L2: a failed read rejects, so the renderer keeps the last good list; only a
+            // route that is not there (an older hub or lb-bot) reads as no answer.
+            screenRead(await request('GET', '/lb/activity'), activityRequests),
+    ),
 );
 
 ipcMain.handle('lbbot-wishlist', async (): Promise<LbBotWishlist> => {

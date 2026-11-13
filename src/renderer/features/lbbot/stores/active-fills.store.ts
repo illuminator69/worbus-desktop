@@ -1,3 +1,5 @@
+import type { DismissedRequest } from '/@/renderer/features/lbbot/utils/need-you';
+
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -29,6 +31,10 @@ import { LbBotFailureKind, LbBotResolvedEdition } from '/@/shared/types/lbbot-ty
 /** How long a finished row stays readable, and how many are kept at all. */
 const LEDGER_RETAIN_MS = 7 * 24 * 60 * 60 * 1000;
 const LEDGER_MAX = 50;
+/** Need you's dismissals (review M1): forgotten once lb-bot lists nothing for them
+ *  (`dismissalsStillListed`); these bounds only stop a never-answering lb-bot growing them. */
+const DISMISSED_RETAIN_MS = 30 * 24 * 60 * 60 * 1000;
+const DISMISSED_MAX = 200;
 
 export interface ActiveFill {
     /** Display fields, captured at the tap. The downloads view may be opened days
@@ -179,7 +185,11 @@ interface ActiveFillsState {
     actions: {
         clear: () => void;
         describe: (key: string, info: Partial<ActiveFill & ActiveGap>) => void;
+        /** Forget one finished row, and remember its request as dismissed here: Need you lists
+         *  every client's requests, and lb-bot keeps a failure 24 h after this row is gone. */
         dismiss: (key: string) => void;
+        /** Need you's dismissals lb-bot still lists (`dismissalsStillListed`); the rest go. */
+        keepDismissed: (keep: DismissedRequest[]) => void;
         /** A poll reached (error '') or failed to reach (error set) lb-bot for
          *  this row. Separate from `describe`, which ignores empty strings —
          *  clearing an error IS the news here. */
@@ -196,6 +206,8 @@ interface ActiveFillsState {
         ) => void;
         startGap: (groupId: string, meta?: Partial<ActiveGap>) => void;
     };
+    /** Requests dismissed on this device (Need you, review M1). */
+    dismissed: DismissedRequest[];
     fills: Record<string, ActiveFill>;
     gaps: Record<string, ActiveGap>;
     /** Last quality the user picked, reused as the default for the next download. */
@@ -229,11 +241,19 @@ const prune = <T extends { finishedAt?: number; settled: boolean; startedAt: num
     );
 };
 
+const pruneDismissed = (rows: DismissedRequest[]): DismissedRequest[] => {
+    const now = Date.now();
+    return (Array.isArray(rows) ? rows : [])
+        .filter((d) => d && now - d.at < DISMISSED_RETAIN_MS)
+        .sort((a, b) => b.at - a.at)
+        .slice(0, DISMISSED_MAX);
+};
+
 export const useActiveFillsStore = create<ActiveFillsState>()(
     persist(
         (set) => ({
             actions: {
-                clear: () => set({ fills: {}, gaps: {} }),
+                clear: () => set({ dismissed: [], fills: {}, gaps: {} }),
                 /** Fold in whatever the latest poll learned — title, artist, last state.
                  *  Never blanks a field it has no answer for: a poll that returns
                  *  `unknown` still knows less than the tap that started the fill.
@@ -267,8 +287,36 @@ export const useActiveFillsStore = create<ActiveFillsState>()(
                     set((state) => {
                         const { [key]: droppedFill, ...fills } = state.fills;
                         const { [key]: droppedGap, ...gaps } = state.gaps;
-                        return droppedFill || droppedGap ? { fills, gaps } : state;
+                        if (!droppedFill && !droppedGap) return state;
+                        const request: DismissedRequest = droppedFill
+                            ? {
+                                  album: droppedFill.album ?? '',
+                                  artist: droppedFill.artist ?? '',
+                                  at: Date.now(),
+                                  groupId: droppedFill.groupId ?? '',
+                                  isGap: false,
+                                  releaseMbid: droppedFill.releaseMbid ?? '',
+                                  rgid: droppedFill.rgid ?? '',
+                              }
+                            : {
+                                  album: droppedGap!.album ?? '',
+                                  artist: droppedGap!.artist ?? '',
+                                  at: Date.now(),
+                                  groupId: droppedGap!.groupId,
+                                  isGap: true,
+                                  releaseMbid: '',
+                                  rgid: '',
+                              };
+                        return {
+                            dismissed: [...state.dismissed, request].slice(-DISMISSED_MAX),
+                            fills,
+                            gaps,
+                        };
                     }),
+                keepDismissed: (keep) =>
+                    set((state) =>
+                        keep.length === state.dismissed.length ? state : { dismissed: keep },
+                    ),
                 noteCheck: (key, error) =>
                     set((state) => {
                         const target = state.fills[key] ? 'fills' : state.gaps[key] ? 'gaps' : null;
@@ -438,6 +486,7 @@ export const useActiveFillsStore = create<ActiveFillsState>()(
                         },
                     })),
             },
+            dismissed: [],
             fills: {},
             gaps: {},
             preferredQuality: '',
@@ -447,6 +496,7 @@ export const useActiveFillsStore = create<ActiveFillsState>()(
                 const saved = (persisted ?? {}) as Partial<ActiveFillsState>;
                 return {
                     ...current,
+                    dismissed: pruneDismissed(saved.dismissed ?? []),
                     fills: prune(saved.fills ?? {}),
                     gaps: prune(saved.gaps ?? {}),
                     preferredQuality: saved.preferredQuality ?? '',
@@ -461,6 +511,7 @@ export const useActiveFillsStore = create<ActiveFillsState>()(
             // Never the action closures. Settled rows now DO persist — they are the
             // history the downloads view lists; `prune` is what bounds them.
             partialize: (state) => ({
+                dismissed: pruneDismissed(state.dismissed),
                 fills: prune(state.fills),
                 gaps: prune(state.gaps),
                 preferredQuality: state.preferredQuality,
@@ -477,6 +528,10 @@ export const useActiveGap = (groupId: string): ActiveGap | undefined =>
     useActiveFillsStore((state) => state.gaps[groupId]);
 
 export const useActiveFillsActions = () => useActiveFillsStore((state) => state.actions);
+
+/** Need you's dismissals on this device (review M1). */
+export const useDismissedRequests = (): DismissedRequest[] =>
+    useActiveFillsStore((state) => state.dismissed);
 
 export const usePreferredQuality = (): string =>
     useActiveFillsStore((state) => state.preferredQuality);

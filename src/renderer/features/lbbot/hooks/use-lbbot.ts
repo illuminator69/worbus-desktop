@@ -42,7 +42,7 @@ import type {
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
 import type { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
-import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
+import type { LbBotAttentionAlbum, LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import {
     keepPreviousData,
@@ -3679,16 +3679,42 @@ const NO_LINK: LbBotResult<LbBotResolvedLink> = {
  * Admin only, like the rest of `/lb/attention` (a non-admin never asks). `null` data (an older
  * hub or lb-bot) reads as no imports (`attentionImports`).
  */
+/** What `/lb/attention` answers a client (main's allowlist): counts, folders, and Need you's albums. */
+export interface LbBotAttentionAnswer {
+    /** null from a main or lb-bot before the rows: Need you then reads `/lb/activity` alone. */
+    albums: LbBotAttentionAlbum[] | null;
+    counts: Record<string, number>;
+    folders: LbBotAttentionFolder[];
+    foldersCut: number;
+}
+
+/**
+ * Review L4: an admin's read (`/lb/attention`, `/lb/activity`) holds other clients' album names.
+ * When this user may no longer read it (demoted by a `user` frame, the hub's setup removed, a
+ * hub without the route) the cached answer is dropped, not merely hidden; a read that only failed
+ * keeps its last answer (review L2), as does a blip in lb-bot's availability.
+ */
+const useAdminLbRead = (queryKey: readonly string[], allowed: boolean): void => {
+    useEffect(() => {
+        if (allowed) return;
+        void queryClient.cancelQueries({ exact: true, queryKey });
+        queryClient.removeQueries({ exact: true, queryKey });
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- the key is a constant per caller
+    }, [allowed]);
+};
+
+const ATTENTION_KEY = ['lbbot', 'attention-counts'] as const;
+const ACTIVITY_KEY = ['lbbot', 'activity'] as const;
+
 export const useLbBotAttention = () => {
     const available = useLbBotAvailable();
     const supported = useHubSupports('GET /lb/attention');
     const admin = allows(useHubRoles(), 'needsAttention');
-    const query = useQuery<null | {
-        counts: Record<string, number>;
-        folders: LbBotAttentionFolder[];
-        foldersCut: number;
-    }>({
-        enabled: !!lbBot && available && supported && admin,
+    const setUp = useMirrorShown();
+    const allowed = !!lbBot && supported && admin && setUp;
+    useAdminLbRead(ATTENTION_KEY, allowed);
+    const query = useQuery<LbBotAttentionAnswer | null>({
+        enabled: allowed && available,
         gcTime: 5 * 60 * 1000,
         queryFn: async () => {
             const answer: unknown = await lbBot!.attentionCounts();
@@ -3696,45 +3722,56 @@ export const useLbBotAttention = () => {
             // B-406: the counts with the folders; a main from before them sent the counts alone.
             const a = answer as Record<string, unknown>;
             return 'counts' in a
-                ? (answer as {
-                      counts: Record<string, number>;
-                      folders: LbBotAttentionFolder[];
-                      foldersCut: number;
-                  })
-                : { counts: a as Record<string, number>, folders: [], foldersCut: 0 };
+                ? {
+                      ...(answer as Omit<LbBotAttentionAnswer, 'albums'>),
+                      albums: Array.isArray(a.albums) ? (a.albums as LbBotAttentionAlbum[]) : null,
+                  }
+                : { albums: null, counts: a as Record<string, number>, folders: [], foldersCut: 0 };
         },
-        queryKey: ['lbbot', 'attention-counts'],
+        queryKey: [...ATTENTION_KEY],
+        // Need you reads its albums too (another client's picks): polled as `/lb/activity` is.
+        refetchInterval: 60 * 1000,
         refetchOnWindowFocus: true,
         staleTime: 60 * 1000,
     });
-    return useShownWithHub(query);
+    const shown = useShownWithHub(query);
+    return allowed ? shown : ({ ...shown, data: undefined } as typeof shown);
 };
 
 /**
  * Activity's Need you (the owner, 2026-11-13): every client's requests lb-bot's ledger holds,
  * `/lb/activity` (PROTOCOL §15.6). Admin only, as the badge is; null data (an older hub or lb-bot,
- * not read yet) leaves Need you to this device's ledger (`needYouItems`). Re-read on a `fill`
- * frame (`invalidateLbBotActivity`), on focus, and at most every 30 s otherwise while shown.
+ * not read yet) leaves Need you to this device's ledger and `/lb/attention`'s albums
+ * (`needYouItems`). Re-read on a `fill` frame (`invalidateNeedYouReads`), on focus, and every
+ * 60 s while shown. A failed read keeps the last good list (review L2).
  */
 export const useLbBotActivity = () => {
     const available = useLbBotAvailable();
     const supported = useHubSupports('GET /lb/activity');
     const admin = allows(useHubRoles(), 'needsAttention');
+    const setUp = useMirrorShown();
+    const allowed = !!lbBot && supported && admin && setUp;
+    useAdminLbRead(ACTIVITY_KEY, allowed);
     const query = useQuery<LbBotActivityRequest[] | null>({
-        enabled: !!lbBot && available && supported && admin,
+        enabled: allowed && available,
         gcTime: 5 * 60 * 1000,
         queryFn: () => lbBot!.activity(),
-        queryKey: ['lbbot', 'activity'],
+        queryKey: [...ACTIVITY_KEY],
         refetchInterval: 60 * 1000,
         refetchOnWindowFocus: true,
         staleTime: 30 * 1000,
     });
-    return useShownWithHub(query);
+    const shown = useShownWithHub(query);
+    return allowed ? shown : ({ ...shown, data: undefined } as typeof shown);
 };
 
-/** A fill moved (a `fill` frame): what lb-bot's ledger lists may have too. */
-export const invalidateLbBotActivity = (): void => {
-    void queryClient.invalidateQueries({ queryKey: ['lbbot', 'activity'] });
+/**
+ * A fill moved (a `fill` frame): what lb-bot's ledger and its attention list say may have too.
+ * Main runs one read of each at a time and folds a burst into one follow-up (review L4).
+ */
+export const invalidateNeedYouReads = (): void => {
+    void queryClient.invalidateQueries({ exact: true, queryKey: [...ACTIVITY_KEY] });
+    void queryClient.invalidateQueries({ exact: true, queryKey: [...ATTENTION_KEY] });
 };
 
 export const useLbBotWishlist = () => {

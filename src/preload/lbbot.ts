@@ -43,7 +43,7 @@ import type {
     LbBotWishlist,
 } from '/@/shared/types/lbbot-types';
 import type { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
-import type { LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
+import type { LbBotAttentionAlbum, LbBotAttentionFolder } from '/@/shared/utils/lbbot-attention';
 
 import { ipcRenderer } from 'electron';
 
@@ -400,16 +400,17 @@ const wishlistAdd = (args: {
 const wishlistRemove = (rgid: string): Promise<LbBotResult<boolean>> =>
     ipcRenderer.invoke('lbbot-wishlist-remove', { rgid });
 
-/** Worbus P4: `/lb/attention`'s `counts` (numbers only) and (B-406) its folders, allowlisted; null
- *  when lb-bot did not answer. */
+/** Worbus P4: `/lb/attention`'s `counts` (numbers only), (B-406) its folders and (Need you) its
+ *  albums, allowlisted; null when the route is not there; rejects on a failed read (review L2). */
 const attentionCounts = (): Promise<null | {
+    albums: LbBotAttentionAlbum[] | null;
     counts: Record<string, number>;
     folders: LbBotAttentionFolder[];
     foldersCut: number;
 }> => ipcRenderer.invoke('lbbot-attention-counts');
 
-/** Activity's Need you: `/lb/activity`'s requests, every client's, allowlisted; null when lb-bot
- *  did not answer. */
+/** Activity's Need you: `/lb/activity`'s requests, every client's, allowlisted; null when the
+ *  route is not there; rejects on a failed read (review L2). */
 const activity = (): Promise<LbBotActivityRequest[] | null> => ipcRenderer.invoke('lbbot-activity');
 
 export const lbBot = {

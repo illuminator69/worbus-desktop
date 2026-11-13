@@ -8,16 +8,14 @@ import styles from './sidebar-groups.module.css';
 import { allows } from '/@/renderer/features/hub/utils/hub-roles';
 import {
     useHubSupports,
-    useLbBotActivity,
     useLbBotAttention,
     useLbBotAvailable,
     useLbBotDownloadsShown,
     useListeningSupported,
     useOverridesSupported,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { useNeedYou } from '/@/renderer/features/lbbot/hooks/use-need-you';
 import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
-import { useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
-import { needYouCount } from '/@/renderer/features/lbbot/utils/need-you';
 import { LIBRARY_FRAME_ROUTES } from '/@/renderer/features/library/library-routes';
 import { SidebarIcon } from '/@/renderer/features/sidebar/components/sidebar-icon';
 import { SidebarItem } from '/@/renderer/features/sidebar/components/sidebar-item';
@@ -102,7 +100,6 @@ export const useSidebarModel = (options?: {
     const listeningSupported = useListeningSupported();
     const overridesSupported = useOverridesSupported();
     const wishlistSupported = useHubSupports('GET /lb/wishlist');
-    const ledger = useFillLedger();
     const sidebarItems = useSidebarItems();
     // Worbus P2: `hub.store.user`; no user (an older hub) shows everything, as today.
     const roles = useHubRoles();
@@ -110,14 +107,14 @@ export const useSidebarModel = (options?: {
     // and folders to file are Library Matches' badge, where its To fix list is.
     const attention = useLbBotAttention().data;
     // The owner, 2026-11-13: Need you is every client's requests, not this device's alone.
-    const activity = useLbBotActivity().data ?? null;
+    const needYou = useNeedYou();
     const downloadsOn = useLbBotDownloadsShown();
     const counts = useMemo(
         () => ({
-            attentionCount: needYouCount(ledger, activity),
+            attentionCount: needYou.length,
             toFixCount: libraryToFixCount(attention, downloadsOn),
         }),
-        [ledger, activity, attention, downloadsOn],
+        [needYou, attention, downloadsOn],
     );
 
     return useMemo(() => {

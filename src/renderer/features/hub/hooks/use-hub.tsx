@@ -98,8 +98,8 @@ import {
     adoptLbBotWelcome,
     applyFillFrame,
     clearLbBotStatus,
-    invalidateLbBotActivity,
     invalidateLbBotOwnership,
+    invalidateNeedYouReads,
     markLbBotUnreachable,
     refreshLbBotOverrides,
     useLbBotLibraryRefresh,
@@ -2112,7 +2112,7 @@ export const useHub = () => {
                 // fill settles or starts - the frames the hub drops that cache for (PROTOCOL
                 // §15.6) - never on a progress frame, which arrive every few seconds.
                 if (ACTIVITY_MOVES.has(msg.state) || ACTIVITY_MOVES.has(msg.status)) {
-                    invalidateLbBotActivity();
+                    invalidateNeedYouReads();
                 }
             } else if (msg.t === 'lb') {
                 // The hub's own probe changed its verdict on lb-bot (R18) —

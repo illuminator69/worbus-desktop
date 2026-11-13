@@ -13,11 +13,11 @@ import { describeFill } from '/@/renderer/features/lbbot/fill-vocabulary';
 import { useFillActions } from '/@/renderer/features/lbbot/hooks/use-fill-actions';
 import {
     caaCoverUrl,
-    useLbBotActivity,
     useLbBotAttention,
     useLbBotDownloadsShown,
     useLbBotWishlist,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { useNeedYou } from '/@/renderer/features/lbbot/hooks/use-need-you';
 import { libraryToFixCount } from '/@/renderer/features/lbbot/lb-page-link';
 import { LedgerRow, useFillLedger } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import {
@@ -26,7 +26,11 @@ import {
     LEDGER_MATCHES,
     LedgerFilter,
 } from '/@/renderer/features/lbbot/utils/activity-filters';
-import { needYouItems } from '/@/renderer/features/lbbot/utils/need-you';
+import {
+    drawnRow,
+    NeedYouServerEntry,
+    serverLedgerRow,
+} from '/@/renderer/features/lbbot/utils/need-you';
 import { Fold } from '/@/renderer/features/motion/fold';
 import { ForkListPage } from '/@/renderer/features/shared/components/fork-list-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
@@ -39,7 +43,6 @@ import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
 import { LibraryItem } from '/@/shared/types/domain-types';
-import { LbBotActivityRequest } from '/@/shared/utils/lbbot-activity';
 
 /**
  * navi-connect: everything lb-bot has been asked to fetch from Soulseek, in flight
@@ -131,49 +134,13 @@ const FillRow = ({ now, row }: { now: number; row: LedgerRow }) => {
 };
 
 /**
- * A request lb-bot lists that this device never made (another client's): drawn with the ledger's
- * own words (`describeFill`), and with Open album alone - no Retry, Cancel or Dismiss, as PROTOCOL
- * §15.6 says of a row only lb-bot knows.
+ * A request lb-bot lists that this device holds no row of: drawn with the ledger's own words
+ * (`describeFill`) from lb-bot's state, with Open album alone - no Retry, Cancel or Dismiss, as
+ * PROTOCOL §15.6 says of a row only lb-bot knows. lb-bot's rows carry no device, so the row does
+ * not say whose it is (review M1): a failed request is "Requested elsewhere", a gap is lb-bot's.
  */
-const ledgerRowOfRequest = (req: LbBotActivityRequest): LedgerRow => ({
-    album: req.album,
-    allFiles: false,
-    artist: req.artist,
-    attempts: 0,
-    bytesDone: 0,
-    bytesTotal: 0,
-    cancellable: false,
-    done: 0,
-    failed: 0,
-    failureKind: req.failureKind as LedgerRow['failureKind'],
-    groupId: req.groupId,
-    isGap: req.gapFill,
-    key: req.releaseMbid || req.groupId,
-    lastCheckedAt: 0,
-    lastError: '',
-    lastErrorTicks: 0,
-    lastSourcePeer: '',
-    leftOut: 0,
-    mp3WouldHelp: false,
-    otherSourceExcludes: [],
-    outcome: req.state === 'picking' ? 'needsPick' : 'failed',
-    percent: 0,
-    reason: req.reason,
-    releaseMbid: req.releaseMbid,
-    retryable: req.retryable,
-    retryAt: 0,
-    rgid: req.rgid,
-    settled: true,
-    sortAt: req.updatedAt * 1000,
-    speedBps: 0,
-    stalledPlacement: false,
-    state: req.state,
-    total: 0,
-    verifyGaveUp: false,
-});
-
-const ServerRow = ({ now, req }: { now: number; req: LbBotActivityRequest }) => {
-    const row = ledgerRowOfRequest(req);
+const ServerRow = ({ now, req }: { now: number; req: NeedYouServerEntry }) => {
+    const row = serverLedgerRow(req);
     const view = describeFill(row, now, true);
     const to = req.albumId
         ? generatePath(AppRoute.LIBRARY_ALBUMS_DETAIL, { albumId: req.albumId })
@@ -203,7 +170,9 @@ const ServerRow = ({ now, req }: { now: number; req: LbBotActivityRequest }) => 
                     </Text>
                 ))}
                 <Text isMuted size="sm">
-                    Requested from another device.
+                    {req.source === 'attention' && req.gap
+                        ? "From lb-bot's gaps."
+                        : 'Requested elsewhere.'}
                 </Text>
             </Stack>
             <Group gap="xs">
@@ -239,10 +208,9 @@ export const LbBotDownloadsPage = ({
     const wishlistCount = wishlist.data?.entries.length;
     const filter: LedgerFilter = section === 'wishlist' ? 'all' : section;
     const shown = rows.filter(MATCHES[filter]);
-    // The owner, 2026-11-13: Need you is every client's requests lb-bot lists as failed or waiting
-    // on a pick, plus this device's rows lb-bot no longer lists - the sidebar badge's set.
-    const activity = useLbBotActivity().data ?? null;
-    const needYou = needYouItems(rows, activity);
+    // The owner, 2026-11-13: Need you is every client's requests that need someone, from any
+    // client - the sidebar badge's set (`useNeedYou`).
+    const needYou = useNeedYou();
     const shownCount = filter === 'needsYou' ? needYou.length : shown.length;
     const now = useNow();
     // Worbus P1: with downloading off the ledger is history to read: no paste-a-link box (a pasted
@@ -329,21 +297,15 @@ export const LbBotDownloadsPage = ({
                     ) : (
                         <Stack gap="sm">
                             {filter === 'needsYou'
-                                ? needYou.map((item) =>
-                                      item.ledger ? (
-                                          <FillRow
-                                              key={item.ledger.key}
-                                              now={now}
-                                              row={item.ledger}
-                                          />
+                                ? needYou.map((item) => {
+                                      // Review L3: drawn from the state that decided it counts.
+                                      const row = drawnRow(item);
+                                      return row ? (
+                                          <FillRow key={item.key} now={now} row={row} />
                                       ) : (
-                                          <ServerRow
-                                              key={`lb:${item.server!.releaseMbid || item.server!.groupId}`}
-                                              now={now}
-                                              req={item.server!}
-                                          />
-                                      ),
-                                  )
+                                          <ServerRow key={item.key} now={now} req={item.server!} />
+                                      );
+                                  })
                                 : shown.map((row) => <FillRow key={row.key} now={now} row={row} />)}
                         </Stack>
                     )}
