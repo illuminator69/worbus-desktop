@@ -138,6 +138,7 @@ import {
 } from '/@/renderer/features/lbbot/utils/artist-override';
 import { artistTapKey, createTapGuard } from '/@/renderer/features/lbbot/utils/artist-tap';
 import { artistLinkPath } from '/@/renderer/features/lbbot/utils/external-paths';
+import { forgetAlbumCovers } from '/@/renderer/features/lbbot/utils/forget-album-covers';
 import {
     classifyRefresh,
     metaHasContent,
@@ -2689,6 +2690,9 @@ export const useLbBotLibraryRefresh = () => {
             const ids = landing?.ndAlbumIds ?? [];
             const artist = landing?.ndArtistId ?? ndArtistId ?? '';
             const invalidateLibrary = () => {
+                // Review M2: a named album's cover may have changed (lb-bot's cover or override
+                // announces itself so, once Navidrome has rescanned): its covers are asked again.
+                forgetAlbumCovers(ids);
                 void queryClient.invalidateQueries({
                     predicate: (query) => {
                         const [scope, kind] = query.queryKey as unknown[];

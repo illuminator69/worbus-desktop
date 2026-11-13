@@ -54,6 +54,7 @@ import {
     tagLineFor,
     wasFinished,
 } from '/@/renderer/features/lbbot/utils/album-override';
+import { forgetAlbumCovers } from '/@/renderer/features/lbbot/utils/forget-album-covers';
 import { leaveAfterAlbumJob } from '/@/renderer/features/lbbot/utils/leave-album';
 import { AppRoute } from '/@/renderer/router/routes';
 import { Badge } from '/@/shared/components/badge/badge';
@@ -385,6 +386,9 @@ const AlbumMatchModal = ({
         }
         setCoverSaved(true);
         setCoverUrl('');
+        // Review M2: the folder cover is written; the covers this session keeps are dropped now and
+        // again on the `library` frame lb-bot sends once Navidrome has rescanned the album.
+        forgetAlbumCovers([albumId]);
         // The row it created (or updated) is what Undo needs; the lists follow.
         void queryClient.invalidateQueries({
             queryKey: ['lbbot', 'overrides'],

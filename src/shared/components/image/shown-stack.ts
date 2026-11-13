@@ -7,6 +7,10 @@ export type ShownEntry = { fade: boolean; loaded: boolean; src: string };
 
 export const showNext = (list: ShownEntry[], src: string, fade: boolean): ShownEntry[] => {
     if (list[list.length - 1]?.src === src) return list;
+    // Review L2: a source already in the list (A -> B -> A; a cover keeps its URL in memory) is the
+    // same <img> (keyed by src), already loaded: it fires no new `load`, so it stays loaded.
+    const again = list.find((entry) => entry.src === src);
+    if (again?.loaded) return [{ ...again, fade: false }];
     const under = [...list].reverse().find((entry) => entry.loaded && entry.src !== src);
     return [...(under ? [under] : []), { fade, loaded: false, src }];
 };

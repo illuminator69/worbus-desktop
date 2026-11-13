@@ -3,6 +3,7 @@ import { generatePath } from 'react-router';
 import type { PollState } from './album-override';
 
 import { decideLeaveAfterJob } from './album-override';
+import { forgetAlbumCovers } from './forget-album-covers';
 import { currentRoutePath, leaveTo } from './leave-page';
 
 import { AppRoute } from '/@/renderer/router/routes';
@@ -22,6 +23,9 @@ export const leaveAfterAlbumJob = (input: {
     kind: 'apply' | 'remove';
     startRow: null | { prevReleaseMbid: string; releaseMbid: string };
 }): void => {
+    // Review M2: an override can change the album's cover (and an undo puts the old one back);
+    // the covers kept in memory for the album, under its old and new ids, are dropped.
+    forgetAlbumCovers([input.deadAlbumId, input.ended.row?.albumId]);
     const decision = decideLeaveAfterJob({
         artistId: input.artistId,
         deadAlbumId: input.deadAlbumId,

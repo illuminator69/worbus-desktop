@@ -94,9 +94,14 @@ test('a_server_that_keeps_answering_nothing_is_a_failure', async () => {
 
 test('the_native_image_fetches_through_it', async () => {
     const { readFileSync } = await import('node:fs');
-    const hook = readFileSync(new URL('./use-native-image.ts', import.meta.url), 'utf8');
-    // B-412 follow-up: through the memory cache, whose misses go to fetchImage.
-    assert.match(hook, /loadCachedImage\(/, 'useNativeImage reads one fetch, any 200 its image');
+    const hook = readFileSync(new URL('./native-image-core.ts', import.meta.url), 'utf8');
+    // B-412 follow-up: through the memory cache, whose misses go to fetchImage; the hook's logic
+    // is NativeImageCore (review L4).
+    assert.match(
+        hook,
+        /load = loadCachedImage/,
+        'useNativeImage reads one fetch, any 200 its image',
+    );
     const cache = readFileSync(new URL('./image-memory-cache.ts', import.meta.url), 'utf8');
     assert.match(cache, /await fetchImage\(/, 'the memory cache fetches its misses through it');
 });

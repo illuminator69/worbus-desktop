@@ -209,24 +209,22 @@ test('the_cache_is_bounded', async () => {
 });
 
 test('the_native_image_reads_the_memory_cache', () => {
-    const hook = readFileSync(new URL('./use-native-image.ts', import.meta.url), 'utf8');
-    assert.match(hook, /loadCachedImage\(/, 'useNativeImage loads through the memory cache');
-    assert.match(
-        hook,
-        /useState<NativeImageState>\(\s*\(\)\s*=>/,
-        'the first render of a remount starts from the cache',
-    );
-    assert.match(hook, /imageMemoryCache\.peek\(/);
+    // Review L4: the hook's logic is NativeImageCore (native-image-core.harness.ts drives it).
+    const core = readFileSync(new URL('./native-image-core.ts', import.meta.url), 'utf8');
+    assert.match(core, /load = loadCachedImage/, 'useNativeImage loads through the memory cache');
+    assert.match(core, /this\.cache\.pin\(/, 'the first render of a remount starts from the cache');
     assert.doesNotMatch(
-        hook,
+        core,
         /URL\.revokeObjectURL/,
         'an unmount releases the cover to the cache instead of revoking it',
     );
+    const hook = readFileSync(new URL('./use-native-image.ts', import.meta.url), 'utf8');
+    assert.match(hook, /useState<NativeImageState>\(\(\) => core\.first\(request\)\)/);
+    assert.doesNotMatch(hook, /URL\.revokeObjectURL/);
     const image = readFileSync(new URL('./image.tsx', import.meta.url), 'utf8');
     assert.match(image, /imageMemoryCache\.forget\(/, 'a cover that will not decode is not kept');
 });
 
-type CacheM1 = Cache & { size: () => { bytes: number; entries: number; largeBytes: number } };
 /**
  * Review of `99477e450` (REVIEW-second-rewalk-desktop-2026-11-13), M1: the full-screen player asks
  * for every song's cover at its original size (`imageRes.fullScreenPlayer: 0`, no `size`), and

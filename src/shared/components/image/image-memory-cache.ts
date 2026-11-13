@@ -14,16 +14,41 @@ import { isImageBody } from './shown-stack.ts';
  *   never by the URL, whose salt and token are the login's, not the image's.
  * - **One object URL per cover**, owned here, so a remount gets the same URL (and Chromium's own
  *   decoded copy of it). A URL is revoked only when its cover has been evicted or forgotten and no
- *   element holds it any more (`take`/`put` hold, `release` lets go).
+ *   element holds it any more (`take`/`put`/`pin` hold, `release` lets go).
  * - **Bounded** by bytes and by count, least recently shown first. A cover on screen is never
  *   evicted under its element; it can go once released.
+ * - **Two budgets** (review M1): a full-size cover (a server request with no size: the full-screen
+ *   player's, per song) or a body over `LARGE_BODY_BYTES` is kept in a small budget of its own, so
+ *   a few originals of several MB cannot push out the hundreds of list covers this exists for. A
+ *   body over `MAX_KEPT_BODY_BYTES` is shown and never kept.
  * - **Never an empty or non-image answer** (B-412): `put` refuses a body of nothing or a document,
  *   so a failed cover is asked again on the next mount.
+ * - **A cover changed from inside the app is forgotten** (review M2, `forgetItems`): every size of
+ *   the named items goes, the elements showing one are told (`onForget`) and ask again, and a fetch
+ *   that was in flight when they were forgotten is shown but not kept. Navidrome 0.64.2 answers a
+ *   cover `Cache-Control: public, no-cache` with an ETag carrying the album's update time
+ *   (measured), so the ask is a revalidation that brings the new image once Navidrome has
+ *   rescanned.
  */
 export const MEMORY_CACHE_MAX_BYTES = 64 * 1024 * 1024;
 export const MEMORY_CACHE_MAX_ENTRIES = 2000;
+/** Review M1: a body above this is "large" and kept in the large budget. */
+export const LARGE_BODY_BYTES = 1024 * 1024;
+/** Review M1: the large budget (full-size and large covers), apart from the list covers'. */
+export const LARGE_MAX_BYTES = 24 * 1024 * 1024;
+/** Review M1: a body above this is shown (held) but never kept. */
+export const MAX_KEPT_BODY_BYTES = 12 * 1024 * 1024;
+/** Review L1: how long a first render's `pin` holds a cover if no effect ever takes it. */
+export const PIN_MS = 10_000;
 
-type Entry = { blob: Blob; detached: boolean; holders: number; key: string; url: string };
+type Entry = {
+    blob: Blob;
+    detached: boolean;
+    holders: number;
+    key: string;
+    large: boolean;
+    url: string;
+};
 
 type UrlApi = { create: (blob: Blob) => string; revoke: (url: string) => void };
 
@@ -32,21 +57,57 @@ const objectUrls: UrlApi = {
     revoke: (url) => URL.revokeObjectURL(url),
 };
 
+/** A server cover's key (`<type>:<server id>:<base URL>:<id>:<size>`, the controllers'). */
+const SERVER_KEY = /^(subsonic|jellyfin):/;
+
+/**
+ * The item a cover key names: the image id of a server cover (the base URL may hold colons, the id
+ * and size do not), else the key itself (a plain URL).
+ */
+export const itemIdOf = (key: string): string => {
+    if (!SERVER_KEY.test(key)) return key;
+    const last = key.lastIndexOf(':');
+    return key.slice(key.lastIndexOf(':', last - 1) + 1, last);
+};
+
+/** A server cover asked for with no size: the original image, at full size. */
+const isFullSizeKey = (key: string) => SERVER_KEY.test(key) && key.endsWith(':');
+
+export type ImageMemoryCacheLimits = {
+    largeBodyBytes?: number;
+    largeMaxBytes?: number;
+    maxBytes?: number;
+    maxEntries?: number;
+    maxKeptBodyBytes?: number;
+    pinMs?: number;
+};
+
 export class ImageMemoryCache {
-    private bytes = 0;
     private readonly byUrl = new Map<string, Entry>();
     /** In Map order: the least recently shown first. */
     private readonly entries = new Map<string, Entry>();
+    /** Per item id, the `version` it was last forgotten at (M2: a fetch in flight then is not kept). */
+    private readonly forgottenAt = new Map<string, number>();
+    private readonly largeBodyBytes: number;
+    private largeBytes = 0;
+    private largeEntries = 0;
+    private readonly largeMaxBytes: number;
+    private readonly listeners = new Set<(ids: ReadonlySet<string>) => void>();
     private readonly maxBytes: number;
     private readonly maxEntries: number;
+    private readonly maxKeptBodyBytes: number;
+    private readonly pinMs: number;
+    private smallBytes = 0;
     private readonly urls: UrlApi;
+    private version = 0;
 
-    constructor(
-        limits: { maxBytes?: number; maxEntries?: number } = {},
-        urls: UrlApi = objectUrls,
-    ) {
+    constructor(limits: ImageMemoryCacheLimits = {}, urls: UrlApi = objectUrls) {
         this.maxBytes = limits.maxBytes ?? MEMORY_CACHE_MAX_BYTES;
         this.maxEntries = limits.maxEntries ?? MEMORY_CACHE_MAX_ENTRIES;
+        this.largeBodyBytes = limits.largeBodyBytes ?? LARGE_BODY_BYTES;
+        this.largeMaxBytes = limits.largeMaxBytes ?? LARGE_MAX_BYTES;
+        this.maxKeptBodyBytes = limits.maxKeptBodyBytes ?? MAX_KEPT_BODY_BYTES;
+        this.pinMs = limits.pinMs ?? PIN_MS;
         this.urls = urls;
     }
 
@@ -60,34 +121,100 @@ export class ImageMemoryCache {
         this.detach(entry);
     }
 
-    /** The cover's URL without holding it (a first render); marks it recently shown. */
+    /**
+     * Review M2: the covers of these items changed (an album's cover, its songs'). Every size of
+     * each is dropped, a fetch in flight for one is not kept, and `onForget` listeners (the elements
+     * showing one) are told, so they ask again.
+     */
+    forgetItems(ids: Iterable<string>) {
+        const wanted = new Set([...ids].filter(Boolean));
+        if (wanted.size === 0) return;
+        this.version += 1;
+        for (const id of wanted) this.forgottenAt.set(id, this.version);
+        for (const entry of [...this.entries.values()]) {
+            if (wanted.has(itemIdOf(entry.key))) this.detach(entry);
+        }
+        for (const listener of [...this.listeners]) listener(wanted);
+    }
+
+    /** The holds outstanding, kept or not (the harness: 0 once every element has let go). */
+    holdCount() {
+        let holds = 0;
+        for (const entry of this.byUrl.values()) holds += entry.holders;
+        return holds;
+    }
+
+    /** A version to pass to `put` as `since`: taken before a fetch starts (M2). */
+    mark(): number {
+        return this.version;
+    }
+
+    /** Review M2: told the item ids `forgetItems` dropped. Returns the unsubscribe. */
+    onForget(listener: (ids: ReadonlySet<string>) => void): () => void {
+        this.listeners.add(listener);
+        return () => this.listeners.delete(listener);
+    }
+
+    /** The cover's URL without holding it; marks it recently shown. */
     peek(key: string): string | undefined {
         return this.touch(key)?.url;
     }
 
     /**
-     * Keeps `blob` as the cover for `key` and holds it for the caller. Undefined (nothing kept)
-     * for an empty body or a document. A cover already kept is held and returned instead.
+     * Review L1: the cover's URL for a first render, held until `unpin` (the element's effect,
+     * once it has taken its own hold) or `pinMs`, whichever comes first, so another row's `put`
+     * between the render and the effect cannot revoke it. A render React throws away is let go by
+     * the timer.
      */
-    put(key: string, blob: Blob): string | undefined {
+    pin(key: string): undefined | { unpin: () => void; url: string } {
+        const url = this.take(key);
+        if (!url) return undefined;
+        let pinned = true;
+        const unpin = () => {
+            if (!pinned) return;
+            pinned = false;
+            clearTimeout(timer);
+            this.release(url);
+        };
+        const timer = setTimeout(unpin, this.pinMs);
+        (timer as { unref?: () => void }).unref?.();
+        return { unpin, url };
+    }
+
+    /**
+     * Keeps `blob` as the cover for `key` and holds it for the caller. Undefined (nothing kept)
+     * for an empty body or a document. A cover already kept is held and returned instead. A body
+     * too large to keep, or one whose item was forgotten after `since` (a `mark()` taken before
+     * its fetch), is held for the caller and not kept.
+     */
+    put(key: string, blob: Blob, options: { since?: number } = {}): string | undefined {
         if (blob.size === 0 || !isImageBody(blob.type)) return undefined;
         const kept = this.take(key);
         if (kept) return kept;
+        const stale =
+            options.since !== undefined &&
+            (this.forgottenAt.get(itemIdOf(key)) ?? 0) > options.since;
         const entry: Entry = {
             blob,
             detached: false,
             holders: 1,
             key,
+            large: blob.size > this.largeBodyBytes || isFullSizeKey(key),
             url: this.urls.create(blob),
         };
-        this.entries.set(key, entry);
         this.byUrl.set(entry.url, entry);
-        this.bytes += blob.size;
+        if (stale || blob.size > this.maxKeptBodyBytes) {
+            // Shown, never kept: freed when its element lets go.
+            entry.detached = true;
+            return entry.url;
+        }
+        this.entries.set(key, entry);
+        this.account(entry, 1);
         this.trim();
         return entry.url;
     }
 
-    /** Lets go of a URL from `take` or `put`. */
+    /** Lets go of a URL from `take`, `put` or `pin`. */
     release(url: string) {
         const entry = this.byUrl.get(url);
         if (!entry || entry.holders === 0) return;
@@ -98,7 +225,11 @@ export class ImageMemoryCache {
     }
 
     size() {
-        return { bytes: this.bytes, entries: this.entries.size };
+        return {
+            bytes: this.smallBytes + this.largeBytes,
+            entries: this.entries.size,
+            largeBytes: this.largeBytes,
+        };
     }
 
     /** The cover's URL, held for the caller until `release`. */
@@ -109,9 +240,18 @@ export class ImageMemoryCache {
         return entry.url;
     }
 
+    private account(entry: Entry, sign: -1 | 1) {
+        if (entry.large) {
+            this.largeBytes += sign * entry.blob.size;
+            this.largeEntries += sign;
+        } else {
+            this.smallBytes += sign * entry.blob.size;
+        }
+    }
+
     private detach(entry: Entry) {
         this.entries.delete(entry.key);
-        this.bytes -= entry.blob.size;
+        this.account(entry, -1);
         entry.detached = true;
         if (entry.holders === 0) this.free(entry);
     }
@@ -119,6 +259,17 @@ export class ImageMemoryCache {
     private free(entry: Entry) {
         this.byUrl.delete(entry.url);
         this.urls.revoke(entry.url);
+    }
+
+    private largeOver() {
+        return this.largeBytes > this.largeMaxBytes;
+    }
+
+    private smallOver() {
+        return (
+            this.smallBytes > this.maxBytes ||
+            this.entries.size - this.largeEntries > this.maxEntries
+        );
     }
 
     private touch(key: string): Entry | undefined {
@@ -129,11 +280,15 @@ export class ImageMemoryCache {
         return entry;
     }
 
+    /** Each budget evicts its own entries only, least recently shown first, never one held. */
     private trim() {
-        if (this.bytes <= this.maxBytes && this.entries.size <= this.maxEntries) return;
+        if (!this.smallOver() && !this.largeOver()) return;
         for (const entry of [...this.entries.values()]) {
-            if (this.bytes <= this.maxBytes && this.entries.size <= this.maxEntries) return;
-            if (entry.holders === 0) this.detach(entry);
+            const small = this.smallOver();
+            const large = this.largeOver();
+            if (!small && !large) return;
+            if (entry.holders > 0) continue;
+            if (entry.large ? large : small) this.detach(entry);
         }
     }
 }
@@ -142,7 +297,9 @@ export const imageMemoryCache = new ImageMemoryCache();
 
 /**
  * A cover's URL, held for the caller (who `release`s it): from memory when this session has shown
- * it, else fetched (`fetchImage`: the per-server slots and B-412's re-asks) and kept.
+ * it, else fetched (`fetchImage`: the per-server slots and B-412's re-asks) and kept. Review L3: a
+ * cover whose caller went away (the row scrolled out) while its sent request ran on is kept when it
+ * arrives, so scroll-back does not ask again.
  */
 export const loadCachedImage = async (
     request: {
@@ -158,8 +315,15 @@ export const loadCachedImage = async (
     const key = request.cacheKey || request.url;
     const kept = cache.take(key);
     if (kept) return kept;
-    const blob = await fetchImage(request, init, options);
-    const url = cache.put(key, blob);
+    const since = cache.mark();
+    const blob = await fetchImage(request, init, {
+        ...options,
+        onLateImage: (late) => {
+            const url = cache.put(key, late, { since });
+            if (url) cache.release(url);
+        },
+    });
+    const url = cache.put(key, blob, { since });
     if (!url) throw new Error('Not an image');
     return url;
 };

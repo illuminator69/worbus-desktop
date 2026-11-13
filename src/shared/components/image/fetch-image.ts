@@ -123,6 +123,9 @@ const acquire = (
 
 type Answer = { blob: Blob | null; ok: boolean; status: number; timedOut?: boolean; type: string };
 
+const isImage = (answer: Answer) =>
+    answer.ok && !!answer.blob && answer.blob.size > 0 && isImageBody(answer.type);
+
 /**
  * One request, sent in a slot and run to its end whatever the caller does; `timeoutMs` (a re-ask's,
  * or the budget for a first ask) is the one thing that cancels it.
@@ -133,6 +136,7 @@ const ask = async (
     reload: boolean,
     signal: AbortSignal,
     timeoutMs: number,
+    onLate?: (blob: Blob) => void,
 ): Promise<Answer> => {
     const origin = new URL(request.url).origin;
     // A re-ask waits for the server's re-ask lane first, then for one of its slots.
@@ -178,13 +182,28 @@ const ask = async (
     })();
     // The caller may stop waiting; the request itself is not cancelled.
     sent.catch(() => {});
+    // Review L3: an image that arrives after the caller stopped waiting is handed on, not dropped.
+    if (onLate) {
+        void sent.then(
+            (answer) => {
+                if (signal.aborted && isImage(answer)) onLate(answer.blob!);
+            },
+            () => {},
+        );
+    }
     return Promise.race([sent, whenAborted(signal)]);
 };
 
 export const fetchImage = async (
     request: { credentials?: RequestCredentials; headers?: HeadersInit; url: string },
     init: RequestInit & { priority?: 'auto' | 'high' | 'low' },
-    options: { budgetMs?: number; delaysMs?: number[]; reaskTimeoutMs?: number } = {},
+    options: {
+        budgetMs?: number;
+        delaysMs?: number[];
+        /** Review L3: an image that arrived after the caller aborted (the request ran on). */
+        onLateImage?: (blob: Blob) => void;
+        reaskTimeoutMs?: number;
+    } = {},
 ): Promise<Blob> => {
     const delays = options.delaysMs ?? RETRY_DELAYS_MS;
     const budgetMs = options.budgetMs ?? GIVE_UP_AFTER_MS;
@@ -206,6 +225,7 @@ export const fetchImage = async (
                 attempt > 0,
                 signal,
                 attempt > 0 ? reaskTimeoutMs : budgetMs,
+                options.onLateImage,
             );
             const transient =
                 answer.status === 429 ||

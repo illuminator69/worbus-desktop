@@ -62,8 +62,14 @@ const standIn = async () => {
     const { port } = server.address() as { port: number };
     const base = `http://127.0.0.1:${port}`;
     return {
-        /** Answers every request waiting, then lets the answers arrive. */
-        answer: async () => {
+        /** Waits for `count` requests to arrive, answers them all, then lets the answers land. */
+        answer: async (count = 1) => {
+            for (let waited = 0; waiting.length < count && waited < 2000; waited += 5)
+                await tick(5);
+            assert.ok(
+                waiting.length >= count,
+                `${count} requests asked, ${waiting.length} arrived`,
+            );
             for (const res of waiting.splice(0)) {
                 res.setHeader('Cache-Control', 'public, no-cache');
                 res.setHeader('Content-Type', 'image/jpeg');
@@ -72,12 +78,14 @@ const standIn = async () => {
             await tick(60);
         },
         asked: (id: string) => asked.get(id) ?? 0,
-        close: () => server.close(),
+        close: () => {
+            server.closeAllConnections();
+            server.close();
+        },
         request: (id: string, salt = 'a'): Request => ({
             cacheKey: ['subsonic', 'srv', '', id, 80].join(':'),
             url: `${base}/rest/getCoverArt.view?id=${id}&u=w&t=t${salt}&s=${salt}&size=80`,
         }),
-        waiting: () => waiting.length,
     };
 };
 
@@ -135,6 +143,11 @@ test('holds_return_to_zero_and_no_url_is_revoked_while_shown_or_held', async () 
         return element;
     };
     const alive = (url?: string) => !!url && resolveObjectURL(url) !== undefined;
+    // Balanced: the cache's holds are exactly the elements' (one each that holds a cover).
+    const balanced = (step: string) => {
+        const holding = [...elements].filter((element) => element.core.held).length;
+        assert.equal(cache.holdCount(), holding, `${step}: holds ${cache.holdCount()}`);
+    };
 
     try {
         // Mount: the cover loads.
@@ -144,6 +157,7 @@ test('holds_return_to_zero_and_no_url_is_revoked_while_shown_or_held', async () 
         assert.equal(a.state.status, 'loaded');
         const c1 = a.state.displaySrc!;
         assert.ok(alive(c1));
+        balanced('mount');
 
         // Request change: C2 loads, C1 is let go (kept in memory).
         a.effect(s.request('C2'));
@@ -151,11 +165,13 @@ test('holds_return_to_zero_and_no_url_is_revoked_while_shown_or_held', async () 
         const c2 = a.state.displaySrc!;
         assert.notEqual(c2, c1);
         assert.ok(alive(c1), 'C1 stays in memory');
+        balanced('request change');
 
         // The same cover under a new salt: no request, the same URL.
         a.effect(s.request('C2', 'other-salt'));
         assert.equal(a.state.displaySrc, c2);
         assert.equal(s.asked('C2'), 1);
+        balanced('same cover, new salt');
 
         // Abort: C3 in flight, then C4 asked before C3 answers.
         a.effect(s.request('C3'));
@@ -164,7 +180,7 @@ test('holds_return_to_zero_and_no_url_is_revoked_while_shown_or_held', async () 
         await tick();
         // Unmount mid-fetch.
         a.unmount();
-        await s.answer();
+        await s.answer(2);
         assert.ok(cache.peek(s.request('C3').cacheKey), 'C3 arrived after its row left: kept');
         assert.ok(cache.peek(s.request('C4').cacheKey), 'C4 arrived after unmount: kept');
         assert.equal(cache.holdCount(), 0, 'nothing is held after the unmount');
@@ -178,15 +194,18 @@ test('holds_return_to_zero_and_no_url_is_revoked_while_shown_or_held', async () 
         assert.equal(c.state.displaySrc, c1);
         b.unmount();
         assert.ok(alive(c1), 'still held by the other element');
+        balanced('two elements, one unmounted');
 
         // A changed cover (M2): forgotten while shown; the element asks again and keeps the old
         // image on screen until the new one is there.
         cache.forgetItems(['C1']);
-        assert.equal(s.waiting(), 1, 'the element showing it asked again');
+        assert.equal(c.state.status, 'loading', 'the element showing it asks again');
         await s.answer();
+        assert.equal(s.asked('C1'), 2);
         assert.equal(c.state.status, 'loaded');
         assert.notEqual(c.state.displaySrc, c1, 'a new URL for the new bytes');
         assert.ok(!alive(c1), 'the old one is freed once nothing shows it');
+        balanced('forgotten and asked again');
 
         // Disabled (off screen) and never loaded, then unmounted.
         const d = mount(s.request('C5'), false);
