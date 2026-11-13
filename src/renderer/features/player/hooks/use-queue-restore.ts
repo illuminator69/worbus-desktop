@@ -93,7 +93,11 @@ export const useInitialTimestampRestore = () => {
             return;
         }
 
+        // B-402 M1: for the song current now; a song change in the next 100 ms makes it no one's.
+        const armedFor = usePlayerStore.getState().getCurrentSong()?._uniqueId;
         setTimeout(() => {
+            const now = usePlayerStore.getState().getCurrentSong()?._uniqueId;
+            if (!scheduledSeekApplies(armedFor, now)) return;
             mediaSeekToTimestamp(seekTimestamp);
         }, 100);
     }, [mediaSeekToTimestamp]);
