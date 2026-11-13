@@ -75,3 +75,44 @@ export function resyncAction({ readyState, shouldRun, welcomed }: ResyncState): 
     if (!shouldRun) return 'none';
     return readyState === 1 && welcomed ? 'reconnect' : 'none';
 }
+
+/** How long a resync waits for the old socket's close before terminating it (review L5). */
+export const RESYNC_CLOSE_WAIT_MS = 2000;
+
+/** The bit of a WebSocket `afterClose` uses. */
+export interface ClosingSocket {
+    close(): void;
+    once(event: 'close', listener: () => void): unknown;
+    terminate(): void;
+}
+
+/**
+ * Review L5: close `socket` and run `then` once it has closed - or, if no close comes within
+ * `waitMs`, terminate it and run `then` anyway. A resync's new socket must not say hello before
+ * the old one's close reaches the hub: the hub's disconnect skips a socket that is no longer the
+ * device's (`dev.ws is not ws`), so the device would stay active and "playing" under a reloaded,
+ * paused page.
+ */
+export function afterClose(socket: ClosingSocket, waitMs: number, then: () => void): void {
+    let done = false;
+    const go = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        then();
+    };
+    const timer = setTimeout(() => {
+        try {
+            socket.terminate();
+        } catch {
+            /* ignore */
+        }
+        go();
+    }, waitMs);
+    socket.once('close', go);
+    try {
+        socket.close();
+    } catch {
+        go();
+    }
+}

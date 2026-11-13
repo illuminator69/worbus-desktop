@@ -33,7 +33,7 @@ import {
     sweep,
     SweepDeps,
 } from './finder';
-import { kickAction, resyncAction } from './kick';
+import { afterClose, kickAction, RESYNC_CLOSE_WAIT_MS, resyncAction } from './kick';
 import { clearServerVersion, noteServerVersion } from './server-version';
 
 import { getMainWindow } from '/@/main/index';
@@ -656,9 +656,43 @@ ipcMain.on('hub-resync', () => {
     log.info(
         '[hub] the page reloaded after this connection was welcomed - reconnecting for a fresh welcome',
     );
-    stop();
-    start();
+    resyncSocket();
 });
+
+/**
+ * B-421's reconnect, review L5/L6: replace the open socket on the SAME address (L6: a reload is
+ * no reason to re-choose - `stop()` resets the active address, and the choice could move a
+ * working public address to a private one), and dial only once the old socket has closed (L5:
+ * the hub must see this device's disconnect before its new hello). Meanwhile the renderer is told
+ * the transport is down, as a settings restart tells it.
+ */
+function resyncSocket(): void {
+    const old = ws;
+    const url = activeAddress.active();
+    if (!old || !url) {
+        stop();
+        start();
+        return;
+    }
+    if (reconnectTimer) {
+        clearTimeout(reconnectTimer);
+        reconnectTimer = undefined;
+    }
+    // The old socket is superseded from here: its close speaks for nothing (`isCurrent`).
+    const gen = ++generation;
+    choosing = 0;
+    ws = undefined;
+    forgetRegistry();
+    clearServerVersion();
+    emitServer();
+    emitStatus('disconnected');
+    afterClose(old, RESYNC_CLOSE_WAIT_MS, () => {
+        // A settings change, a sign-out or a kick since then owns the connection now.
+        if (gen !== generation || !shouldRun || ws) return;
+        backoffMs = INITIAL_BACKOFF_MS;
+        dial(url, gen);
+    });
+}
 
 // The renderer saw the network come back (its window's `online` event).
 ipcMain.on('hub-kick', () => kick('online'));
