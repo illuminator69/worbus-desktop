@@ -478,3 +478,88 @@ test('a_cover_has_a_re_ask_timeout_and_a_budget_by_default', async () => {
     assert.ok(mod.GIVE_UP_AFTER_MS! >= total, 'the budget is shorter than the schedule');
     assert.ok(mod.GIVE_UP_AFTER_MS! <= 180_000, 'a cover may spin for more than 3 min');
 });
+
+/**
+ * B-412 review L1 (2026-11-13): the long schedule (9 asks over ~2 min) is for the case B-415
+ * measured, Navidrome's `getCoverArt` answering an empty 200 under a burst. A host that answers
+ * 5xx or 429, or an empty 200 from a host that is not a Subsonic cover endpoint (a "no art" answer,
+ * Cover Art Archive), spun for over 2 min and cost 9 asks, all through the server's one re-ask lane
+ * ahead of real recoveries. Definitive answers (a 404, a 501, a body that is not an image) fail at
+ * the first answer.
+ */
+const answeringStandIn = async (answer: (res: import('node:http').ServerResponse) => void) => {
+    let asked = 0;
+    const server = createServer((_req, res) => {
+        asked += 1;
+        answer(res);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return { asked: () => asked, base: `http://127.0.0.1:${port}`, close: () => server.close() };
+};
+
+const quickDefaults = async () => {
+    const mod = (await import('./fetch-image.ts')) as unknown as { RETRY_DELAYS_MS: number[] };
+    return mod.RETRY_DELAYS_MS.map(() => 1);
+};
+
+const asksFor = async (path: string, answer: (res: import('node:http').ServerResponse) => void) => {
+    const s = await answeringStandIn(answer);
+    try {
+        const fetchImage = (await load())!;
+        await assert.rejects(
+            fetchImage(
+                { url: `${s.base}${path}` },
+                { signal: new AbortController().signal },
+                { delaysMs: await quickDefaults() },
+            ),
+        );
+        return s.asked();
+    } finally {
+        s.close();
+    }
+};
+
+const empty = (res: import('node:http').ServerResponse) => {
+    res.setHeader('Content-Length', '0');
+    res.end();
+};
+
+test('a_server_error_is_asked_again_a_few_times_not_the_whole_schedule', async () => {
+    for (const status of [503, 429, 500]) {
+        const n = await asksFor('/rest/getCoverArt.view?id=x', (res) => {
+            res.statusCode = status;
+            res.end();
+        });
+        assert.ok(n > 1, `${status}: not asked again`);
+        assert.ok(n <= 4, `${status}: asked ${n} times`);
+    }
+});
+
+test('an_empty_200_from_another_host_is_asked_again_a_few_times', async () => {
+    const n = await asksFor('/release/abc/front-250', empty);
+    assert.ok(n > 1 && n <= 4, `an empty 200 off a cover endpoint: asked ${n} times`);
+});
+
+test('navidromes_empty_cover_keeps_the_whole_schedule', async () => {
+    const n = await asksFor('/rest/getCoverArt.view?id=x&size=80', empty);
+    assert.equal(n, (await quickDefaults()).length + 1);
+});
+
+test('a_definitive_answer_fails_at_the_first', async () => {
+    const notFound = await asksFor('/rest/getCoverArt.view?id=x', (res) => {
+        res.statusCode = 404;
+        res.end();
+    });
+    assert.equal(notFound, 1, '404');
+    const notImplemented = await asksFor('/rest/getCoverArt.view?id=x', (res) => {
+        res.statusCode = 501;
+        res.end();
+    });
+    assert.equal(notImplemented, 1, '501');
+    const document = await asksFor('/rest/getCoverArt.view?id=x', (res) => {
+        res.setHeader('Content-Type', 'text/xml');
+        res.end('<subsonic-response status="failed"/>');
+    });
+    assert.equal(document, 1, 'a Subsonic error document');
+});
