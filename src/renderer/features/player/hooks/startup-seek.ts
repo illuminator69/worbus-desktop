@@ -119,36 +119,54 @@ export const webEngineReady = (): void => {
 /**
  * B-402: a seek for the web player's playing element. Up (`engineUp`, engineTakesSeekNow): sent at
  * once, and anything held is dropped (the newer word). Not up yet (a fresh start: react-player not
- * loaded or its element never ready): held, and applied when the element of the current song's
- * source reports ready, before it plays. A ready from another source (the previous song's element
- * finishing its load) leaves it held. Only the latest seek is held.
+ * loaded or its element never ready): held for the song it was sent for (its `_uniqueId`), and
+ * taken when that song's element, playing that song's source, reports ready, before it plays.
+ * Review M1: a hold is that song's only. A ready of another song takes nothing, and the web player
+ * drops the hold when the song changes (Next, AutoNext, the B-138 skip, a stop, a queue swap). A
+ * ready of another source (the previous song's element finishing its load) leaves it held. Only
+ * the latest seek is held.
  */
 export interface HeldSeek {
-    ready: (
+    /** The current song changed: a hold made for the previous one is no longer anyone's. */
+    drop: () => void;
+    send: (
+        sec: number,
+        engineUp: boolean,
+        seek: (sec: number) => void,
+        songId: null | string | undefined,
+    ) => void;
+    /** The held seconds, once, when this ready is the held song's on its own source; else null. */
+    take: (
         readySrc: string | undefined,
         currentSrc: string | undefined,
-        seek: (sec: number) => void,
-    ) => void;
-    send: (sec: number, engineUp: boolean, seek: (sec: number) => void) => void;
+        songId: null | string | undefined,
+    ) => null | number;
 }
 
 export const createHeldSeek = (): HeldSeek => {
-    let held: null | number = null;
+    let held: null | { sec: number; songId: null | string } = null;
     return {
-        ready: (readySrc, currentSrc, seek) => {
-            if (held === null) return;
-            if (readySrc && currentSrc && readySrc !== currentSrc) return;
-            const at = held;
+        drop: () => {
             held = null;
-            seek(at);
         },
-        send: (sec, engineUp, seek) => {
+        send: (sec, engineUp, seek, songId) => {
             if (engineUp) {
                 held = null;
                 seek(sec);
                 return;
             }
-            held = sec;
+            held = { sec, songId: songId ?? null };
+        },
+        take: (readySrc, currentSrc, songId) => {
+            if (!held) return null;
+            if (held.songId !== (songId ?? null)) {
+                held = null; // another song's ready: the hold was not for it
+                return null;
+            }
+            if (readySrc && currentSrc && readySrc !== currentSrc) return null;
+            const { sec } = held;
+            held = null;
+            return sec;
         },
     };
 };

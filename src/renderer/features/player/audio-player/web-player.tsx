@@ -323,6 +323,8 @@ export function WebPlayer() {
     usePlayerEvents(
         {
             onCurrentSongChange: () => {
+                // Review M1 (B-402): a seek held for the song that was current is no one's now.
+                heldSeekRef.current.drop();
                 setIsTransitioning(false);
             },
             onPlayerQueueChange: () => {
@@ -366,7 +368,13 @@ export function WebPlayer() {
 
                 // B-402: before the element is up, the seek went to a null ref and was lost (a
                 // transfer to a fresh desktop played from 0 s); it is held for the element's ready.
-                heldSeekRef.current.send(timestamp, engineTakesSeekNow(true), toElement);
+                // Review M1: held for the song it was sent for, never another.
+                heldSeekRef.current.send(
+                    timestamp,
+                    engineTakesSeekNow(true),
+                    toElement,
+                    usePlayerStoreBase.getState().getCurrentSong()?._uniqueId,
+                );
             },
             onPlayerStatus: async (properties) => {
                 setIsTransitioning(false);
@@ -562,11 +570,12 @@ export function WebPlayer() {
             // B-402: a seek held before the element was up, for this element if it is the current
             // song's source (not the previous song's finishing its load).
             const internal = reactPlayer.getInternalPlayer() as HTMLMediaElement | undefined;
-            heldSeekRef.current.ready(
+            const held = heldSeekRef.current.take(
                 internal?.src || undefined,
                 absoluteUrl(activeSlot === 1 ? player1Url : player2Url),
-                (at) => reactPlayer.seekTo(at, 'seconds'),
+                (activeSlot === 1 ? player1 : player2)?._uniqueId,
             );
+            if (held !== null) reactPlayer.seekTo(held, 'seconds');
             if (pendingLocalSeekRef.current <= 0) return;
             const seekTo = pendingLocalSeekRef.current;
             pendingLocalSeekRef.current = -1;
@@ -576,7 +585,7 @@ export function WebPlayer() {
                 setLocalPlayerStatus(PlayerStatus.PLAYING);
             }
         },
-        [num, player1Url, player2Url, status, volume],
+        [num, player1, player1Url, player2, player2Url, status, volume],
     );
 
     const handlePlayer1Start = useCallback(

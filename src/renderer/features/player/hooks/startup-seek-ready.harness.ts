@@ -212,7 +212,8 @@ test('wired_the_web_player_holds_a_seek_for_its_ready', () => {
     const seek = player.slice(player.indexOf('onPlayerSeekToTimestamp'));
     assert.match(seek.slice(0, seek.indexOf('onPlayerStatus')), /\.send\(/);
     const start = player.slice(player.indexOf('const applyPendingSeekIfNeeded'));
-    assert.match(start.slice(0, start.indexOf('const handlePlayer2Start')), /\.ready\(/);
+    // Review M1: `take` (bound to the song) replaced `ready`.
+    assert.match(start.slice(0, start.indexOf('const handlePlayer2Start')), /\.take\(/);
 });
 
 /**
