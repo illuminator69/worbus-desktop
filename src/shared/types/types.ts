@@ -99,6 +99,8 @@ export const toServerType = (value?: string): null | ServerType => {
 export enum AuthState {
     INVALID = 'invalid',
     LOADING = 'loading',
+    /** B-400: the session was refused and the password is being asked for; nothing is mounted. */
+    PASSWORD_NEEDED = 'passwordNeeded',
     VALID = 'valid',
 }
 

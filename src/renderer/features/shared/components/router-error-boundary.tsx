@@ -2,6 +2,7 @@ import { ErrorBoundary } from 'react-error-boundary';
 import { useTranslation } from 'react-i18next';
 
 import { ServerSelector } from '/@/renderer/features/sidebar/components/server-selector';
+import { useAuthStore } from '/@/renderer/store';
 import { Box } from '/@/shared/components/box/box';
 import { Button } from '/@/shared/components/button/button';
 import { Center } from '/@/shared/components/center/center';
@@ -87,6 +88,15 @@ interface RouterErrorBoundaryProps {
 }
 
 export const RouterErrorBoundary = ({ children }: RouterErrorBoundaryProps) => {
+    // B-400: a page that failed under a refused session is retried once a sign-in changes it (the
+    // password form signed in, another server or account was chosen), instead of standing until a
+    // reload. The sign-in form drops every cached query when it signs in. Not Navidrome's own
+    // token: every native answer renews it, which would reset the page on each response.
+    const signIn = useAuthStore((state) => {
+        const server = state.currentServer;
+        return server ? [server.id, server.url, server.username, server.credential].join('|') : '';
+    });
+
     return (
         <ErrorBoundary
             FallbackComponent={RouterErrorFallback}
@@ -96,6 +106,7 @@ export const RouterErrorBoundary = ({ children }: RouterErrorBoundaryProps) => {
                 }
             }}
             onReset={() => {}}
+            resetKeys={[signIn]}
         >
             {children}
         </ErrorBoundary>

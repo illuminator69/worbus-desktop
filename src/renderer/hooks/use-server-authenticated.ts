@@ -9,11 +9,21 @@ import { api } from '/@/renderer/api';
 import { controller } from '/@/renderer/api/controller';
 import { askForPasswordAgain } from '/@/renderer/api/utils';
 import { AppRoute } from '/@/renderer/router/routes';
-import { getServerById, useAuthStoreActions, useCurrentServerId } from '/@/renderer/store';
+import {
+    getServerById,
+    useAuthStore,
+    useAuthStoreActions,
+    useCurrentServerId,
+} from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
+import { ServerType } from '/@/shared/types/domain-types';
 import { AuthState } from '/@/shared/types/types';
-import { whenSessionRefused } from '/@/shared/utils/saved-password';
+import {
+    nativeSessionExpired,
+    signInKey,
+    whenSessionRefused,
+} from '/@/shared/utils/saved-password';
 
 const localSettings = isElectron() ? window.api.localSettings : null;
 
@@ -46,6 +56,12 @@ export const useServerAuthenticated = () => {
     const navigate = useNavigate();
     const navigateRef = useRef(navigate);
     const retryCountRef = useRef<number>(0);
+    // B-400: the server and sign-in the password was asked for; a different sign-in of that
+    // server (the form signed in) is checked again. Another server is the effect below's.
+    const askedSignIn = useRef<null | { id: string; signIn: string }>(null);
+    const currentSignIn = useAuthStore((state) =>
+        state.currentServer ? signInKey(state.currentServer) : null,
+    );
 
     const { setCurrentServer, updateServer } = useAuthStoreActions();
 
@@ -88,6 +104,19 @@ export const useServerAuthenticated = () => {
 
                     if (!userInfo) {
                         throw new Error('Failed to get user info');
+                    }
+
+                    // B-400: getUserInfo asks the Subsonic API, whose token outlives Navidrome's own
+                    // session; the library pages use the latter. An expired one is a refused
+                    // session, handled below like a 401, before anything is mounted.
+                    if (
+                        serverWithAuth.type === ServerType.NAVIDROME &&
+                        nativeSessionExpired(serverWithAuth.ndCredential, Date.now())
+                    ) {
+                        throw Object.assign(
+                            new Error('Unauthorized: the Navidrome session has expired'),
+                            { response: { status: 401 } },
+                        );
                     }
 
                     // Update server with user info (in case isAdmin changed)
@@ -168,7 +197,13 @@ export const useServerAuthenticated = () => {
                                 serverId: serverWithAuth.id,
                             });
                             askForPasswordAgain(serverWithAuth);
-                            setReady(AuthState.INVALID);
+                            // B-400: not INVALID, which mounts the library under the refused
+                            // session; the sign-in the form writes is checked again (below).
+                            askedSignIn.current = {
+                                id: serverWithAuth.id,
+                                signIn: signInKey(serverWithAuth),
+                            };
+                            setReady(AuthState.PASSWORD_NEEDED);
                             return;
                         }
 
@@ -377,6 +412,18 @@ export const useServerAuthenticated = () => {
             debouncedAuth.cancel();
         };
     }, [debouncedAuth, serverId]);
+
+    // B-400: the password was asked for and that server's sign-in has changed since (the form
+    // signed in): check it, as at start.
+    useEffect(() => {
+        const asked = askedSignIn.current;
+        if (ready !== AuthState.PASSWORD_NEEDED || !asked || !currentSignIn) return;
+        if (asked.id !== serverId || currentSignIn === asked.signIn) return;
+        const serverWithAuth = getServerById(serverId);
+        if (!serverWithAuth) return;
+        askedSignIn.current = null;
+        authenticateServer(serverWithAuth).catch(console.error);
+    }, [authenticateServer, currentSignIn, ready, serverId]);
 
     return ready;
 };

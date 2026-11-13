@@ -257,6 +257,8 @@
         "serverLockSingleServer": "Only one server is allowed when server is locked",
         "serverNotSelectedError": "No server selected",
         "serverRequired": "Server required",
+        "passwordNeeded": "{{server}} needs your password before the library can open.",
+        "passwordNeededAction": "Sign in",
         "sessionExpiredError": "Your session has expired",
         "signInFromServerMenu": "The music server needs your password. Sign in again from the server menu.",
         "systemFontError": "An error occurred when trying to get system fonts",

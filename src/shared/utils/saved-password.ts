@@ -30,6 +30,38 @@ export interface AskedServer {
 }
 
 /**
+ * B-400: one server's sign-in, as a key: its address, user name and stored credentials. A sign-in
+ * that worked writes new credentials, so the key changes; nothing else does.
+ */
+export const signInKey = (server: Omit<AskedServer, 'id'>): string =>
+    JSON.stringify([
+        server.url,
+        server.username,
+        server.credential ?? '',
+        server.ndCredential ?? '',
+    ]);
+
+/**
+ * B-400: Navidrome's own session (`ndCredential`, a JWT the library pages send) has expired by its
+ * `exp` claim. The start check asks the Subsonic API, whose token outlives it: a profile copied or
+ * left closed past the session's lifetime passed that check and then had every library query
+ * refused. A credential that cannot be read (absent, not a JWT, no `exp`) is not called expired;
+ * the server decides then, as before.
+ */
+export const nativeSessionExpired = (ndCredential: string | undefined, nowMs: number): boolean => {
+    const payload = ndCredential?.split('.')[1];
+    if (!payload) return false;
+    try {
+        const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+        const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=');
+        const claims = JSON.parse(atob(padded)) as { exp?: unknown };
+        return typeof claims.exp === 'number' && claims.exp * 1000 <= nowMs;
+    } catch {
+        return false;
+    }
+};
+
+/**
  * B-338: open the server's sign-in form for a refused session whose saved password cannot be read,
  * once per sign-in. After the person cancels it, later refused requests do not open it again (each
  * request still fails, nobody is logged out) until that server's sign-in changes: its address,
@@ -45,12 +77,7 @@ export const createPasswordAsk = <S extends AskedServer>(
     // suppression was pointed out. Memory only; never logged.
     const asked = new Map<string, { open: boolean; pointed: boolean; signIn: string }>();
     return (server) => {
-        const signIn = JSON.stringify([
-            server.url,
-            server.username,
-            server.credential ?? '',
-            server.ndCredential ?? '',
-        ]);
+        const signIn = signInKey(server);
         const last = asked.get(server.id);
         if (last?.signIn === signIn) {
             // Fix round 4: while the form is open, a refusal of the same sign-in joins it (several
