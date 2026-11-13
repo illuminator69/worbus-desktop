@@ -8,6 +8,7 @@ import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     createStartupSeek,
     onWebEngineReady,
+    scheduledSeekApplies,
 } from '/@/renderer/features/player/hooks/startup-seek';
 import { savePlayQueueQuery } from '/@/renderer/features/player/utils/save-play-queue';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
@@ -33,8 +34,13 @@ export const useQueueRestoreTimestamp = () => {
         {
             onQueueRestored: (properties) => {
                 const { position } = properties;
+                // B-402 M1: the position is the song the queue was set on; a song change in the
+                // next 100 ms (Next after a transfer) makes it no one's.
+                const armedFor = usePlayerStore.getState().getCurrentSong()?._uniqueId;
 
                 setTimeout(() => {
+                    const now = usePlayerStore.getState().getCurrentSong()?._uniqueId;
+                    if (!scheduledSeekApplies(armedFor, now)) return;
                     setTimestamp(position, { seek: true }); // navi-connect (Q-051)
                     mediaSeekToTimestamp(position);
                 }, 100);

@@ -178,3 +178,13 @@ export const createHeldSeek = (): HeldSeek => {
  */
 export const seekAtReady = (held: null | number, handoffSec: number): null | number =>
     held !== null ? held : handoffSec > 0 ? handoffSec : null;
+
+/**
+ * B-402 review M1 (VM walk): a seek sent by a timer (use-hub's landing seek, setQueue's restore
+ * seek) still applies only while the song it was armed for is current. Next, AutoNext or any other
+ * song change before it fires makes it no one's: it was a position in the song that is gone.
+ */
+export const scheduledSeekApplies = (
+    armedFor: null | string | undefined,
+    currentNow: null | string | undefined,
+): boolean => Boolean(armedFor) && armedFor === currentNow;

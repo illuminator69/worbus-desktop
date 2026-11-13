@@ -330,7 +330,7 @@ test('wired_both_timers_check_their_song', () => {
         "setQueue's restore seek seeks whatever song is current 100 ms later",
     );
     const hub = read('../../hub/hooks/use-hub.tsx');
-    const landing = hub.slice(hub.indexOf('const fires = landingSeekFires'));
+    const landing = hub.slice(hub.indexOf('landingSeekFires(landingSeek.current, pending)'));
     assert.match(
         landing.slice(0, landing.indexOf('mediaSeekToTimestamp(pending.sec)')),
         /scheduledSeekApplies\(/,

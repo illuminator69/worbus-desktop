@@ -115,7 +115,10 @@ import {
 import { useActiveFillsStore } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import { lbBotModeActions } from '/@/renderer/features/lbbot/stores/lbbot-mode.store';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
-import { engineTakesSeekNow } from '/@/renderer/features/player/hooks/startup-seek';
+import {
+    engineTakesSeekNow,
+    scheduledSeekApplies,
+} from '/@/renderer/features/player/hooks/startup-seek';
 import {
     retargetStartupSeek,
     withdrawStartupSeek,
@@ -2296,10 +2299,18 @@ export const useHub = () => {
                 if (pending) {
                     landingSeek.current = pending;
                     hubDriven.current.hold(2000);
+                    // B-402 M1: the song this seek lands on; a song change before it fires
+                    // (Next after a transfer) makes it no one's.
+                    const armedFor = properties.song?._uniqueId;
                     // Small delay so the engine finishes loading the new source
                     // before the seek (same approach as use-queue-restore).
                     setTimeout(() => {
-                        const fires = landingSeekFires(landingSeek.current, pending);
+                        const fires =
+                            landingSeekFires(landingSeek.current, pending) &&
+                            scheduledSeekApplies(
+                                armedFor,
+                                usePlayerStore.getState().getCurrentSong()?._uniqueId,
+                            );
                         if (landingSeek.current === pending) landingSeek.current = null;
                         if (!fires) return;
                         mediaSeekToTimestamp(pending.sec);
