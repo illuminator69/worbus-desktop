@@ -125,3 +125,55 @@ test('the_placeholders_ready_while_the_url_is_pending_keeps_the_hold', () => {
     d.ready();
     assert.equal(d.el.position, HUB_SEC, 'the placeholder took the held seek');
 });
+
+/**
+ * Review L6 (2026-11-13): a seek went to the element only while `element.src` equalled the current
+ * song's URL resolved against the page. Any lasting difference between the two (react-player's
+ * FilePlayer presenting a URL differently, a normalisation the page's URL parser and the element do
+ * not share) would have parked every local scrub in the hold for a ready that never comes, on a
+ * song that is playing. The per-source rules compare this app's own strings instead: the URL last
+ * committed to the slot, against the current song's URL; the element's `src` only says whether it
+ * is on the silent placeholder.
+ */
+type SlotSource = (
+    committedUrl: string | undefined,
+    elementSrc: string | undefined,
+) => string | undefined;
+const slotHelper = startupSeek as unknown as { slotSource?: SlotSource };
+
+test('a_scrub_applies_when_the_element_presents_its_source_differently', () => {
+    assert.equal(
+        typeof slotHelper.slotSource,
+        'function',
+        'the rules read the element-reported src',
+    );
+    const slotSource = slotHelper.slotSource!;
+    const url = '/rest/stream.view?id=a&u=me&t=x&s=y';
+    // The element reports an absolute, differently written URL for the very source it was given.
+    const elementSrc = 'http://localhost:4790/rest/stream.view?id=a&u=me&t=x&s=y&_=1';
+    assert.equal(startupSeek.elementTakesSeek(true, slotSource(url, elementSrc), url), true);
+    assert.equal(
+        startupSeek.readyOnOwnSource(slotSource(url, elementSrc), url),
+        true,
+        'its ready is its own source',
+    );
+    // The silent placeholder is never a song's source, whatever was committed.
+    assert.equal(slotSource(undefined, 'data:audio/mp3;base64,AAAA'), undefined);
+    assert.equal(slotSource(url, 'data:audio/mp3;base64,AAAA'), undefined);
+    assert.equal(slotSource(url, ''), undefined, 'no source yet');
+});
+
+test('the_web_player_compares_its_committed_urls_not_the_elements_src', () => {
+    const web = readFileSync(new URL('../audio-player/web-player.tsx', import.meta.url), 'utf8');
+    assert.match(
+        web,
+        /elementTakesSeek\(\s*engineUp,\s*slotSource\(/,
+        'the seek reads element.src',
+    );
+    const apply = web.slice(
+        web.indexOf('const applyPendingSeekIfNeeded'),
+        web.indexOf('const handlePlayer1Start'),
+    );
+    assert.match(apply, /slotSource\(/, "the ready's source is the element-reported src");
+    assert.match(web, /useLayoutEffect\(/, 'the committed URLs are recorded at commit');
+});
