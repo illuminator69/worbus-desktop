@@ -438,3 +438,55 @@ test('a_cover_changed_in_the_app_is_forgotten_where_it_changes', () => {
     const refresh = lbbot.slice(lbbot.indexOf('export const useLbBotLibraryRefresh'));
     assert.match(refresh, /forgetAlbumCovers\(ids\)/, "the library frame's albums");
 });
+
+/**
+ * B-428: on Navidrome a cover's id now carries its version (`<id>&_=<imageHash>`), and Navidrome
+ * answers the CURRENT versioned id `public, max-age=31536000, immutable` (measured 2026-11-13).
+ * So once a version is old, Chromium's HTTP cache answers its URL from disk without asking. A cover
+ * forgotten from inside the app (`forgetAlbumCovers`) is asked again under the id the app holds,
+ * which can still be the old version (the play queue's songs, a list not yet refetched): that first
+ * ask after a forget must revalidate (`cache: 'no-cache'`), or it gets the old image back.
+ */
+test('b428_the_first_ask_after_a_forget_revalidates_each_size_once', async () => {
+    const m = await load();
+    assert.ok(m);
+    const asked: (RequestCache | undefined)[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+        asked.push(init?.cache);
+        return new Response(
+            new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], { type: 'image/jpeg' }),
+            {
+                headers: { 'content-type': 'image/jpeg' },
+            },
+        );
+    }) as typeof fetch;
+    try {
+        const cache = new m.ImageMemoryCache() as Cache & {
+            forgetItems: (ids: Iterable<string>) => void;
+        };
+        const id = 'AL1&_=e59f1a9d92c7d2c8';
+        const at = (size: number) => ({
+            cacheKey: ['subsonic', 'server-1', 'http://nd:4533', id, size].join(':'),
+            url: `http://nd:4533/rest/getCoverArt.view?id=${encodeURIComponent(id)}&size=${size}`,
+        });
+        cache.release(await m.loadCachedImage(at(80), {}, {}, cache));
+        assert.deepEqual(asked, [undefined], 'a first ask is an ordinary one');
+        cache.forgetItems([id]);
+        cache.release(await m.loadCachedImage(at(80), {}, {}, cache));
+        assert.equal(asked[1], 'no-cache', 'the ask after the forget revalidates');
+        cache.release(await m.loadCachedImage(at(300), {}, {}, cache));
+        assert.equal(asked[2], 'no-cache', 'another size of it too');
+        cache.forget(at(80).cacheKey);
+        cache.release(await m.loadCachedImage(at(80), {}, {}, cache));
+        assert.equal(asked[3], undefined, 'once: revalidated since the forget');
+        const other = {
+            cacheKey: ['subsonic', 'server-1', 'http://nd:4533', 'AL2', 80].join(':'),
+            url: 'http://nd:4533/rest/getCoverArt.view?id=AL2&size=80',
+        };
+        cache.release(await m.loadCachedImage(other, {}, {}, cache));
+        assert.equal(asked[4], undefined, 'a cover nobody forgot is not revalidated');
+    } finally {
+        globalThis.fetch = realFetch;
+    }
+});
