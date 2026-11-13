@@ -64,7 +64,13 @@ test("another client's failed request and one waiting on a pick count, with no l
 test('a request lb-bot lists that this device also holds is one item, joined by release or group', () => {
     const rows = [
         ledgerRow({}),
-        ledgerRow({ groupId: 'g-2', isGap: true, key: 'g-2', outcome: 'needsPick', releaseMbid: '' }),
+        ledgerRow({
+            groupId: 'g-2',
+            isGap: true,
+            key: 'g-2',
+            outcome: 'needsPick',
+            releaseMbid: '',
+        }),
     ];
     const requests = [
         request({}),
@@ -72,7 +78,10 @@ test('a request lb-bot lists that this device also holds is one item, joined by 
     ];
     assert.equal(needYouCount(rows, requests), 2);
     const items = needYouItems(rows, requests);
-    assert.ok(items.every((item) => item.ledger !== null && item.server !== null), 'joined');
+    assert.ok(
+        items.every((item) => item.ledger !== null && item.server !== null),
+        'joined',
+    );
 });
 
 test("this device's row that needs you and that lb-bot no longer lists still counts", () => {
@@ -120,7 +129,8 @@ test('activityRequests: the allowlist, a row without a state or a key dropped', 
 });
 
 test('the badge and the chip read the one set', () => {
-    const read = (path: string) => readFileSync(new URL(`../../../../../${path}`, import.meta.url), 'utf8');
+    const read = (path: string) =>
+        readFileSync(new URL(`../../../../../${path}`, import.meta.url), 'utf8');
     const sidebar = read('src/renderer/features/sidebar/components/sidebar-groups.tsx');
     assert.match(sidebar, /attentionCount: needYouCount\(ledger, activity\)/);
     const route = read('src/renderer/features/lbbot/routes/lbbot-downloads-route.tsx');
