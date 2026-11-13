@@ -193,3 +193,132 @@ test('a_row_that_goes_away_does_not_empty_the_other_rows_covers', async () => {
         s.close();
     }
 });
+
+/**
+ * B-412, re-walk on `a96a9de17` (cold start, In Waves in the side queue): Treat Each… and Life still
+ * show the empty-art icon, a different pair from the walk before. A cover the server answers empty
+ * more than twice was given up after three asks in ~4 s (1 s, then 3 s), and the re-asks of every
+ * row that got an empty answer went out together at the same moments: one more wave on the disc's
+ * shared resize entry, the very condition that emptied them (B-415: asked together, empty; one at a
+ * time, the JPEG). A cover is asked again, with a growing wait, until it gets an image or a real
+ * error, and the re-asks to one server go one at a time.
+ */
+const delayedStandIn = async (emptyFor: (id: string) => number, holdMs: number) => {
+    const asked = new Map<string, number>();
+    let reasksInFlight = 0;
+    let maxReasksInFlight = 0;
+    const server = createServer((req, res) => {
+        const id = new URL(req.url ?? '', 'http://x').searchParams.get('id') ?? '';
+        const n = (asked.get(id) ?? 0) + 1;
+        asked.set(id, n);
+        const reask = n > 1;
+        if (reask) {
+            reasksInFlight += 1;
+            maxReasksInFlight = Math.max(maxReasksInFlight, reasksInFlight);
+        }
+        setTimeout(() => {
+            if (reask) reasksInFlight -= 1;
+            res.setHeader('Cache-Control', 'public, no-cache');
+            if (n <= emptyFor(id)) {
+                res.setHeader('Content-Length', '0');
+                res.end();
+                return;
+            }
+            res.setHeader('Content-Type', 'image/jpeg');
+            res.end(JPEG);
+        }, holdMs);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return {
+        asked,
+        base: `http://127.0.0.1:${port}`,
+        close: () => server.close(),
+        maxReasks: () => maxReasksInFlight,
+    };
+};
+
+test('a_cover_answered_empty_three_times_still_arrives', async () => {
+    // Treat Each… and Life: empty for their first three asks, then the JPEG.
+    const stuck = new Set(['life', 'treat-each']);
+    const s = await delayedStandIn((id) => (stuck.has(id) ? 3 : 0), 5);
+    try {
+        const fetchImage = (await load())!;
+        // The default number of re-asks, each wait shortened to 1 ms (the base: 2, not exported).
+        const mod = (await import('./fetch-image.ts')) as unknown as { RETRY_DELAYS_MS?: number[] };
+        const delaysMs = (mod.RETRY_DELAYS_MS ?? [1000, 3000]).map(() => 1);
+        const ids = ['treat-each', 'life', 'sleep-sound', 'girl'];
+        const results = await Promise.allSettled(
+            ids.map((id) =>
+                fetchImage(
+                    { url: `${s.base}/rest/getCoverArt.view?id=${id}&size=80` },
+                    { signal: new AbortController().signal },
+                    { delaysMs },
+                ),
+            ),
+        );
+        for (const [i, r] of results.entries()) {
+            assert.equal(
+                r.status,
+                'fulfilled',
+                `${ids[i]}: given up while the server was still answering empty`,
+            );
+        }
+        assert.equal(s.asked.get('treat-each'), 4, 'asked until the image came, no more');
+        assert.equal(s.asked.get('sleep-sound'), 1);
+    } finally {
+        s.close();
+    }
+});
+
+test('the_re_asks_to_one_server_go_one_at_a_time', async () => {
+    const s = await delayedStandIn(() => 1, 40);
+    try {
+        const fetchImage = (await load())!;
+        const ids = ['a', 'b', 'c', 'd', 'e', 'f'];
+        await Promise.all(
+            ids.map((id) =>
+                fetchImage(
+                    { url: `${s.base}/rest/getCoverArt.view?id=${id}&size=80` },
+                    { signal: new AbortController().signal },
+                    { delaysMs: [1, 1] },
+                ),
+            ),
+        );
+        assert.equal(s.maxReasks(), 1, `${s.maxReasks()} re-asks in flight at once: one more wave`);
+    } finally {
+        s.close();
+    }
+});
+
+test('the_default_wait_grows_and_outlasts_a_burst_without_asking_forever', async () => {
+    const mod = (await import('./fetch-image.ts')) as unknown as { RETRY_DELAYS_MS?: number[] };
+    const delays = mod.RETRY_DELAYS_MS;
+    assert.ok(Array.isArray(delays), 'RETRY_DELAYS_MS is exported');
+    for (let i = 1; i < delays.length; i += 1) {
+        assert.ok(delays[i] >= delays[i - 1], 'each wait at least the one before');
+    }
+    const total = delays.reduce((a, b) => a + b, 0);
+    assert.ok(total >= 60_000, `asks again for ${total} ms only: a burst outlasts that`);
+    assert.ok(delays.length <= 10, `${delays.length + 1} asks per cover: a storm`);
+    assert.ok(Math.max(...delays) <= 30_000, 'no wait longer than 30 s');
+});
+
+test('a_cover_whose_row_goes_away_while_it_waits_is_not_asked_again', async () => {
+    const s = await delayedStandIn(() => 99, 1);
+    try {
+        const fetchImage = (await load())!;
+        const controller = new AbortController();
+        const pending = fetchImage(
+            { url: `${s.base}/rest/getCoverArt.view?id=gone&size=80` },
+            { signal: controller.signal },
+            { delaysMs: [50, 50, 50] },
+        );
+        setTimeout(() => controller.abort(), 25);
+        await assert.rejects(pending);
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        assert.equal(s.asked.get('gone'), 1, 'asked again after its row went away');
+    } finally {
+        s.close();
+    }
+});
