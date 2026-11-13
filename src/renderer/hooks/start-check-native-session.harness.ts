@@ -89,3 +89,22 @@ test('a_sign_in_that_worked_checks_again_and_clears_the_error_page', () => {
         'the root error page stays mounted after the sign-in that removed its cause',
     );
 });
+
+/**
+ * B-400 review M2: the sign-in form wrote the new sign-in (updateServer, setCurrentServer), which
+ * resets the root error boundary, and only after awaiting the password save removed the cached
+ * queries. The boundary remounted the page with the failed query still cached, and TanStack Query
+ * rethrows a cached error on remount without a QueryErrorResetBoundary: the error page came back,
+ * and nothing reset it again.
+ */
+test('the_form_drops_the_failed_queries_before_the_sign_in_resets_the_page', () => {
+    const form = read('../features/servers/components/edit-server-form.tsx');
+    const submit = form.slice(form.indexOf('const handleSubmit'));
+    const removed = submit.indexOf('queryClient.removeQueries()');
+    const written = submit.indexOf('updateServer(server.id, serverItem)');
+    assert.ok(removed > 0 && written > 0);
+    assert.ok(
+        removed < written,
+        'the cached errors are removed after the sign-in that resets the error page',
+    );
+});
