@@ -21,7 +21,7 @@ export function RadioWebPlayer() {
     const playerRef = useRef<null | WebPlayerEngineHandle>(null);
     const { currentStreamUrl, isPlaying } = useRadioPlayer();
     const { actions } = useRadioStore();
-    const { setCurrentStreamUrl, setIsPlaying, setStationName } = actions;
+    const { stop } = actions;
     const isRadioActive = useIsRadioActive();
     const isMuted = usePlayerMuted();
     const volume = usePlayerVolume();
@@ -131,13 +131,15 @@ export function RadioWebPlayer() {
         // We don't need to handle progress for radio streams
     }, []);
 
+    // B-401: a station that ends or fails (a dead stream's error is skipped as an end; a network
+    // failure past its retries pauses) stops by the plan, as Stop does: the queue comes back
+    // paused at its position, its player handed that position. Clearing the radio by hand left
+    // the store PLAYING and no handoff, so the queue restarted at 0 s.
     const onEndedPlayer1 = useCallback(() => {
         console.error('Radio stream ended unexpectedly');
-        setIsPlaying(false);
-        setCurrentStreamUrl(null);
-        setStationName(null);
+        stop();
         toast.error({ message: 'Radio stream ended unexpectedly' });
-    }, [setIsPlaying, setCurrentStreamUrl, setStationName]);
+    }, [stop]);
 
     if (!isRadioActive) {
         return null;
@@ -151,7 +153,7 @@ export function RadioWebPlayer() {
             loopPlayer2={false}
             onEndedPlayer1={onEndedPlayer1}
             onEndedPlayer2={() => {}}
-            onErrorPause={() => {}}
+            onErrorPause={onEndedPlayer1}
             onProgressPlayer1={onProgressPlayer1}
             onProgressPlayer2={() => {}}
             onStartedPlayer1={handlePlayer1Start}
