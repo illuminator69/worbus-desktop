@@ -43,7 +43,7 @@ const standIn = async (emptyFirst: number) => {
 type FetchImage = (
     request: { url: string },
     init: { signal: AbortSignal },
-    options?: { delaysMs?: number[] },
+    options?: { budgetMs?: number; delaysMs?: number[]; reaskTimeoutMs?: number },
 ) => Promise<Blob>;
 
 const load = async () =>
@@ -321,4 +321,160 @@ test('a_cover_whose_row_goes_away_while_it_waits_is_not_asked_again', async () =
     } finally {
         s.close();
     }
+});
+
+/**
+ * B-412 review M1 (2026-11-13, probe `reask-lane-stall.probe.ts`): the re-asks to one server go one
+ * at a time, and the lane was given back only when the sent request ended. Nothing timed a request
+ * out, and a caller's abort does not cancel a sent request (by design), so one re-ask that never
+ * got an answer (a stalled resize, a TCP path left dead by sleep/wake) held the lane for good:
+ * every other emptied row on that server waited in `loading` forever, past the ~2 min bound,
+ * never reaching the empty-art icon. A re-ask is timed out, a row that goes away gives the lane
+ * back, and waiting for the lane counts in the cover's budget.
+ */
+const stallingStandIn = async (stalls: (id: string, n: number) => boolean) => {
+    const asked = new Map<string, number>();
+    const server = createServer((req, res) => {
+        const id = new URL(req.url ?? '', 'http://x').searchParams.get('id') ?? '';
+        const n = (asked.get(id) ?? 0) + 1;
+        asked.set(id, n);
+        if (n === 1) {
+            // every cover's first ask: the empty 200 of a burst
+            res.setHeader('Content-Length', '0');
+            res.end();
+            return;
+        }
+        if (stalls(id, n)) return; // never answered
+        res.setHeader('Content-Type', 'image/jpeg');
+        res.end(JPEG);
+    });
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as { port: number };
+    return {
+        asked,
+        base: `http://127.0.0.1:${port}`,
+        close: () => {
+            server.closeAllConnections();
+            server.close();
+        },
+    };
+};
+
+const settle = (p: Promise<unknown>) => {
+    const state = { value: 'pending' as 'error' | 'image' | 'pending' };
+    p.then(
+        () => (state.value = 'image'),
+        () => (state.value = 'error'),
+    );
+    return state;
+};
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+test('a_re_ask_that_never_answers_does_not_hold_the_lane_for_good', async () => {
+    const s = await stallingStandIn((id) => id === 'stuck');
+    try {
+        const fetchImage = (await load())!;
+        const stuck = settle(
+            fetchImage(
+                { url: `${s.base}/rest/getCoverArt.view?id=stuck` },
+                { signal: new AbortController().signal },
+                { delaysMs: [1, 1, 1], reaskTimeoutMs: 150 },
+            ),
+        );
+        await wait(60); // stuck's re-ask is in flight, holding the lane
+        const other = settle(
+            fetchImage(
+                { url: `${s.base}/rest/getCoverArt.view?id=other` },
+                { signal: new AbortController().signal },
+                { delaysMs: [1, 1, 1], reaskTimeoutMs: 150 },
+            ),
+        );
+        await wait(1500);
+        assert.equal(
+            other.value,
+            'image',
+            `other is ${other.value}: the stalled re-ask held the lane`,
+        );
+        assert.equal(
+            stuck.value,
+            'error',
+            'the cover that never answers ends as the empty-art icon',
+        );
+    } finally {
+        s.close();
+    }
+});
+
+test('a_row_that_goes_away_gives_the_lane_back', async () => {
+    const s = await stallingStandIn((id) => id === 'stuck');
+    try {
+        const fetchImage = (await load())!;
+        const gone = new AbortController();
+        fetchImage(
+            { url: `${s.base}/rest/getCoverArt.view?id=stuck` },
+            { signal: gone.signal },
+            { delaysMs: [1, 1, 1], reaskTimeoutMs: 60_000 },
+        ).catch(() => {});
+        await wait(60);
+        const other = settle(
+            fetchImage(
+                { url: `${s.base}/rest/getCoverArt.view?id=other` },
+                { signal: new AbortController().signal },
+                { delaysMs: [1, 1, 1], reaskTimeoutMs: 60_000 },
+            ),
+        );
+        await wait(60);
+        gone.abort(); // stuck's row unmounts while its re-ask hangs
+        await wait(500);
+        assert.equal(
+            other.value,
+            'image',
+            `other is ${other.value}: the lane went with the request`,
+        );
+    } finally {
+        s.close();
+    }
+});
+
+test('waiting_for_the_lane_counts_in_the_covers_budget', async () => {
+    const s = await stallingStandIn((id) => id === 'stuck');
+    try {
+        const fetchImage = (await load())!;
+        fetchImage(
+            { url: `${s.base}/rest/getCoverArt.view?id=stuck` },
+            { signal: new AbortController().signal },
+            { budgetMs: 60_000, delaysMs: [1, 1, 1], reaskTimeoutMs: 60_000 },
+        ).catch(() => {});
+        await wait(60);
+        const other = settle(
+            fetchImage(
+                { url: `${s.base}/rest/getCoverArt.view?id=other` },
+                { signal: new AbortController().signal },
+                { budgetMs: 300, delaysMs: [1, 1, 1], reaskTimeoutMs: 60_000 },
+            ),
+        );
+        await wait(1000);
+        assert.equal(
+            other.value,
+            'error',
+            `other is ${other.value} after its budget, waiting for the lane`,
+        );
+    } finally {
+        s.close();
+    }
+});
+
+test('a_cover_has_a_re_ask_timeout_and_a_budget_by_default', async () => {
+    const mod = (await import('./fetch-image.ts')) as unknown as {
+        GIVE_UP_AFTER_MS?: number;
+        REASK_TIMEOUT_MS?: number;
+        RETRY_DELAYS_MS: number[];
+    };
+    assert.equal(typeof mod.REASK_TIMEOUT_MS, 'number', 'a re-ask waits for its answer forever');
+    assert.ok(mod.REASK_TIMEOUT_MS! <= 30_000, 'a re-ask timeout longer than 30 s');
+    assert.equal(typeof mod.GIVE_UP_AFTER_MS, 'number', 'no bound on lane waiting');
+    const total = mod.RETRY_DELAYS_MS.reduce((a, b) => a + b, 0);
+    assert.ok(mod.GIVE_UP_AFTER_MS! >= total, 'the budget is shorter than the schedule');
+    assert.ok(mod.GIVE_UP_AFTER_MS! <= 180_000, 'a cover may spin for more than 3 min');
 });
