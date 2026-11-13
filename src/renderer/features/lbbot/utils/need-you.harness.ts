@@ -372,7 +372,7 @@ test('every item has a unique, stable key', () => {
         attention: [attention({ groupId: 'g-2', releaseMbid: 'rel-c2', rgid: 'rg-2' })],
         ledger: [
             ledgerRow({}),
-            ledgerRow({ key: 'g-3', groupId: 'g-3', isGap: true, releaseMbid: '', rgid: '' }),
+            ledgerRow({ groupId: 'g-3', isGap: true, key: 'g-3', releaseMbid: '', rgid: '' }),
         ],
     });
     const keys = listed.map((item) => item.key);
@@ -385,7 +385,7 @@ test('every item has a unique, stable key', () => {
         ],
         attention: [attention({ groupId: 'g-2', releaseMbid: 'rel-c2', rgid: 'rg-2' })],
         ledger: [
-            ledgerRow({ key: 'g-3', groupId: 'g-3', isGap: true, releaseMbid: '', rgid: '' }),
+            ledgerRow({ groupId: 'g-3', isGap: true, key: 'g-3', releaseMbid: '', rgid: '' }),
             ledgerRow({}),
         ],
     });
