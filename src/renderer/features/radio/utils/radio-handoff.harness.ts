@@ -82,3 +82,31 @@ test('no_report_says_the_queue_plays_while_a_station_stops', async () => {
         assert.ok(plan.steps.indexOf('handoff') < plan.steps.indexOf('clear'));
     }
 });
+
+/**
+ * B-401 (owner walk, 2026-11-13): after a station FAILS to play, the queue resumes from 0:00.
+ * A station whose element fails (a dead stream answers MEDIA_ERR_SRC_NOT_SUPPORTED, which the
+ * engine skips as an end; a network failure past its retries pauses) ended the radio through
+ * `onEndedPlayer1`, which cleared the radio state by hand: no handoff, and the player store left
+ * PLAYING (the station's play set it). The queue's web player then remounted playing, from 0 s.
+ * Ended or failed, a station stops by the plan, as the Stop button does.
+ */
+test('a_station_that_fails_stops_by_the_plan', () => {
+    const player = readFileSync(
+        new URL('../components/radio-web-player.tsx', import.meta.url),
+        'utf8',
+    );
+    const at = player.indexOf('const onEndedPlayer1');
+    const ended = player.slice(at, player.indexOf('}, [', at));
+    assert.match(ended, /\bstop\(\)/, 'a failed or ended station clears the radio by hand');
+    assert.doesNotMatch(
+        ended,
+        /setCurrentStreamUrl\(null\)/,
+        'the queue comes back playing at 0 s, with no handoff',
+    );
+    assert.doesNotMatch(
+        player,
+        /onErrorPause=\{\(\) => \{\}\}/,
+        'a station that cannot play after its retries is left playing silence',
+    );
+});
