@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import type { KickState } from './kick.ts';
+import type { KickState, ResyncState } from './kick.ts';
 
-import { KICK_FLOOR_MS, kickAction } from './kick.ts';
+import { KICK_FLOOR_MS, kickAction, resyncAction } from './kick.ts';
 
 /** node --test src/main/features/core/hub/kick.harness.ts */
 
@@ -60,4 +60,31 @@ test('a wake fires resume and online together: one attempt, not two', () => {
 
 test('a clock set back since the last kick does not silence the next one', () => {
     assert.equal(kicked({ sinceLastKick: -3_600_000 }), 'connect');
+});
+
+// B-421: a renderer reload (Ctrl+R, Vite's full reload) left the hub state gone for minutes. The
+// main process kept its socket, so no new `welcome` came, and the reloaded page only learns that
+// it is connected - and the session, the devices, lb-bot - from one.
+const resynced = (patch: Partial<ResyncState>) =>
+    resyncAction({ readyState: OPEN, shouldRun: true, welcomed: true, ...patch });
+
+test('B-421: a page that subscribes after this socket welcomed another one gets a fresh connection', () => {
+    assert.equal(resynced({}), 'reconnect');
+});
+
+test('B-421: a socket not yet welcomed is left alone - its welcome reaches the new page', () => {
+    assert.equal(resynced({ welcomed: false }), 'none');
+});
+
+test('B-421: connecting, waiting out the backoff or closing - the next welcome reaches the page', () => {
+    for (const readyState of [undefined, CONNECTING, CLOSING]) {
+        assert.equal(resynced({ readyState }), 'none', String(readyState));
+        assert.equal(resynced({ readyState, welcomed: false }), 'none', String(readyState));
+    }
+});
+
+test('B-421: switched off, refused or signed out - nothing to resync', () => {
+    for (const readyState of [undefined, CONNECTING, OPEN, CLOSING]) {
+        assert.equal(resynced({ readyState, shouldRun: false }), 'none', String(readyState));
+    }
 });
