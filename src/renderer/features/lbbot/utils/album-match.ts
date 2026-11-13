@@ -279,3 +279,16 @@ export const pickAlbumCandidate = <
     candidates: readonly T[],
     asked: { artist: string; title: string },
 ): null | T => rankAlbumCandidates(candidates, asked)[0] ?? null;
+
+/**
+ * B-407: where an lb-bot row's artist link goes. lb-bot's own match (`artistId`, from its index)
+ * opens the library's page; with none, the library is searched by the name with B-313's rule
+ * (`sameArtist`, as the album page's artist link does) and the MBID's virtual page is the
+ * fallback; with no name, the virtual page; with neither, nowhere.
+ */
+export const artistLinkStep = (
+    artistId: null | string | undefined,
+    mbid: null | string | undefined,
+    name: null | string | undefined,
+): 'external' | 'library' | 'lookup' | null =>
+    artistId ? 'library' : name?.trim() ? 'lookup' : mbid ? 'external' : null;

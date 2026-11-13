@@ -75,6 +75,8 @@ interface DiscoverTileProps {
     onClick?: () => void;
     /** The app's own menu for what this card shows (an album, an artist, a song). */
     onContextMenu?: (event: MouseEvent<HTMLElement>) => void;
+    /** B-407: the subtitle link's tap, before it navigates (`preventDefault` to go elsewhere). */
+    onSubtitleClick?: (event: MouseEvent) => void;
     subtitle?: string;
     /**
      * Where the subtitle goes (an artist's page). The card is then a clickable box
@@ -99,6 +101,7 @@ export const DiscoverTile = ({
     itemType,
     onClick,
     onContextMenu,
+    onSubtitleClick,
     subtitle,
     subtitleTo,
     title,
@@ -140,7 +143,10 @@ export const DiscoverTile = ({
                         component={Link}
                         isLink
                         isMuted
-                        onClick={(event: MouseEvent) => event.stopPropagation()}
+                        onClick={(event: MouseEvent) => {
+                            event.stopPropagation();
+                            onSubtitleClick?.(event);
+                        }}
                         size="sm"
                         to={subtitleTo}
                     >

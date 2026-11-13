@@ -1,5 +1,4 @@
 import { useMemo } from 'react';
-import { useNavigate } from 'react-router';
 
 import { useDiscoverSeedArtist } from '../use-discover-seed';
 import { DiscoverRow } from './discover-row';
@@ -8,6 +7,7 @@ import { DiscoverTile } from './discover-tile';
 import {
     useLbBotRelatedArtists,
     useLbBotSimilarArtists,
+    useOpenLbBotArtist,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { artistLinkPath } from '/@/renderer/features/lbbot/utils/external-paths';
 import { useLibraryContextMenu } from '/@/renderer/features/shared/hooks/use-library-context-menu';
@@ -35,8 +35,9 @@ import { LibraryItem } from '/@/shared/types/domain-types';
  * reason to drop to a text-only tile.
  */
 export const SimilarArtistsRow = ({ title }: { title: string }) => {
-    const navigate = useNavigate();
     const openMenu = useLibraryContextMenu();
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const { open: openArtist } = useOpenLbBotArtist();
     const { pending: seedPending, seed } = useDiscoverSeedArtist();
     const { data, isLoading } = useLbBotSimilarArtists({
         mbid: seed?.mbid,
@@ -72,7 +73,6 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
     const cards = useMemo(
         () =>
             artists.map((artist) => {
-                const to = artistLinkPath(artist.artistId, artist.mbid, artist.name);
                 return {
                     content: (
                         <DiscoverTile
@@ -80,7 +80,13 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
                             isRound
                             isUnowned={!artist.owned}
                             itemType={LibraryItem.ALBUM_ARTIST}
-                            onClick={() => to && navigate(to)}
+                            onClick={() =>
+                                openArtist({
+                                    artistId: artist.artistId,
+                                    mbid: artist.mbid,
+                                    name: artist.name,
+                                })
+                            }
                             onContextMenu={(event) =>
                                 void openMenu(
                                     event,
@@ -96,7 +102,7 @@ export const SimilarArtistsRow = ({ title }: { title: string }) => {
                     id: artist.mbid || artist.name,
                 };
             }),
-        [artists, navigate, openMenu],
+        [artists, openArtist, openMenu],
     );
 
     return (

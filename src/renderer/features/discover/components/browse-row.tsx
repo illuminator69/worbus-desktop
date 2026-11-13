@@ -11,6 +11,7 @@ import {
     useLbBotDeezerChart,
     useLbBotDeezerEditorial,
     useLbBotDeezerGenres,
+    useOpenLbBotArtist,
     useResolveBrowseAlbum,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import {
@@ -78,6 +79,8 @@ const BECAUSE: Record<BrowseRowProps['feed'], string> = {
 export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
     const navigate = useNavigate();
     const openMenu = useLibraryContextMenu();
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const { open: openArtist } = useOpenLbBotArtist();
     const { pending, resolve } = useResolveBrowseAlbum();
     const genre = useDiscoverGenre();
     const setGenre = useSetDiscoverGenre();
@@ -215,7 +218,6 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
         const artists = (data?.artists ?? [])
             .filter((artist) => artistLinkPath(artist.artistId, artist.mbid))
             .map((artist) => {
-                const to = artistLinkPath(artist.artistId, artist.mbid, artist.name);
                 return {
                     content: (
                         <DiscoverTile
@@ -229,7 +231,13 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
                             isRound
                             isUnowned={!artist.owned}
                             itemType={LibraryItem.ALBUM_ARTIST}
-                            onClick={() => to && navigate(to)}
+                            onClick={() =>
+                                openArtist({
+                                    artistId: artist.artistId,
+                                    mbid: artist.mbid,
+                                    name: artist.name,
+                                })
+                            }
                             onContextMenu={(event) =>
                                 void openMenu(
                                     event,
@@ -247,7 +255,7 @@ export const BrowseRow = ({ feed, showGenres, title }: BrowseRowProps) => {
             });
 
         return [...albums, ...artists];
-    }, [data, navigate, openAlbum, openMenu, pending, switching]);
+    }, [data, navigate, openAlbum, openArtist, openMenu, pending, switching]);
 
     // A genre the feed answered nothing for. The row would normally render
     // nothing at all, but the chips are the only way back to one that works —

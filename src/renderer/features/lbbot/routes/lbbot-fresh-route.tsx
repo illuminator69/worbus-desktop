@@ -7,6 +7,7 @@ import { DiscoverTile } from '/@/renderer/features/discover/components/discover-
 import {
     useLbBotAvailable,
     useLbBotFreshReleases,
+    useOpenLbBotArtist,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import {
     FreshScope,
@@ -88,6 +89,13 @@ const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
         release.artistMbids[0] ?? '',
         release.artist,
     );
+    // B-407: lb-bot's own match missed: the library is searched by name (B-313's rule) on tap.
+    const artistLink = useOpenLbBotArtist();
+    const artistRow = {
+        artistId: release.artistOwned ? release.artistId : '',
+        mbid: release.artistMbids[0] ?? '',
+        name: release.artist,
+    };
 
     // An album the library holds opens the library album, full stop. This used
     // to send *every* row to the virtual page and rely on its redirect — which
@@ -130,6 +138,14 @@ const FreshTile = ({ release }: { release: LbBotFreshRelease }) => {
                     event,
                     release.releaseAlbumId ? { id: release.releaseAlbumId, kind: 'album' } : null,
                 )
+            }
+            onSubtitleClick={
+                artistLink.looksUp(artistRow)
+                    ? (event) => {
+                          event.preventDefault();
+                          artistLink.open(artistRow);
+                      }
+                    : undefined
             }
             subtitle={release.artist}
             subtitleTo={artistTo}

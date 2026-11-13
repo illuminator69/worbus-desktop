@@ -6,7 +6,10 @@ import styles from './artist-columns.module.css';
 
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
 import { ReleasePill } from '/@/renderer/features/discography/components/release-pill';
-import { useLbBotSimilarArtists } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import {
+    useLbBotSimilarArtists,
+    useOpenLbBotArtist,
+} from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { artistLinkPath } from '/@/renderer/features/lbbot/utils/external-paths';
 import { tintHues } from '/@/shared/components/animations/tint-hues';
 import { LibraryItem } from '/@/shared/types/domain-types';
@@ -18,6 +21,8 @@ import { LibraryItem } from '/@/shared/types/domain-types';
 export const SimilarArtistList = ({ mbid, name }: { mbid: string; name: string }) => {
     const { t } = useTranslation();
     const { data } = useLbBotSimilarArtists({ limit: 8, mbid, name });
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const artistLink = useOpenLbBotArtist();
     const rows = (data?.artists ?? []).filter((artist) =>
         artistLinkPath(artist.artistId, artist.mbid),
     );
@@ -27,10 +32,19 @@ export const SimilarArtistList = ({ mbid, name }: { mbid: string; name: string }
             <h2 className={styles.sideLabel}>{t('naviConnect.artistPage.similar')}</h2>
             {rows.map((artist) => {
                 const [a, b] = tintHues(artist.mbid || artist.name);
+                const row = { artistId: artist.artistId, mbid: artist.mbid, name: artist.name };
                 return (
                     <Link
                         className={styles.artistRow}
                         key={artist.mbid || artist.name}
+                        onClick={
+                            artistLink.looksUp(row)
+                                ? (event) => {
+                                      event.preventDefault();
+                                      artistLink.open(row);
+                                  }
+                                : undefined
+                        }
                         to={artistLinkPath(artist.artistId, artist.mbid, artist.name)!}
                     >
                         {artist.owned && artist.artistId ? (

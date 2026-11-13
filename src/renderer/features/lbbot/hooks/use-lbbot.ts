@@ -106,6 +106,7 @@ import {
 } from '/@/renderer/features/lbbot/stores/lbbot-mode.store';
 import { nextFillExtras } from '/@/renderer/features/lbbot/utils/album-download';
 import {
+    artistLinkStep,
     fieldedAlbumQuery,
     normalizeAlbumTitle,
     pickAlbumCandidate,
@@ -3397,6 +3398,50 @@ export const useOpenArtist = () => {
         [navigate, serverId],
     );
 };
+
+/**
+ * B-407: an lb-bot row's artist, opened on tap. lb-bot's own match opens the library page; a row
+ * it did not match is looked up in the library by name with B-313's rule (`useOpenArtist`, the
+ * album page's rule), else the MBID's virtual page (`artistLinkStep`). For a link that also has
+ * an href (`artistLinkPath`), `looksUp` says whether the tap must be taken over.
+ */
+export const useOpenLbBotArtist = () => {
+    const navigate = useNavigate();
+    const openArtist = useOpenArtist();
+
+    const open = useCallback(
+        (artist: LbBotArtistLinkRow) => {
+            const step = artistLinkStep(artist.artistId, artist.mbid, artist.name);
+            if (step === 'lookup') {
+                void openArtist(artist.mbid ?? '', artist.name ?? '');
+                return;
+            }
+            const to =
+                step === 'library'
+                    ? artistLinkPath(artist.artistId ?? '', '')
+                    : step === 'external'
+                      ? artistLinkPath('', artist.mbid ?? '', artist.name ?? undefined)
+                      : undefined;
+            if (to) navigate(to);
+        },
+        [navigate, openArtist],
+    );
+
+    const looksUp = useCallback(
+        (artist: LbBotArtistLinkRow) =>
+            artistLinkStep(artist.artistId, artist.mbid, artist.name) === 'lookup',
+        [],
+    );
+
+    return { looksUp, open };
+};
+
+export interface LbBotArtistLinkRow {
+    /** lb-bot's own match to a library artist; empty when it found none. */
+    artistId?: null | string;
+    mbid?: null | string;
+    name?: null | string;
+}
 
 export const useResolveBrowseAlbum = () => {
     const [pending, setPending] = useState('');

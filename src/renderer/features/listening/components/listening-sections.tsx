@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { MouseEvent, ReactNode } from 'react';
 import { generatePath, Link, useNavigate } from 'react-router';
 
 import styles from './listening.module.css';
@@ -7,11 +7,11 @@ import { ItemImage } from '/@/renderer/components/item-image/item-image';
 import { DiscoverRow } from '/@/renderer/features/discover/components/discover-row';
 import { DiscoverTile } from '/@/renderer/features/discover/components/discover-tile';
 import { MissingAlbumTile } from '/@/renderer/features/lbbot/components/missing-album-tile';
-import { caaCoverUrl } from '/@/renderer/features/lbbot/hooks/use-lbbot';
+import { caaCoverUrl, useOpenLbBotArtist } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { useActiveFill } from '/@/renderer/features/lbbot/stores/active-fills.store';
 import {
+    artistLinkPath,
     externalAlbumPathFor,
-    externalArtistPath,
 } from '/@/renderer/features/lbbot/utils/external-paths';
 import { useHistoryContextMenu } from '/@/renderer/features/listening/hooks/use-history-menu';
 import {
@@ -19,7 +19,6 @@ import {
     AlbumTarget,
     albumTarget,
     artistCardView,
-    ArtistTarget,
     artistTarget,
     dailyForPeriod,
     dailyNote,
@@ -60,13 +59,6 @@ import {
  * in flight, "empty" only from a 200, a failure with lb-bot's own text.
  */
 
-const artistPath = (target: ArtistTarget, name?: string): string | undefined =>
-    target?.kind === 'library'
-        ? generatePath(AppRoute.LIBRARY_ALBUM_ARTISTS_DETAIL, { albumArtistId: target.id })
-        : target?.kind === 'external'
-          ? externalArtistPath(target.mbid, name)
-          : undefined;
-
 const albumPath = (
     target: AlbumTarget,
     hints: { artist?: string; artistMbid?: string; title?: string },
@@ -77,9 +69,17 @@ const albumPath = (
           ? externalAlbumPathFor({ ...hints, rgid: target.rgid })
           : undefined;
 
-const MaybeLink = ({ children, to }: { children: ReactNode; to?: string }) =>
+const MaybeLink = ({
+    children,
+    onClick,
+    to,
+}: {
+    children: ReactNode;
+    onClick?: (event: MouseEvent) => void;
+    to?: string;
+}) =>
     to ? (
-        <Text className={styles.clip} component={Link} isLink size="sm" to={to}>
+        <Text className={styles.clip} component={Link} isLink onClick={onClick} size="sm" to={to}>
             {children}
         </Text>
     ) : (
@@ -273,6 +273,8 @@ export const TopLists = ({
     summary: LbBotListeningSummary;
 }) => {
     const go = useGo();
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const { open: openArtist } = useOpenLbBotArtist();
     const openMenu = useLibraryContextMenu();
     const openSongMenu = useHistoryContextMenu();
     return (
@@ -334,12 +336,12 @@ export const TopLists = ({
                                 itemType={LibraryItem.ALBUM_ARTIST}
                                 onClick={
                                     view.linked
-                                        ? go(
-                                              artistPath(
-                                                  artistTarget(artist.ndArtistId, artist.mbid),
-                                                  artist.name,
-                                              ),
-                                          )
+                                        ? () =>
+                                              openArtist({
+                                                  artistId: artist.ndArtistId,
+                                                  mbid: artist.mbid,
+                                                  name: artist.name,
+                                              })
                                         : undefined
                                 }
                                 onContextMenu={(event) =>
@@ -550,7 +552,8 @@ export const UnownedSection = ({
     read: ReadState;
     rows: LbBotUnownedRow[] | undefined;
 }) => {
-    const go = useGo();
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const { open: openArtist } = useOpenLbBotArtist();
     const openMenu = useLibraryContextMenu();
     const shown = read.kind === 'rows' ? (rows ?? []) : [];
     const cards =
@@ -568,13 +571,16 @@ export const UnownedSection = ({
                           isRound
                           isUnowned={!row.artistOwned}
                           itemType={LibraryItem.ALBUM_ARTIST}
-                          onClick={(() => {
-                              const path = artistPath(
-                                  artistTarget(row.artistOwned ? row.artistId : '', row.artistMbid),
-                                  row.artist,
-                              );
-                              return path ? go(path) : undefined;
-                          })()}
+                          onClick={
+                              artistTarget(row.artistOwned ? row.artistId : '', row.artistMbid)
+                                  ? () =>
+                                        openArtist({
+                                            artistId: row.artistOwned ? row.artistId : '',
+                                            mbid: row.artistMbid,
+                                            name: row.artist,
+                                        })
+                                  : undefined
+                          }
                           onContextMenu={(event) =>
                               void openMenu(
                                   event,
@@ -654,6 +660,8 @@ export const RecentSection = ({
     rows: LbBotRecentRow[];
 }) => {
     const openMenu = useHistoryContextMenu();
+    // B-407: an artist lb-bot did not match is looked up in the library by name (B-313's rule).
+    const artistLink = useOpenLbBotArtist();
     return (
         <Stack gap="sm">
             <ReadLine
@@ -692,8 +700,19 @@ export const RecentSection = ({
                                 </MaybeLink>
                                 <Group gap={4} wrap="nowrap">
                                     <MaybeLink
-                                        to={artistPath(
-                                            artistTarget(row.ndArtistId, row.artistMbid),
+                                        onClick={(event) => {
+                                            const artist = {
+                                                artistId: row.ndArtistId,
+                                                mbid: row.artistMbid,
+                                                name: row.artist,
+                                            };
+                                            if (!artistLink.looksUp(artist)) return;
+                                            event.preventDefault();
+                                            artistLink.open(artist);
+                                        }}
+                                        to={artistLinkPath(
+                                            row.ndArtistId,
+                                            row.artistMbid,
                                             row.artist,
                                         )}
                                     >
