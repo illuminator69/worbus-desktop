@@ -147,7 +147,7 @@ import {
 import { staleUnlessAnswered } from '/@/renderer/features/lbbot/utils/persisted-queries';
 import { importFinished } from '/@/renderer/features/listening/listening-logic';
 import { queryClient } from '/@/renderer/lib/react-query';
-import { useCurrentServerId } from '/@/renderer/store';
+import { getServerById, useCurrentServerId } from '/@/renderer/store';
 import {
     hubRolesNow,
     lbBotDownNow,
@@ -156,7 +156,13 @@ import {
     useHubStore,
 } from '/@/renderer/store/hub.store';
 import { toast } from '/@/shared/components/toast/toast';
-import { AlbumArtistListSort, AlbumListSort, SortOrder } from '/@/shared/types/domain-types';
+import {
+    AlbumArtistListSort,
+    AlbumListSort,
+    ArtistListSort,
+    ServerType,
+    SortOrder,
+} from '/@/shared/types/domain-types';
 import { isLbRefusal } from '/@/shared/utils/lbbot-failure';
 import {
     downloadsShown,
@@ -3368,37 +3374,48 @@ export const useResolveLibraryArtistPath = () => {
 
     return useCallback(
         async (artistMbid: string, name: string, owned?: boolean) => {
+            if (!serverId) return artistLinkPath('', artistMbid, name);
             // B-407 review M4: the search's rows are cached (not one answer per name), and the
             // row's MBID and ownership pick among them (`pickLibraryArtist`).
-            const rows = serverId
-                ? await queryClient
-                      .fetchQuery<{ id: string; mbz: null | string; name: string }[]>({
-                          gcTime: 5 * 60 * 1000,
-                          queryFn: async () => {
-                              const found = await api.controller
-                                  .getAlbumArtistList({
-                                      apiClientProps: { serverId },
-                                      query: {
-                                          limit: 25,
-                                          searchTerm: name,
-                                          sortBy: AlbumArtistListSort.NAME,
-                                          sortOrder: SortOrder.ASC,
-                                          startIndex: 0,
-                                      },
-                                  })
-                                  .catch(() => null);
-                              return (found?.items ?? []).map((row) => ({
-                                  id: row.id,
-                                  mbz: row.mbz ?? null,
-                                  name: row.name,
-                              }));
-                          },
-                          queryKey: ['lbbot', 'artist-search', serverId, name],
-                          staleTime: 5 * 60 * 1000,
-                      })
-                      .catch(() => [])
-                : [];
-            const libraryId = pickLibraryArtist(rows, { mbid: artistMbid, name, owned });
+            const search = (roles: 'album' | 'all') =>
+                queryClient
+                    .fetchQuery<{ id: string; mbz: null | string; name: string }[]>({
+                        gcTime: 5 * 60 * 1000,
+                        queryFn: async () => {
+                            const query = {
+                                limit: 25,
+                                searchTerm: name,
+                                sortOrder: SortOrder.ASC,
+                                startIndex: 0,
+                            };
+                            const found = await (
+                                roles === 'album'
+                                    ? api.controller.getAlbumArtistList({
+                                          apiClientProps: { serverId },
+                                          query: { ...query, sortBy: AlbumArtistListSort.NAME },
+                                      })
+                                    : api.controller.getArtistList({
+                                          apiClientProps: { serverId },
+                                          query: { ...query, sortBy: ArtistListSort.NAME },
+                                      })
+                            ).catch(() => null);
+                            return (found?.items ?? []).map((row) => ({
+                                id: row.id,
+                                mbz: row.mbz ?? null,
+                                name: row.name,
+                            }));
+                        },
+                        queryKey: ['lbbot', 'artist-search', serverId, roles, name],
+                        staleTime: 5 * 60 * 1000,
+                    })
+                    .catch(() => []);
+            const row = { mbid: artistMbid, name, owned };
+            let libraryId = pickLibraryArtist(await search('album'), row);
+            // VM walk edge: an artist only on others' albums (a track artist) is no album artist;
+            // on a miss, Navidrome's artists of every role are asked (one more search, on a miss).
+            if (!libraryId && getServerById(serverId)?.type === ServerType.NAVIDROME) {
+                libraryId = pickLibraryArtist(await search('all'), row);
+            }
             return artistLinkPath(libraryId || '', artistMbid, name);
         },
         [serverId],
