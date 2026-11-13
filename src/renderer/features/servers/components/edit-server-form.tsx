@@ -169,6 +169,10 @@ export const EditServerForm = ({
                 serverItem.preferRemoteUrl = values.preferRemoteUrl;
             }
 
+            // B-400 review M2: drop the cached queries before the new sign-in is written. Writing it
+            // resets the root error boundary (its key), and a failed query still cached then is
+            // rethrown on remount instead of fetched again.
+            queryClient.removeQueries();
             updateServer(server.id, serverItem);
 
             // After re-authenticating, switch to the updated server so the user
@@ -209,7 +213,6 @@ export const EditServerForm = ({
                 }
             }
 
-            queryClient.removeQueries();
         } catch (err: any) {
             setIsLoading(false);
             return toast.error({ message: err?.message });
