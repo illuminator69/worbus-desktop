@@ -7,8 +7,9 @@ import {
 } from '/@/renderer/components/item-list/helpers/play-row-from-list';
 import { ItemTableListInnerColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { useIsActiveRow } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
+import { useRemoteAwareStatus } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
-import { usePlayerSong, usePlayerStatus } from '/@/renderer/store';
+import { usePlayerSong } from '/@/renderer/store';
 import {
     Album,
     AlbumArtist,
@@ -47,7 +48,9 @@ export const hasPlayableRowItem = (
 };
 
 export const useRowPlayControl = (props: ItemTableListInnerColumn) => {
-    const status = usePlayerStatus();
+    // B-420: the session's play state, whichever device plays (the hub's while another is
+    // active), so the playing row's bars move and stop with the music.
+    const status = useRemoteAwareStatus();
     const currentSong = usePlayerSong();
     const player = usePlayer();
     const rowItem = props.getRowItem?.(props.rowIndex) ?? props.data[props.rowIndex];
