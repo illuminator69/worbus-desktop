@@ -337,3 +337,15 @@ test('wired_both_timers_check_their_song', () => {
         'the landing seek seeks whatever song is current 150 ms later',
     );
 });
+
+test('wired_the_startup_seek_timer_checks_its_song_too', () => {
+    // The third timed seek: applyStartupSeek sends the position taken on the first PLAYING 100 ms
+    // later. A transfer's own PLAYING (B-402) then Next inside those 100 ms is the same miss.
+    const restore = readFileSync(new URL('./use-queue-restore.ts', import.meta.url), 'utf8');
+    const apply = restore.slice(restore.indexOf('const applyStartupSeek'));
+    assert.match(
+        apply.slice(0, apply.indexOf('}, [mediaSeekToTimestamp]);')),
+        /scheduledSeekApplies\(/,
+        'the startup seek seeks whatever song is current 100 ms later',
+    );
+});
