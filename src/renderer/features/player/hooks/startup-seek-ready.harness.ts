@@ -104,3 +104,97 @@ test('only_the_main_web_player_signals_ready', () => {
     );
     assert.doesNotMatch(read('../../radio/components/radio-web-player.tsx'), /onCurrentReady/);
 });
+
+/**
+ * B-402 (owner walk, 2026-11-13): a transfer from the phone to a freshly opened desktop restarted
+ * the song at 0:00. The transfer's load calls mediaPlay() at once, so its first PLAYING is the
+ * store's, before the web element has reported ready: the startup seek (retargeted to the hub's
+ * position by B-339) is taken on that PLAYING and sent 100 ms later, and a load to another row
+ * sends its landing seek 150 ms after the song change. Before the element is up the web player's
+ * seek goes to a null ref (react-player not loaded) and is lost; the element then plays from 0 s.
+ * B-339's and B-349's models had the first PLAYING come from a person pressing play on an element
+ * already up. A seek the element cannot take yet is held for its ready, on its own source.
+ */
+type HeldSeek = {
+    ready: (readySrc: string, currentSrc: string, seek: (sec: number) => void) => void;
+    send: (sec: number, engineUp: boolean, seek: (sec: number) => void) => void;
+};
+const held = startupSeekModule as unknown as { createHeldSeek?: () => HeldSeek };
+
+const freshDesktop = () => {
+    const seek = createStartupSeek();
+    const hold = held.createHeldSeek?.();
+    const engine = { position: 0, ready: false, src: 'song-a' };
+    const toElement = (sec: number) => {
+        engine.position = sec;
+    };
+    // web-player.tsx onPlayerSeekToTimestamp: today, a seek before the element is up is lost.
+    const engineSeek = (sec: number) => {
+        if (hold) hold.send(sec, engine.ready, toElement);
+        else if (engine.ready) toElement(sec);
+    };
+    hooks.onWebEngineReady?.(() => {
+        const at = seek.takeOnPlaying('u3');
+        if (at !== null) engineSeek(at);
+    });
+    // The element of `src` reports ready (canplay); `current` is the source the current song plays.
+    const ready = (src = engine.src, current = engine.src) => {
+        engine.ready = true;
+        hold?.ready(src, current, toElement);
+        if (src === current) hooks.webEngineReady?.();
+    };
+    // The store's PLAYING (use-queue-restore's applyStartupSeek, its 100 ms timer folded in).
+    const playing = () => {
+        const at = seek.takeOnPlaying('u3');
+        if (at !== null) engineSeek(at);
+    };
+    return { engine, engineSeek, playing, ready, seek };
+};
+
+test('a_transfer_that_plays_before_the_mount_starts_at_the_hub_position', () => {
+    // Same queue, same row: armSeekStep retargets the startup seek (engine not up), then the
+    // load's mediaPlay() is the first PLAYING; the element reports ready after it.
+    const d = freshDesktop();
+    d.seek.arm(CLOSED_SEC, 'u3');
+    d.seek.retarget(HUB_SEC, 'u3');
+    d.playing();
+    d.ready();
+    assert.equal(d.engine.position, HUB_SEC, 'the element plays from 0 s');
+    hooks.onWebEngineReady?.(null);
+});
+
+test('a_landing_seek_before_the_mount_is_held_for_the_ready', () => {
+    // Another row (or another queue): the startup seek is withdrawn and the hub's position lands
+    // 150 ms after the song change, still before the element is up.
+    const d = freshDesktop();
+    d.seek.arm(CLOSED_SEC, 'u3');
+    d.seek.withdraw();
+    d.engine.src = 'song-b';
+    d.engineSeek(HUB_SEC);
+    // The persisted song's element reports ready first: not the source the seek was for.
+    d.ready('song-a', 'song-b');
+    assert.equal(d.engine.position, 0, "the hub's position went to the previous song's element");
+    d.ready('song-b', 'song-b');
+    assert.equal(d.engine.position, HUB_SEC, 'the seek before the mount is lost');
+    hooks.onWebEngineReady?.(null);
+});
+
+test('a_seek_once_the_element_is_up_goes_at_once', () => {
+    const d = freshDesktop();
+    d.ready();
+    d.engineSeek(120);
+    assert.equal(d.engine.position, 120);
+    d.ready(); // a later canplay (after a seek) applies nothing held
+    assert.equal(d.engine.position, 120);
+    hooks.onWebEngineReady?.(null);
+});
+
+test('wired_the_web_player_holds_a_seek_for_its_ready', () => {
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    const player = read('../audio-player/web-player.tsx');
+    assert.match(player, /createHeldSeek\(/, "the web player's seek before the mount is dropped");
+    const seek = player.slice(player.indexOf('onPlayerSeekToTimestamp'));
+    assert.match(seek.slice(0, seek.indexOf('onPlayerStatus')), /\.send\(/);
+    const start = player.slice(player.indexOf('const applyPendingSeekIfNeeded'));
+    assert.match(start.slice(0, start.indexOf('const handlePlayer2Start')), /\.ready\(/);
+});
