@@ -170,3 +170,11 @@ export const createHeldSeek = (): HeldSeek => {
         },
     };
 };
+
+/**
+ * B-402 review L2: the one seek an element's ready applies. A held seek (sent after the element
+ * mounted) is newer than the radio handoff (written when the station stopped, before the mount),
+ * so it wins; the handoff applies only when nothing is held. Null: no seek.
+ */
+export const seekAtReady = (held: null | number, handoffSec: number): null | number =>
+    held !== null ? held : handoffSec > 0 ? handoffSec : null;

@@ -20,6 +20,7 @@ import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     createHeldSeek,
     engineTakesSeekNow,
+    seekAtReady,
     webEngineReady,
 } from '/@/renderer/features/player/hooks/startup-seek';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
@@ -575,11 +576,12 @@ export function WebPlayer() {
                 absoluteUrl(activeSlot === 1 ? player1Url : player2Url),
                 (activeSlot === 1 ? player1 : player2)?._uniqueId,
             );
-            if (held !== null) reactPlayer.seekTo(held, 'seconds');
-            if (pendingLocalSeekRef.current <= 0) return;
-            const seekTo = pendingLocalSeekRef.current;
+            // Review L2: one seek, the newer word: the held one over the radio handoff.
+            const handoff = pendingLocalSeekRef.current;
             pendingLocalSeekRef.current = -1;
-            reactPlayer.seekTo(seekTo, 'seconds');
+            const at = seekAtReady(held, handoff);
+            if (at !== null) reactPlayer.seekTo(at, 'seconds');
+            if (handoff <= 0) return;
             if (status === PlayerStatus.PLAYING) {
                 playerRef.current?.setVolume(volume);
                 setLocalPlayerStatus(PlayerStatus.PLAYING);
