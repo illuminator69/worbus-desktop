@@ -116,21 +116,25 @@ test('only_the_main_web_player_signals_ready', () => {
  * already up. A seek the element cannot take yet is held for its ready, on its own source.
  */
 type HeldSeek = {
-    ready: (readySrc: string, currentSrc: string, seek: (sec: number) => void) => void;
-    send: (sec: number, engineUp: boolean, seek: (sec: number) => void) => void;
+    drop?: () => void;
+    // Before review M1: `ready` applied a held seek to whatever element was current.
+    ready?: (readySrc: string, currentSrc: string, seek: (sec: number) => void) => void;
+    send: (sec: number, engineUp: boolean, seek: (sec: number) => void, songId?: string) => void;
+    take?: (readySrc: string, currentSrc: string, songId: string) => null | number;
 };
 const held = startupSeekModule as unknown as { createHeldSeek?: () => HeldSeek };
 
 const freshDesktop = () => {
     const seek = createStartupSeek();
     const hold = held.createHeldSeek?.();
-    const engine = { position: 0, ready: false, src: 'song-a' };
+    // `song` is the current song's _uniqueId, `src` its stream URL.
+    const engine = { position: 0, ready: false, song: 'u3', src: 'song-a' };
     const toElement = (sec: number) => {
         engine.position = sec;
     };
     // web-player.tsx onPlayerSeekToTimestamp: today, a seek before the element is up is lost.
     const engineSeek = (sec: number) => {
-        if (hold) hold.send(sec, engine.ready, toElement);
+        if (hold) hold.send(sec, engine.ready, toElement, engine.song);
         else if (engine.ready) toElement(sec);
     };
     hooks.onWebEngineReady?.(() => {
@@ -140,7 +144,12 @@ const freshDesktop = () => {
     // The element of `src` reports ready (canplay); `current` is the source the current song plays.
     const ready = (src = engine.src, current = engine.src) => {
         engine.ready = true;
-        hold?.ready(src, current, toElement);
+        if (hold?.take) {
+            const at = hold.take(src, current, engine.song);
+            if (at !== null) toElement(at);
+        } else {
+            hold?.ready?.(src, current, toElement);
+        }
         if (src === current) hooks.webEngineReady?.();
     };
     // The store's PLAYING (use-queue-restore's applyStartupSeek, its 100 ms timer folded in).
@@ -148,7 +157,13 @@ const freshDesktop = () => {
         const at = seek.takeOnPlaying('u3');
         if (at !== null) engineSeek(at);
     };
-    return { engine, engineSeek, playing, ready, seek };
+    // The song changes (Next, AutoNext, the B-138 skip of a failed track, a queue swap).
+    const changeSong = (song: string, src: string) => {
+        engine.song = song;
+        engine.src = src;
+        hold?.drop?.();
+    };
+    return { changeSong, engine, engineSeek, hold, playing, ready, seek };
 };
 
 test('a_transfer_that_plays_before_the_mount_starts_at_the_hub_position', () => {
@@ -170,6 +185,7 @@ test('a_landing_seek_before_the_mount_is_held_for_the_ready', () => {
     d.seek.arm(CLOSED_SEC, 'u3');
     d.seek.withdraw();
     d.engine.src = 'song-b';
+    d.engine.song = 'u-b';
     d.engineSeek(HUB_SEC);
     // The persisted song's element reports ready first: not the source the seek was for.
     d.ready('song-a', 'song-b');
@@ -197,4 +213,50 @@ test('wired_the_web_player_holds_a_seek_for_its_ready', () => {
     assert.match(seek.slice(0, seek.indexOf('onPlayerStatus')), /\.send\(/);
     const start = player.slice(player.indexOf('const applyPendingSeekIfNeeded'));
     assert.match(start.slice(0, start.indexOf('const handlePlayer2Start')), /\.ready\(/);
+});
+
+/**
+ * B-402 review M1: a seek held for song A must never land on song B. A transfer holds 86 s for A on
+ * a fresh desktop; before A's element is ready the song moves on (Next, or A's stream fails and the
+ * B-138 skip ends it): B's element reports ready with its own source, and B started at 1:26.
+ */
+test('a_seek_held_for_one_song_never_lands_on_the_next', () => {
+    const d = freshDesktop();
+    d.engine.song = 'u-a';
+    d.engineSeek(HUB_SEC); // held for A
+    // The song changes with no word to the hold (what the hold itself must catch).
+    d.engine.song = 'u-b';
+    d.engine.src = 'song-b';
+    d.ready('song-b', 'song-b');
+    assert.equal(d.engine.position, 0, 'the seek held for A landed on B');
+    hooks.onWebEngineReady?.(null);
+});
+
+test('a_song_change_drops_the_hold', () => {
+    const d = freshDesktop();
+    d.engine.song = 'u-a';
+    d.engineSeek(HUB_SEC);
+    assert.equal(typeof d.hold?.drop, 'function', 'nothing drops a hold when the song changes');
+    d.changeSong('u-b', 'song-b');
+    // Back on A later (the queue came round): the old hold is gone too.
+    d.changeSong('u-a', 'song-a');
+    d.ready('song-a', 'song-a');
+    assert.equal(d.engine.position, 0);
+    hooks.onWebEngineReady?.(null);
+});
+
+test('wired_a_held_seek_is_bound_to_its_song', () => {
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    const player = read('../audio-player/web-player.tsx');
+    const changed = player.slice(player.indexOf('onCurrentSongChange'));
+    assert.match(
+        changed.slice(0, changed.indexOf('},')),
+        /heldSeekRef\.current\.drop\(\)/,
+        'a song change keeps the hold',
+    );
+    assert.match(
+        player,
+        /heldSeekRef\.current\.take\(/,
+        'the ready applies a hold made for any song',
+    );
 });
