@@ -172,6 +172,21 @@ export const createHeldSeek = (): HeldSeek => {
 };
 
 /**
+ * B-402 (the owner's re-walk of `a96a9de17`): whether a seek can go to the element now. "Up"
+ * (`engineTakesSeekNow`) means the element reported ready once, and react-player's silent
+ * EMPTY_SOURCE reports ready too; after a song change the element keeps the previous source until
+ * the new song's stream URL arrives (a react-query that waits for Navidrome's
+ * `getTranscodeDecision`). A seek sent then is reset to 0 s when the new source loads. So the
+ * element takes a seek only while it holds the current song's source (`currentSrc`, resolved like
+ * the element's `src`); otherwise the seek is held for that source's ready (`createHeldSeek`).
+ */
+export const elementTakesSeek = (
+    engineUp: boolean,
+    elementSrc: string | undefined,
+    currentSrc: string | undefined,
+): boolean => engineUp && Boolean(currentSrc) && elementSrc === currentSrc;
+
+/**
  * B-402 review L2: the one seek an element's ready applies. A held seek (sent after the element
  * mounted) is newer than the radio handoff (written when the station stopped, before the mount),
  * so it wins; the handoff applies only when nothing is held. Null: no seek.

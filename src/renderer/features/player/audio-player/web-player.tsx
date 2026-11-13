@@ -19,6 +19,7 @@ import { PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import {
     createHeldSeek,
+    elementTakesSeek,
     engineTakesSeekNow,
     seekAtReady,
     webEngineReady,
@@ -372,25 +373,26 @@ export function WebPlayer() {
                 // B-402: before the element is up, the seek went to a null ref and was lost (a
                 // transfer to a fresh desktop played from 0 s); it is held for the element's ready.
                 // Review M1: held for the song it was sent for, never another.
+                // B-402 (re-walk): and while the element still holds another source (the previous
+                // song's, or the silent placeholder) the new song's URL has not arrived yet; a
+                // seek sent then is reset to 0 s by that load, so it is held for its ready too.
                 const engineUp = engineTakesSeekNow(true);
                 const element = (
                     num === 1 ? playerRef.current?.player1() : playerRef.current?.player2()
                 )?.ref?.getInternalPlayer() as HTMLMediaElement | undefined;
-                const onCurrentSource =
-                    Boolean(currentSrcRef.current) && element?.src === currentSrcRef.current;
-                // B-402 (re-walk): at INFO whenever the seek does not simply go to the element on
-                // the current song's source (no URL logged: it carries the credentials).
-                if (!engineUp || !onCurrentSource) {
-                    logger.info('[player] seek before the element is on the current song', {
+                const takesNow = elementTakesSeek(engineUp, element?.src, currentSrcRef.current);
+                // At INFO whenever the seek does not simply go to the element on the current
+                // song's source (no URL logged: it carries the credentials).
+                if (!takesNow) {
+                    logger.info("[player] seek held for the current song's source", {
                         currentUrlKnown: Boolean(currentSrcRef.current),
                         elementUp: engineUp,
-                        held: !engineUp,
                         sec: timestamp,
                     });
                 }
                 heldSeekRef.current.send(
                     timestamp,
-                    engineUp,
+                    takesNow,
                     toElement,
                     usePlayerStoreBase.getState().getCurrentSong()?._uniqueId,
                 );
