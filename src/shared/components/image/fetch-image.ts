@@ -1,29 +1,111 @@
 import { isImageBody } from './shown-stack.ts';
 
 /**
- * B-412: an image's bytes, or a rejection. A server under load can answer a cover with HTTP 200 and
- * nothing in it: the owner's Navidrome did for 6 of 12 songs asked in one second (empty body, no
- * Content-Type, `public, no-cache`), and answers the same ids with the JPEG when asked again. So an
- * empty or non-image 200, a 429 and a 5xx are asked again, past the HTTP cache (`cache: 'reload'`,
- * so the empty answer it stored is not handed back), after `delaysMs`; anything else that is not an
- * image is a failure at once. Aborting the signal stops it.
+ * B-412: an image's bytes, or a rejection.
+ *
+ * Why a cover can come back as `200` with nothing in it (Navidrome 0.64.2, read): the songs of one
+ * disc share one resized-cover cache entry; the first request writes it while the others read it
+ * as it is written, and when the writer's request is cancelled the entry closes empty, so every
+ * reader of that wave gets an empty 200. So:
+ * - **A sent request is never cancelled.** The caller's abort rejects its promise at once, but the
+ *   request runs to its end (and its bytes are dropped), so it cannot empty other songs' covers.
+ *   A request still waiting for a slot is dropped without being sent.
+ * - **At most `MAX_IN_FLIGHT` cover requests per server at once**, so one page does not open a
+ *   burst of them (the waves above are what a burst makes).
+ * - **An empty 200, a 429 or a 5xx is asked again** after `delaysMs` (1 s, then 3 s), past the HTTP
+ *   cache (`cache: 'reload'`, so the empty answer Chromium stored is not handed back). A non-image
+ *   document under 200 (a Subsonic error) and any other status fail at once.
  */
-const RETRY_DELAYS_MS = [400, 1500];
+const RETRY_DELAYS_MS = [1000, 3000];
+const MAX_IN_FLIGHT = 4;
 
 export class NotAnImage extends Error {}
 
-const sleep = (ms: number, signal: AbortSignal) =>
-    new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(resolve, ms);
-        signal.addEventListener(
-            'abort',
-            () => {
-                clearTimeout(timer);
-                reject(signal.reason);
-            },
-            { once: true },
-        );
+const abortError = (signal: AbortSignal) =>
+    signal.reason instanceof Error ? signal.reason : new DOMException('Aborted', 'AbortError');
+
+/** Rejects when `signal` aborts; never settles otherwise. */
+const whenAborted = (signal: AbortSignal | null | undefined) =>
+    new Promise<never>((_, reject) => {
+        if (!signal) return;
+        if (signal.aborted) reject(abortError(signal));
+        else signal.addEventListener('abort', () => reject(abortError(signal)), { once: true });
     });
+
+const sleep = (ms: number, signal: AbortSignal | null | undefined) =>
+    Promise.race([new Promise<void>((resolve) => setTimeout(resolve, ms)), whenAborted(signal)]);
+
+/** Per server (URL origin): the requests in flight and the ones waiting for a slot. */
+const servers = new Map<string, { active: number; waiting: (() => void)[] }>();
+
+const slotFor = (origin: string) => {
+    let server = servers.get(origin);
+    if (!server) {
+        server = { active: 0, waiting: [] };
+        servers.set(origin, server);
+    }
+    return server;
+};
+
+/** A slot to send in; rejects (and gives up its place) if the caller aborts while it waits. */
+const acquire = (origin: string, signal: AbortSignal | null | undefined) =>
+    new Promise<() => void>((resolve, reject) => {
+        const server = slotFor(origin);
+        let released = false;
+        const release = () => {
+            if (released) return;
+            released = true;
+            server.active -= 1;
+            server.waiting.shift()?.();
+        };
+        const take = () => {
+            server.active += 1;
+            resolve(release);
+        };
+        if (signal?.aborted) return reject(abortError(signal));
+        if (server.active < MAX_IN_FLIGHT) return take();
+        const waiter = () => {
+            signal?.removeEventListener('abort', onAbort);
+            take();
+        };
+        const onAbort = () => {
+            server.waiting = server.waiting.filter((w) => w !== waiter);
+            reject(abortError(signal!));
+        };
+        signal?.addEventListener('abort', onAbort, { once: true });
+        server.waiting.push(waiter);
+    });
+
+type Answer = { blob: Blob | null; ok: boolean; status: number; type: string };
+
+/** One request, sent in a slot and run to its end whatever the caller does. */
+const ask = async (
+    request: { credentials?: RequestCredentials; headers?: HeadersInit; url: string },
+    init: Omit<RequestInit, 'signal'>,
+    reload: boolean,
+    signal: AbortSignal | null | undefined,
+): Promise<Answer> => {
+    const origin = new URL(request.url).origin;
+    const release = await acquire(origin, signal);
+    const sent = (async (): Promise<Answer> => {
+        try {
+            const response = await fetch(request.url, {
+                ...init,
+                ...(reload ? { cache: 'reload' as RequestCache } : {}),
+                credentials: request.credentials,
+                headers: request.headers,
+            });
+            const blob = response.ok ? await response.blob() : null;
+            const type = blob?.type || response.headers.get('content-type') || '';
+            return { blob, ok: response.ok, status: response.status, type };
+        } finally {
+            release();
+        }
+    })();
+    // The caller may stop waiting; the request itself is not cancelled.
+    sent.catch(() => {});
+    return Promise.race([sent, whenAborted(signal)]);
+};
 
 export const fetchImage = async (
     request: { credentials?: RequestCredentials; headers?: HeadersInit; url: string },
@@ -31,26 +113,20 @@ export const fetchImage = async (
     options: { delaysMs?: number[] } = {},
 ): Promise<Blob> => {
     const delays = options.delaysMs ?? RETRY_DELAYS_MS;
+    const { signal, ...rest } = init;
     for (let attempt = 0; ; attempt += 1) {
-        const response = await fetch(request.url, {
-            ...init,
-            ...(attempt > 0 ? { cache: 'reload' as RequestCache } : {}),
-            credentials: request.credentials,
-            headers: request.headers,
-        });
-        const transient = response.status === 429 || response.status >= 500;
-        if (!response.ok && !transient) {
-            throw new Error(`Failed to load image: ${response.status}`);
+        const answer = await ask(request, rest, attempt > 0, signal);
+        const transient = answer.status === 429 || answer.status >= 500;
+        if (!answer.ok && !transient) {
+            throw new Error(`Failed to load image: ${answer.status}`);
         }
-        const blob = response.ok ? await response.blob() : null;
-        const type = blob?.type || response.headers.get('content-type') || '';
-        if (blob && blob.size > 0 && isImageBody(type)) return blob;
+        if (answer.blob && answer.blob.size > 0 && isImageBody(answer.type)) return answer.blob;
         // A document under 200 (a Subsonic error) is the server's answer, not a hiccup.
-        if (blob && blob.size > 0) throw new NotAnImage(`Not an image: ${type}`);
+        if (answer.blob && answer.blob.size > 0)
+            throw new NotAnImage(`Not an image: ${answer.type}`);
         if (attempt >= delays.length) {
-            throw new Error(`No image after ${attempt + 1} answers (${response.status}, empty)`);
+            throw new Error(`No image after ${attempt + 1} answers (${answer.status}, empty)`);
         }
-        if (init.signal) await sleep(delays[attempt], init.signal);
-        else await new Promise((resolve) => setTimeout(resolve, delays[attempt]));
+        await sleep(delays[attempt], signal);
     }
 };
