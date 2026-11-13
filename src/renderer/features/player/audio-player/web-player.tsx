@@ -1,7 +1,7 @@
 import type { Dispatch } from 'react';
 import type ReactPlayer from 'react-player';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { playerHandoff } from './engine/player-handoff';
@@ -23,6 +23,7 @@ import {
     engineTakesSeekNow,
     readyOnOwnSource,
     seekAtReady,
+    slotSource,
     webEngineReady,
 } from '/@/renderer/features/player/hooks/startup-seek';
 import { useWebAudio } from '/@/renderer/features/player/hooks/use-webaudio';
@@ -46,16 +47,6 @@ import { CrossfadeStyle, PlayerRepeat, PlayerStatus, PlayerStyle } from '/@/shar
 const PLAY_PAUSE_FADE_DURATION = 300;
 const PLAY_PAUSE_FADE_INTERVAL = 10;
 
-/** B-402: a stream URL as the element reports its `src` (resolved against the page). */
-const absoluteUrl = (url: string | undefined): string | undefined => {
-    if (!url) return undefined;
-    try {
-        return new URL(url, window.location.href).href;
-    } catch {
-        return url;
-    }
-};
-
 export function WebPlayer() {
     const playerRef = useRef<null | WebPlayerEngineHandle>(null);
     const { t } = useTranslation();
@@ -76,6 +67,7 @@ export function WebPlayer() {
     // B-402: a seek sent before this player's element is up (a fresh start), held for its ready.
     const heldSeekRef = useRef(createHeldSeek());
     const currentSrcRef = useRef<string | undefined>(undefined);
+    const committedUrlRef = useRef<{ 1?: string; 2?: string }>({});
 
     const [localPlayerStatus, setLocalPlayerStatus] = useState<PlayerStatus>(() => {
         if (playerHandoff.pendingLocalSeek > 0) {
@@ -381,7 +373,11 @@ export function WebPlayer() {
                 const element = (
                     num === 1 ? playerRef.current?.player1() : playerRef.current?.player2()
                 )?.ref?.getInternalPlayer() as HTMLMediaElement | undefined;
-                const takesNow = elementTakesSeek(engineUp, element?.src, currentSrcRef.current);
+                const takesNow = elementTakesSeek(
+                    engineUp,
+                    slotSource(committedUrlRef.current[num === 1 ? 1 : 2], element?.src),
+                    currentSrcRef.current,
+                );
                 // At INFO whenever the seek does not simply go to the element on the current
                 // song's source (no URL logged: it carries the credentials).
                 if (!takesNow) {
@@ -585,8 +581,14 @@ export function WebPlayer() {
 
     const player1Url = useSongUrl(player1, num === 1, transcode);
     const player2Url = useSongUrl(player2, num === 2, transcode);
-    // B-402: the current song's stream URL as its element reports `src`, for the seek handler.
-    currentSrcRef.current = absoluteUrl(num === 1 ? player1Url : player2Url);
+    // B-402: the current song's stream URL, for the seek handler. Set while rendering, so between a
+    // render and its commit (the element still on the old source) a seek is held, not lost.
+    currentSrcRef.current = num === 1 ? player1Url : player2Url;
+    // Review L6: the URL each slot's element was last given, recorded once the commit has set its
+    // `src` (react-player passes `url` to the <audio> in the same commit).
+    useLayoutEffect(() => {
+        committedUrlRef.current = { 1: player1Url, 2: player2Url };
+    }, [player1Url, player2Url]);
 
     const applyPendingSeekIfNeeded = useCallback(
         (reactPlayer: ReactPlayer, activeSlot: 1 | 2) => {
@@ -594,8 +596,8 @@ export function WebPlayer() {
             // B-402: a seek held before the element was up, for this element if it is the current
             // song's source (not the previous song's finishing its load).
             const internal = reactPlayer.getInternalPlayer() as HTMLMediaElement | undefined;
-            const readySrc = internal?.src || undefined;
-            const currentSrc = absoluteUrl(activeSlot === 1 ? player1Url : player2Url);
+            const readySrc = slotSource(committedUrlRef.current[activeSlot], internal?.src);
+            const currentSrc = activeSlot === 1 ? player1Url : player2Url;
             const held = heldSeekRef.current.take(
                 readySrc,
                 currentSrc,

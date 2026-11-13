@@ -154,6 +154,18 @@ export const readyOnOwnSource = (
     currentSrc: string | undefined,
 ): boolean => Boolean(readySrc && currentSrc && readySrc === currentSrc);
 
+/**
+ * Review L6: the source a slot's element holds, for the per-source rules: the stream URL this app
+ * last committed to that slot (web-player's layout effect), compared with the current song's URL as
+ * the same string, so a source the element presents differently as `src` cannot park every scrub
+ * in a hold. The element's own `src` says only whether it is on react-player's silent placeholder
+ * (a `data:` URL) or on nothing yet: then there is no song source.
+ */
+export const slotSource = (
+    committedUrl: string | undefined,
+    elementSrc: string | undefined,
+): string | undefined => (!elementSrc || elementSrc.startsWith('data:') ? undefined : committedUrl);
+
 export const createHeldSeek = (): HeldSeek => {
     let held: null | { sec: number; songId: null | string } = null;
     return {
