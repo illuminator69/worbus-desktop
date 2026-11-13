@@ -12,12 +12,19 @@ import { isImageBody } from './shown-stack.ts';
  *   A request still waiting for a slot is dropped without being sent.
  * - **At most `MAX_IN_FLIGHT` cover requests per server at once**, so one page does not open a
  *   burst of them (the waves above are what a burst makes).
- * - **An empty 200, a 429 or a 5xx is asked again** after `delaysMs` (1 s, then 3 s), past the HTTP
- *   cache (`cache: 'reload'`, so the empty answer Chromium stored is not handed back). A non-image
+ * - **An empty 200, a 429 or a 5xx is asked again** after `delaysMs`, past the HTTP cache
+ *   (`cache: 'reload'`, so the empty answer Chromium stored is not handed back). A non-image
  *   document under 200 (a Subsonic error) and any other status fail at once.
+ * - **Re-asks to one server go one at a time** (`MAX_REASKS_IN_FLIGHT`). The rows a burst emptied
+ *   used to re-ask together, at the same moments: one more wave on the same shared entry, the
+ *   condition that emptied them (B-415: asked together, empty; asked one at a time, the JPEG).
+ * - **The wait grows** (1, 2, 4, 8, 16, then 30 s): a cover is asked again until it gets an image or
+ *   a real error, for about two minutes (9 asks), then it is a failure. The re-walk of
+ *   `a96a9de17` lost two rows to the old three asks in ~4 s.
  */
-const RETRY_DELAYS_MS = [1000, 3000];
+export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000, 30000, 30000];
 const MAX_IN_FLIGHT = 4;
+const MAX_REASKS_IN_FLIGHT = 1;
 
 export class NotAnImage extends Error {}
 
@@ -35,22 +42,31 @@ const whenAborted = (signal: AbortSignal | null | undefined) =>
 const sleep = (ms: number, signal: AbortSignal | null | undefined) =>
     Promise.race([new Promise<void>((resolve) => setTimeout(resolve, ms)), whenAborted(signal)]);
 
-/** Per server (URL origin): the requests in flight and the ones waiting for a slot. */
-const servers = new Map<string, { active: number; waiting: (() => void)[] }>();
+type Pool = Map<string, { active: number; waiting: (() => void)[] }>;
 
-const slotFor = (origin: string) => {
-    let server = servers.get(origin);
+/** Per server (URL origin): the requests in flight and the ones waiting for a slot. */
+const servers: Pool = new Map();
+/** Per server: the re-asks in flight (each also holds one of the server's slots). */
+const reasks: Pool = new Map();
+
+const slotFor = (pool: Pool, origin: string) => {
+    let server = pool.get(origin);
     if (!server) {
         server = { active: 0, waiting: [] };
-        servers.set(origin, server);
+        pool.set(origin, server);
     }
     return server;
 };
 
 /** A slot to send in; rejects (and gives up its place) if the caller aborts while it waits. */
-const acquire = (origin: string, signal: AbortSignal | null | undefined) =>
+const acquire = (
+    pool: Pool,
+    limit: number,
+    origin: string,
+    signal: AbortSignal | null | undefined,
+) =>
     new Promise<() => void>((resolve, reject) => {
-        const server = slotFor(origin);
+        const server = slotFor(pool, origin);
         let released = false;
         const release = () => {
             if (released) return;
@@ -63,7 +79,7 @@ const acquire = (origin: string, signal: AbortSignal | null | undefined) =>
             resolve(release);
         };
         if (signal?.aborted) return reject(abortError(signal));
-        if (server.active < MAX_IN_FLIGHT) return take();
+        if (server.active < limit) return take();
         const waiter = () => {
             signal?.removeEventListener('abort', onAbort);
             take();
@@ -86,7 +102,19 @@ const ask = async (
     signal: AbortSignal | null | undefined,
 ): Promise<Answer> => {
     const origin = new URL(request.url).origin;
-    const release = await acquire(origin, signal);
+    // A re-ask waits for the server's re-ask lane first, then for one of its slots.
+    const releaseLane = reload ? await acquire(reasks, MAX_REASKS_IN_FLIGHT, origin, signal) : null;
+    let releaseSlot: () => void;
+    try {
+        releaseSlot = await acquire(servers, MAX_IN_FLIGHT, origin, signal);
+    } catch (error) {
+        releaseLane?.();
+        throw error;
+    }
+    const release = () => {
+        releaseSlot();
+        releaseLane?.();
+    };
     const sent = (async (): Promise<Answer> => {
         try {
             const response = await fetch(request.url, {
