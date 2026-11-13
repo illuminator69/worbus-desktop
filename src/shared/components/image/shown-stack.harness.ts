@@ -163,7 +163,7 @@ test('wired_the_element_and_the_fetch_say_when_there_is_no_image', async () => {
         "the top <img>'s error is passed on and nothing else",
     );
     assert.match(
-        read('./use-native-image.ts'),
+        read('./fetch-image.ts'), // the fetch rule moved there (B-412's cause)
         /isImageBody\(/,
         'a 200 with an XML body is loaded',
     );

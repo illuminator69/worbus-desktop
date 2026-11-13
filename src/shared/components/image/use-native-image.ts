@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { isImageBody } from './shown-stack';
+import { fetchImage } from './fetch-image';
 
 import { ImageRequest } from '/@/shared/types/domain-types';
 
@@ -93,8 +93,6 @@ export function useNativeImage({
         void (async () => {
             try {
                 const init = {
-                    credentials: request.credentials,
-                    headers: request.headers,
                     signal: abortController.signal,
                 } as RequestInit & { priority?: FetchPriority };
 
@@ -102,18 +100,9 @@ export function useNativeImage({
                     init.priority = fetchPriority;
                 }
 
-                const response = await fetch(request.url, init);
-
-                if (!response.ok) {
-                    throw new Error(`Failed to load image: ${response.status}`);
-                }
-
-                const blob = await response.blob();
-
-                // B-412: a Subsonic error document under HTTP 200 is no image.
-                if (!isImageBody(blob.type || response.headers.get('content-type') || '')) {
-                    throw new Error(`Not an image: ${blob.type}`);
-                }
+                // B-412: one fetch rule (fetch-image.ts): an empty or non-image 200 is no image,
+                // and an empty one is asked again past the HTTP cache.
+                const blob = await fetchImage(request, init);
 
                 if (abortController.signal.aborted) {
                     return;
