@@ -21,6 +21,7 @@ import {
     createHeldSeek,
     elementTakesSeek,
     engineTakesSeekNow,
+    readyOnOwnSource,
     seekAtReady,
     webEngineReady,
 } from '/@/renderer/features/player/hooks/startup-seek';
@@ -593,15 +594,30 @@ export function WebPlayer() {
             // B-402: a seek held before the element was up, for this element if it is the current
             // song's source (not the previous song's finishing its load).
             const internal = reactPlayer.getInternalPlayer() as HTMLMediaElement | undefined;
+            const readySrc = internal?.src || undefined;
+            const currentSrc = absoluteUrl(activeSlot === 1 ? player1Url : player2Url);
             const held = heldSeekRef.current.take(
-                internal?.src || undefined,
-                absoluteUrl(activeSlot === 1 ? player1Url : player2Url),
+                readySrc,
+                currentSrc,
                 (activeSlot === 1 ? player1 : player2)?._uniqueId,
             );
+            // Review M2 (B-401): the radio/DLNA hand-back waits for the song's own source too; the
+            // silent placeholder's ready (the queue's URL pending after a long station) used it up.
+            const ownSource = readyOnOwnSource(readySrc, currentSrc);
+            const waiting = pendingLocalSeekRef.current;
+            const handoff = ownSource ? waiting : -1;
+            if (ownSource) pendingLocalSeekRef.current = -1;
+            else if (waiting > 0) {
+                logger.info("[player] hand-back seek held for the current song's source", {
+                    currentUrlKnown: Boolean(currentSrc),
+                    sec: waiting,
+                });
+            }
             // Review L2: one seek, the newer word: the held one over the radio handoff.
-            const handoff = pendingLocalSeekRef.current;
-            pendingLocalSeekRef.current = -1;
             const at = seekAtReady(held, handoff);
+            if (handoff > 0 && held === null) {
+                logger.info('[player] hand-back seek applied at ready', { sec: handoff });
+            }
             if (held !== null) logger.info('[player] held seek applied at ready', { sec: held });
             if (at !== null) reactPlayer.seekTo(at, 'seconds');
             if (handoff <= 0) return;

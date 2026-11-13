@@ -143,6 +143,17 @@ export interface HeldSeek {
     ) => null | number;
 }
 
+/**
+ * B-402 / review M2: a ready is the current song's own source: the element's source is the
+ * current song's resolved stream URL. Not while the URL is pending (react-player's silent
+ * placeholder reports ready too), not another song's source. A held seek and the radio/DLNA
+ * hand-back position are applied only at such a ready.
+ */
+export const readyOnOwnSource = (
+    readySrc: string | undefined,
+    currentSrc: string | undefined,
+): boolean => Boolean(readySrc && currentSrc && readySrc === currentSrc);
+
 export const createHeldSeek = (): HeldSeek => {
     let held: null | { sec: number; songId: null | string } = null;
     return {
@@ -166,7 +177,7 @@ export const createHeldSeek = (): HeldSeek => {
             // Only the song's own source takes it. B-402 (re-walk): while the new song's URL is
             // still pending (`currentSrc` unknown) the element loads react-player's silent
             // placeholder, which reports ready too; that ready leaves the hold for the real one.
-            if (!readySrc || !currentSrc || readySrc !== currentSrc) return null;
+            if (!readyOnOwnSource(readySrc, currentSrc)) return null;
             const { sec } = held;
             held = null;
             return sec;
