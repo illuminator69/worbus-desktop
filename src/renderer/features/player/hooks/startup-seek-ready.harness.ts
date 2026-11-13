@@ -261,3 +261,23 @@ test('wired_a_held_seek_is_bound_to_its_song', () => {
         'the ready applies a hold made for any song',
     );
 });
+
+/**
+ * B-402 review L2: after a station stops, the queue's web player remounts not up, with the
+ * station-stop position as its handoff (B-401, radioStopPlan). A hub seek in that window is held;
+ * at ready the held seek was applied first and the older handoff after it, so the older one won.
+ */
+test('a_newer_held_seek_wins_over_the_radio_handoff', () => {
+    const rule = startupSeekModule as unknown as {
+        seekAtReady?: (held: null | number, handoffSec: number) => null | number;
+    };
+    assert.equal(typeof rule.seekAtReady, 'function', 'the handoff is applied after the held seek');
+    assert.equal(rule.seekAtReady!(HUB_SEC, 63.1), HUB_SEC);
+    assert.equal(rule.seekAtReady!(null, 63.1), 63.1);
+    assert.equal(rule.seekAtReady!(null, -1), null);
+    assert.equal(rule.seekAtReady!(0, 63.1), 0, 'a held seek to 0 s is still the newer word');
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    const player = read('../audio-player/web-player.tsx');
+    const start = player.slice(player.indexOf('const applyPendingSeekIfNeeded'));
+    assert.match(start.slice(0, start.indexOf('const handlePlayer1Start')), /seekAtReady\(/);
+});
