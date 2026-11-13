@@ -81,6 +81,7 @@ import { BrowserWindow, ipcMain, Notification } from 'electron';
 
 import { getHubConfig, hubAuth } from '../hub';
 import { albumSourcesParams } from './album-sources-params';
+import { indexArtistBody } from './index-artist-body';
 
 import { getMainWindow } from '/@/main/index';
 import { toFindIt } from '/@/shared/utils/find-it';
@@ -422,14 +423,9 @@ ipcMain.handle(
         _event,
         args: { mbid?: string; name: string; ndId: string },
     ): Promise<LbBotIndexStart | null> => {
-        // With an MBID lb-bot needs both: the MBID is what it scans, the name is
-        // what it matches the library against. Without one, the Navidrome id.
-        if (args.mbid ? !args.name : !args.ndId) return null;
-        const result = await request('POST', '/lb/artist/discography', {
-            body: args.mbid
-                ? { mbid: args.mbid, name: args.name, nd_id: args.ndId }
-                : { nd_id: args.ndId },
-        });
+        const body = indexArtistBody(args);
+        if (!body) return null;
+        const result = await request('POST', '/lb/artist/discography', { body });
         // lb-bot's own words, not `describeFailure`'s sentence for them.
         if (!args.mbid && isOlderScanRefusal(result.status, result.upstreamError)) {
             return { covered: false, olderLbBot: true, taskId: '' };
