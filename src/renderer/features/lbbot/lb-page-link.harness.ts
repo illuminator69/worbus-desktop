@@ -38,8 +38,9 @@ test('imports_counted_in_to_fix', () => {
             picks: 3,
         },
     };
-    // Worbus for desktop's to-fix number is its own ledger's failures (the sidebar badge) plus the imports.
-    assert.equal(toFixCount([SETTLED_FAILED, RUNNING], answer), 3);
+    // Worbus for desktop's to-fix number is its own ledger's failures (the sidebar badge) plus the
+    // imports and (B-406, the phone's units) the folders waiting to be filed.
+    assert.equal(toFixCount([SETTLED_FAILED, RUNNING], answer), 4);
     assert.equal(toFixCount([SETTLED_FAILED], null), 1, 'no answer: the ledger alone');
     assert.equal(toFixCount([], { counts: { failedGaps: 4 } }), 0, 'an older lb-bot: no imports');
     // The badge reads it.
