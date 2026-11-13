@@ -117,3 +117,46 @@ test('the_open_uses_the_rule_and_the_rows_ownership', () => {
     const open = hooks.slice(hooks.indexOf('export const useOpenArtist'));
     assert.match(open.slice(0, open.indexOf('\n};')), /pickLibraryArtist\(/);
 });
+
+/**
+ * B-407 review L1: a tap waited on a library search with nothing on screen, then navigated
+ * whatever happened meanwhile: after the person had moved on, after a later tap elsewhere (which
+ * could lose to the earlier one), and twice for a double tap (two history entries).
+ */
+test('a_tap_is_one_navigation_the_latest_and_only_where_it_was_made', async () => {
+    const mod = (await import('./artist-tap.ts').catch(() => null)) as null | {
+        createTapGuard: () => {
+            begin: (key: string) => null | number;
+            finish: (token: number, stillHere: boolean) => boolean;
+            pending: () => null | string;
+        };
+    };
+    assert.ok(mod, 'no guard: every completed lookup navigates');
+    const guard = mod.createTapGuard();
+    const a = guard.begin('nirvana');
+    assert.equal(guard.pending(), 'nirvana', 'nothing says the tap is being worked on');
+    assert.equal(guard.begin('nirvana'), null, 'a double tap pushes two entries');
+    const b = guard.begin('fire');
+    assert.equal(guard.finish(a!, true), false, 'an earlier tap overrides a later one');
+    assert.equal(guard.pending(), 'fire');
+    assert.equal(guard.finish(b!, true), true);
+    assert.equal(guard.pending(), null);
+    const c = guard.begin('bts');
+    assert.equal(guard.finish(c!, false), false, 'the person moved on and was pulled back');
+    assert.equal(guard.pending(), null);
+
+    const hooks = readFileSync(new URL('../hooks/use-lbbot.ts', import.meta.url), 'utf8');
+    const open = hooks.slice(hooks.indexOf('export const useOpenLbBotArtist'));
+    assert.match(open.slice(0, open.indexOf('\n};')), /\.begin\(/);
+    for (const file of [
+        '../routes/lbbot-fresh-route.tsx',
+        '../../discover/components/browse-row.tsx',
+        '../../discover/components/similar-artists-row.tsx',
+    ]) {
+        assert.match(
+            readFileSync(new URL(file, import.meta.url), 'utf8'),
+            /isBusy=\{[^}]*pending/,
+            `${file}: no pending state on the tapped tile`,
+        );
+    }
+});
