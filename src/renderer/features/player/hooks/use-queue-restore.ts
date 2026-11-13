@@ -22,6 +22,7 @@ import {
     usePlayerStore,
     useTimestampStoreBase,
 } from '/@/renderer/store';
+import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { PlayerStatus } from '/@/shared/types/types';
 
@@ -40,7 +41,12 @@ export const useQueueRestoreTimestamp = () => {
 
                 setTimeout(() => {
                     const now = usePlayerStore.getState().getCurrentSong()?._uniqueId;
-                    if (!scheduledSeekApplies(armedFor, now)) return;
+                    if (!scheduledSeekApplies(armedFor, now)) {
+                        logger.info('[player] queue restore seek dropped: the song changed', {
+                            sec: position,
+                        });
+                        return;
+                    }
                     setTimestamp(position, { seek: true }); // navi-connect (Q-051)
                     mediaSeekToTimestamp(position);
                 }, 100);
@@ -97,7 +103,13 @@ export const useInitialTimestampRestore = () => {
         const armedFor = usePlayerStore.getState().getCurrentSong()?._uniqueId;
         setTimeout(() => {
             const now = usePlayerStore.getState().getCurrentSong()?._uniqueId;
-            if (!scheduledSeekApplies(armedFor, now)) return;
+            if (!scheduledSeekApplies(armedFor, now)) {
+                logger.info('[player] startup seek dropped: the song changed', {
+                    sec: seekTimestamp,
+                });
+                return;
+            }
+            logger.info('[player] startup seek applied at the first play', { sec: seekTimestamp });
             mediaSeekToTimestamp(seekTimestamp);
         }, 100);
     }, [mediaSeekToTimestamp]);
@@ -114,7 +126,10 @@ export const useInitialTimestampRestore = () => {
             const at = startupSeek.takeOnPlaying(
                 usePlayerStore.getState().getCurrentSong()?._uniqueId,
             );
-            if (at !== null) mediaSeekToTimestamp(at);
+            if (at !== null) {
+                logger.info('[player] startup seek applied at ready', { sec: at });
+                mediaSeekToTimestamp(at);
+            }
         });
         return () => onWebEngineReady(null);
     }, [mediaSeekToTimestamp]);

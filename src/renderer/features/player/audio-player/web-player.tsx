@@ -36,6 +36,7 @@ import {
     usePlayerStoreBase,
     usePlayerVolume,
 } from '/@/renderer/store';
+import { logger } from '/@/renderer/utils/logger';
 import { toast } from '/@/shared/components/toast/toast';
 import { QueueSong } from '/@/shared/types/domain-types';
 import { CrossfadeStyle, PlayerRepeat, PlayerStatus, PlayerStyle } from '/@/shared/types/types';
@@ -72,6 +73,7 @@ export function WebPlayer() {
     const pendingLocalSeekRef = useRef(-1);
     // B-402: a seek sent before this player's element is up (a fresh start), held for its ready.
     const heldSeekRef = useRef(createHeldSeek());
+    const currentSrcRef = useRef<string | undefined>(undefined);
 
     const [localPlayerStatus, setLocalPlayerStatus] = useState<PlayerStatus>(() => {
         if (playerHandoff.pendingLocalSeek > 0) {
@@ -370,9 +372,25 @@ export function WebPlayer() {
                 // B-402: before the element is up, the seek went to a null ref and was lost (a
                 // transfer to a fresh desktop played from 0 s); it is held for the element's ready.
                 // Review M1: held for the song it was sent for, never another.
+                const engineUp = engineTakesSeekNow(true);
+                const element = (
+                    num === 1 ? playerRef.current?.player1() : playerRef.current?.player2()
+                )?.ref?.getInternalPlayer() as HTMLMediaElement | undefined;
+                const onCurrentSource =
+                    Boolean(currentSrcRef.current) && element?.src === currentSrcRef.current;
+                // B-402 (re-walk): at INFO whenever the seek does not simply go to the element on
+                // the current song's source (no URL logged: it carries the credentials).
+                if (!engineUp || !onCurrentSource) {
+                    logger.info('[player] seek before the element is on the current song', {
+                        currentUrlKnown: Boolean(currentSrcRef.current),
+                        elementUp: engineUp,
+                        held: !engineUp,
+                        sec: timestamp,
+                    });
+                }
                 heldSeekRef.current.send(
                     timestamp,
-                    engineTakesSeekNow(true),
+                    engineUp,
                     toElement,
                     usePlayerStoreBase.getState().getCurrentSong()?._uniqueId,
                 );
@@ -564,6 +582,8 @@ export function WebPlayer() {
 
     const player1Url = useSongUrl(player1, num === 1, transcode);
     const player2Url = useSongUrl(player2, num === 2, transcode);
+    // B-402: the current song's stream URL as its element reports `src`, for the seek handler.
+    currentSrcRef.current = absoluteUrl(num === 1 ? player1Url : player2Url);
 
     const applyPendingSeekIfNeeded = useCallback(
         (reactPlayer: ReactPlayer, activeSlot: 1 | 2) => {
@@ -580,6 +600,7 @@ export function WebPlayer() {
             const handoff = pendingLocalSeekRef.current;
             pendingLocalSeekRef.current = -1;
             const at = seekAtReady(held, handoff);
+            if (held !== null) logger.info('[player] held seek applied at ready', { sec: held });
             if (at !== null) reactPlayer.seekTo(at, 'seconds');
             if (handoff <= 0) return;
             if (status === PlayerStatus.PLAYING) {

@@ -1226,6 +1226,22 @@ export const useHub = () => {
                         incomingIds.every((id, n) => id === currentIds[n]);
 
                     const wantPause = msg.play === false;
+                    // B-402: the transfer path at INFO (ids, numbers and booleans only: never a
+                    // URL, which carries the server's credentials).
+                    logger.info('[hub] load received', {
+                        engineUp: engineTakesSeekNow(
+                            useSettingsStore.getState().playback.type === PlayerType.WEB,
+                        ),
+                        index: msg.index ?? 0,
+                        localIndex: playingQueueIndex(state),
+                        localSec: useTimestampStoreBase.getState().timestamp || 0,
+                        play: !wantPause,
+                        positionMs: msg.positionMs ?? 0,
+                        sameQueue,
+                        status: state.player.status,
+                        tracks: incomingIds.length,
+                        transferId: transferId ?? null,
+                    });
                     // I-031: a load that could not start. A transfer's is rolled back by the
                     // hub on this answer, so nothing more is said. Any other load (a setQueue
                     // while this device plays) has nobody to roll it back: pause, and the
@@ -1257,10 +1273,20 @@ export const useHub = () => {
                         // Changing track reloads the source, so the seek is armed for
                         // onCurrentSongChange; on the same row it is sought now, or carried by
                         // the startup seek while the web player is not up (B-348).
-                        noteRetargeted(
-                            sameQueueLoadStep(msg.index ?? 0, targetSec, wantPause, seekDeps()),
+                        const placed = sameQueueLoadStep(
+                            msg.index ?? 0,
                             targetSec,
+                            wantPause,
+                            seekDeps(),
                         );
+                        // B-402: pending = another row, the landing seek follows the song change;
+                        // retargeted = the startup seek carries it; seeked = sent now.
+                        logger.info('[hub] load positioned (same queue)', {
+                            how: placed,
+                            sec: targetSec,
+                            transferId: transferId ?? null,
+                        });
+                        noteRetargeted(placed, targetSec);
                     } else {
                         withdrawStartupSeek();
                         const songs = await resolveSongs(msg.tracks, heldSongs());
@@ -1282,6 +1308,11 @@ export const useHub = () => {
                         };
                         // Load straight into the requested state — see setQueue's `play`.
                         // `msg.index` is a row; the play order is the hub's when it sent one.
+                        logger.info('[hub] load positioned (new queue)', {
+                            resolved: songs.length,
+                            sec: targetSec,
+                            transferId: transferId ?? null,
+                        });
                         setQueue(songs, msg.index ?? 0, targetSec, !wantPause, adopt);
                     }
                     if (wantPause) {
@@ -1299,6 +1330,22 @@ export const useHub = () => {
                     const later = async (): Promise<DoExit> => {
                         const outcome = await awaitLoadOutcome(gen, exp, budgetMs);
                         if (pendingLoad.current?.exp === exp) pendingLoad.current = null;
+                        // B-402: where the player is when the load is answered, and 2 s on (the
+                        // position actually reached once the element plays).
+                        const reached = (when: string) => {
+                            const here = readPlayer();
+                            logger.info(`[hub] load ${when}`, {
+                                asked: { index: msg.index ?? 0, sec: targetSec },
+                                error: outcome.ok ? null : (outcome.error ?? null),
+                                index: here.index,
+                                ok: outcome.ok,
+                                playing: here.isPlaying,
+                                sec: here.positionMs / 1000,
+                                transferId: transferId ?? null,
+                            });
+                        };
+                        reached('settled');
+                        setTimeout(() => reached('2 s after settling'), 2000);
                         const ending = loadEnding(outcome, exp);
                         if (ending.kind === 'refuse') return refuse(outcome.error);
                         if (ending.kind === 'answered') {
@@ -2312,6 +2359,18 @@ export const useHub = () => {
                                 usePlayerStore.getState().getCurrentSong()?._uniqueId,
                             );
                         if (landingSeek.current === pending) landingSeek.current = null;
+                        // B-402: the hub's position on the song it was armed for, or why not.
+                        logger.info(`[hub] landing seek ${fires ? 'applied' : 'dropped'}`, {
+                            ...(fires
+                                ? {}
+                                : {
+                                      why:
+                                          landingSeek.current && landingSeek.current !== pending
+                                              ? 'superseded'
+                                              : 'song changed or withdrawn',
+                                  }),
+                            sec: pending.sec,
+                        });
                         if (!fires) return;
                         mediaSeekToTimestamp(pending.sec);
                         if (pending.pause) {
