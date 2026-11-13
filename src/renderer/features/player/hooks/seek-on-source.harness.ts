@@ -109,3 +109,19 @@ test('the_web_player_asks_whether_its_element_holds_the_current_source', () => {
     const web = readFileSync(new URL('../audio-player/web-player.tsx', import.meta.url), 'utf8');
     assert.match(web, /elementTakesSeek\(/, 'the seek handler sends on "up" alone');
 });
+
+test('the_placeholders_ready_while_the_url_is_pending_keeps_the_hold', () => {
+    // Another row whose URL is not cached: react-player loads its silent EMPTY_SOURCE first (the
+    // element's url is `src || EMPTY_SOURCE`), and that placeholder reports ready while the URL is
+    // still pending. The hold is for the song's own source: the placeholder must not take it.
+    const d = freshDesktop();
+    d.ready();
+    d.changeSong('u-b');
+    d.seek(HUB_SEC);
+    d.el.src = 'data:audio/mp3;base64,AAAA'; // the placeholder loads, from 0 s
+    d.el.position = 0;
+    d.ready(); // its canplay: the current URL is still unknown
+    d.urlResolved('song-b');
+    d.ready();
+    assert.equal(d.el.position, HUB_SEC, 'the placeholder took the held seek');
+});
