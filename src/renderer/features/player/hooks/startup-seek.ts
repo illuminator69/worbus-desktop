@@ -163,7 +163,10 @@ export const createHeldSeek = (): HeldSeek => {
                 held = null; // another song's ready: the hold was not for it
                 return null;
             }
-            if (readySrc && currentSrc && readySrc !== currentSrc) return null;
+            // Only the song's own source takes it. B-402 (re-walk): while the new song's URL is
+            // still pending (`currentSrc` unknown) the element loads react-player's silent
+            // placeholder, which reports ready too; that ready leaves the hold for the real one.
+            if (!readySrc || !currentSrc || readySrc !== currentSrc) return null;
             const { sec } = held;
             held = null;
             return sec;
