@@ -142,3 +142,43 @@ test('the_badge_counts_the_folders_and_the_page_shows_them', () => {
         'the Downloads page shows the imports row alone',
     );
 });
+
+/**
+ * B-406 review L3: lb-bot's folder id is 12 lowercase hex characters (`_download_folder_id`);
+ * anything else would draw a dead Open in lb-bot. And the folder's words are i18n'd like their
+ * neighbours.
+ */
+test('only_a_folder_id_lbbot_could_have_made_is_listed', async () => {
+    const mod = (await shared())!;
+    const rows = mod.attentionFolders({
+        folders: [
+            { fileCount: 1, id: 'a1b2c3d4e5f6' },
+            { fileCount: 1, id: 'A1B2C3D4E5F6' },
+            { fileCount: 1, id: 'a1b2c3d4e5' },
+            { fileCount: 1, id: 'a1b2c3d4e5f6/../x' },
+            { fileCount: 1, id: 'g1b2c3d4e5f6' },
+        ],
+    });
+    assert.deepEqual(
+        rows.map((r) => r.id),
+        ['a1b2c3d4e5f6'],
+    );
+});
+
+test('the_folder_words_come_from_the_caller', () => {
+    const f = { fileCount: 1, formats: 'flac', id: 'a', identified: false, matchLabel: '' };
+    const title = rule.folderTitle as unknown as (f: Folder, unidentified: string) => string;
+    const detail = rule.folderDetail as unknown as (
+        f: Folder,
+        files: (count: number) => string,
+    ) => string;
+    assert.equal(title(f, 'Dossier non identifié'), 'Dossier non identifié');
+    assert.equal(
+        detail({ ...f, fileCount: 3 }, (n) => `${n} fichiers`),
+        '3 fichiers · FLAC',
+    );
+    const en = JSON.parse(read('src/i18n/locales/en.json'));
+    assert.equal(en.naviConnect.toFix.unidentified, 'Unidentified folder');
+    assert.equal(en.naviConnect.toFix.files_one, '{{count}} file');
+    assert.equal(en.naviConnect.toFix.files_other, '{{count}} files');
+});
