@@ -2215,6 +2215,8 @@ export const useHub = () => {
                 toast.warn({ message: hubFailureMessage(msg) });
             }
         });
+        // B-421: listening now - a page reloaded under a socket main kept asks for a fresh welcome.
+        hub.resync();
         return () => dispose();
     }, [
         adoptIfNoLiveReceiver,

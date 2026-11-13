@@ -33,7 +33,7 @@ import {
     sweep,
     SweepDeps,
 } from './finder';
-import { kickAction } from './kick';
+import { kickAction, resyncAction } from './kick';
 import { clearServerVersion, noteServerVersion } from './server-version';
 
 import { getMainWindow } from '/@/main/index';
@@ -191,6 +191,8 @@ let backoffMs = INITIAL_BACKOFF_MS;
 let shouldRun = false;
 /** Wall-clock ms of the last kick that did something (see kick()). */
 let lastKickAt = 0;
+/** B-421: the socket whose `welcome` was forwarded to the renderer (a page that may since be gone). */
+let welcomedSocket: undefined | WebSocket;
 
 /**
  * Which connection attempt is current.
@@ -378,6 +380,8 @@ function dial(url: string, gen: number): void {
             if (msg?.t === 'welcome') noteWelcomeServer(url, msg.server);
             // P4: `welcome.server.version`, for Export diagnostics' header.
             if (msg?.t === 'welcome') noteServerVersion(msg.server);
+            // B-421: forwarded just below, to whichever page is loaded now.
+            if (msg?.t === 'welcome') welcomedSocket = socket;
             if (registry.snoop(msg)) hubEvents.emit('devices', registry.current());
         } catch {
             /* not our problem — the renderer owns protocol semantics */
@@ -638,6 +642,23 @@ function stop(): void {
 }
 
 ipcMain.on('hub-send', (_event, obj: unknown) => send(obj));
+
+// B-421: a page subscribed to the hub stream (once per page load, preload's `resync`). A reloaded
+// page learns nothing from a socket whose welcome went to the page before it (kick.ts
+// `resyncAction`): that socket is replaced, the way a settings change replaces it.
+ipcMain.on('hub-resync', () => {
+    const action = resyncAction({
+        readyState: ws?.readyState,
+        shouldRun,
+        welcomed: ws !== undefined && welcomedSocket === ws,
+    });
+    if (action === 'none') return;
+    log.info(
+        '[hub] the page reloaded after this connection was welcomed - reconnecting for a fresh welcome',
+    );
+    stop();
+    start();
+});
 
 // The renderer saw the network come back (its window's `online` event).
 ipcMain.on('hub-kick', () => kick('online'));

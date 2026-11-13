@@ -22,6 +22,18 @@ const onMessage = (cb: (msg: any) => void): (() => void) => {
     return () => ipcRenderer.removeListener('hub-message', handler);
 };
 
+/**
+ * B-421: ask for a fresh `welcome` - call it once the page listens (`onMessage`). Once per page
+ * load: a renderer reload runs this file again, a Fast Refresh or a re-subscription does not, so
+ * only a page that lost its hub state makes the main process replace a socket it kept.
+ */
+let resynced = false;
+const resync = () => {
+    if (resynced) return;
+    resynced = true;
+    ipcRenderer.send('hub-resync');
+};
+
 const send = (obj: unknown) => {
     ipcRenderer.send('hub-send', obj);
 };
@@ -111,6 +123,7 @@ export const hub = {
     onMessage,
     onServer,
     removeListeners,
+    resync,
     send,
     serverEdit,
     serverState,

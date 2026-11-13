@@ -27,6 +27,33 @@ export interface KickState {
     sinceLastKick: number;
 }
 
+/**
+ * B-421: a page that subscribes to the hub stream asks for a fresh welcome (`hub-resync`, once
+ * per page load). The renderer learns that it is connected - and the session, the devices and
+ * lb-bot - only from a `welcome`, and the main process's socket outlives a renderer reload
+ * (Ctrl+R, Vite's full reload): the settings the new page pushes are the old ones, nothing
+ * restarts, and the hub state stayed gone until the socket happened to drop (9+ minutes).
+ *
+ * Replaying the welcome main saw is not an answer: the session has moved since, and the command
+ * echo (I-031) is reset on both sides only by a new connection - a page reset to `applied` 0 on a
+ * socket whose hub expects a higher seq has every report it sends disbelieved. So the socket is
+ * replaced, which is also the truth for the hub: a reloaded page's player starts paused.
+ *
+ * - `reconnect`: the open socket's welcome went to a page before this one;
+ * - `none`: not meant to run, or the welcome is still to come (connecting, waiting out the
+ *   backoff, closing, or open and not yet welcomed) and reaches this page as it is.
+ */
+export type ResyncAction = 'none' | 'reconnect';
+
+export interface ResyncState {
+    /** The current socket's `readyState` (0 CONNECTING, 1 OPEN, 2 CLOSING); undefined without one. */
+    readyState: number | undefined;
+    /** Meant to be connected: switched on, and not refused by the hub. */
+    shouldRun: boolean;
+    /** A `welcome` has been forwarded to a page on the current socket. */
+    welcomed: boolean;
+}
+
 export function kickAction({ readyState, shouldRun, sinceLastKick }: KickState): KickAction {
     if (!shouldRun) return 'none';
     // Wall clock on purpose: a monotonic one may not count the time asleep, and the kick after a
@@ -42,4 +69,9 @@ export function kickAction({ readyState, shouldRun, sinceLastKick }: KickState):
         default:
             return 'none';
     }
+}
+
+export function resyncAction({ readyState, shouldRun, welcomed }: ResyncState): ResyncAction {
+    if (!shouldRun) return 'none';
+    return readyState === 1 && welcomed ? 'reconnect' : 'none';
 }
