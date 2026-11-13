@@ -14,7 +14,8 @@ import { isImageBody } from './shown-stack.ts';
  *   burst of them (the waves above are what a burst makes).
  * - **An empty 200, a 429 or a 5xx is asked again** after `delaysMs`, past the HTTP cache
  *   (`cache: 'reload'`, so the empty answer Chromium stored is not handed back). A non-image
- *   document under 200 (a Subsonic error) and any other status fail at once.
+ *   document under 200 (a Subsonic error), a 501 or 505, and any other status fail at once. Only
+ *   Navidrome's empty `getCoverArt` gets the whole schedule; the rest `SHORT_REASKS` (review L1).
  * - **Re-asks to one server go one at a time** (`MAX_REASKS_IN_FLIGHT`). The rows a burst emptied
  *   used to re-ask together, at the same moments: one more wave on the same shared entry, the
  *   condition that emptied them (B-415: asked together, empty; asked one at a time, the JPEG).
@@ -32,7 +33,26 @@ export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 30000, 30000, 300
 export const REASK_TIMEOUT_MS = 20_000;
 /** A cover with no image after this, its waits and lane waiting included, is a failure. */
 export const GIVE_UP_AFTER_MS = 150_000;
+/**
+ * Review L1: re-asks for any other transient answer (a 5xx or 429, an empty 200 from a host that is
+ * not a Subsonic cover endpoint): 4 asks in about 7 s, as a host that is rate limiting or has no
+ * art for the item will not answer differently in two minutes, and its re-asks would queue in the
+ * server's one lane ahead of real recoveries. The whole schedule is for B-415's case alone.
+ */
+export const SHORT_REASKS = 3;
 const MAX_IN_FLIGHT = 4;
+
+/** Navidrome's (Subsonic's) cover endpoint, under any base path: B-415's burst-emptied entry. */
+const isSubsonicCover = (url: string) => {
+    try {
+        return /\/rest\/getCoverArt(\.view)?$/.test(new URL(url).pathname);
+    } catch {
+        return false;
+    }
+};
+
+/** A 5xx that says the server will not do this at all (Not Implemented, Version Not Supported). */
+const DEFINITIVE_5XX = new Set([501, 505]);
 const MAX_REASKS_IN_FLIGHT = 1;
 
 export class NotAnImage extends Error {}
@@ -177,6 +197,7 @@ export const fetchImage = async (
         budgetMs,
     );
     const signal = callerSignal ? AbortSignal.any([callerSignal, budget.signal]) : budget.signal;
+    const coverEndpoint = isSubsonicCover(request.url);
     try {
         for (let attempt = 0; ; attempt += 1) {
             const answer = await ask(
@@ -186,7 +207,10 @@ export const fetchImage = async (
                 signal,
                 attempt > 0 ? reaskTimeoutMs : budgetMs,
             );
-            const transient = answer.status === 429 || answer.status >= 500 || !!answer.timedOut;
+            const transient =
+                answer.status === 429 ||
+                (answer.status >= 500 && !DEFINITIVE_5XX.has(answer.status)) ||
+                !!answer.timedOut;
             if (!answer.ok && !transient) {
                 throw new Error(`Failed to load image: ${answer.status}`);
             }
@@ -194,7 +218,10 @@ export const fetchImage = async (
             // A document under 200 (a Subsonic error) is the server's answer, not a hiccup.
             if (answer.blob && answer.blob.size > 0)
                 throw new NotAnImage(`Not an image: ${answer.type}`);
-            if (attempt >= delays.length) {
+            // Review L1: the whole schedule only for an empty (or unanswered) Subsonic cover.
+            const burstEmptied = (answer.ok || answer.timedOut) && coverEndpoint;
+            const asksAgain = burstEmptied ? delays.length : Math.min(SHORT_REASKS, delays.length);
+            if (attempt >= asksAgain) {
                 throw new Error(`No image after ${attempt + 1} answers (${answer.status}, empty)`);
             }
             await sleep(delays[attempt], signal);
