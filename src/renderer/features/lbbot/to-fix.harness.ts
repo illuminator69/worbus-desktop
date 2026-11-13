@@ -112,10 +112,14 @@ test('a_folder_says_what_it_is_and_opens_lbbot_on_it', () => {
         { fileCount: 11, formats: 'flac', id: 'a', identified: true, matchLabel: 'After - EP 2' },
         { fileCount: 1, formats: '', id: 'b', identified: false, matchLabel: 'stale' },
     ];
-    assert.equal(rule.folderTitle!(identified), 'After - EP 2');
-    assert.equal(rule.folderTitle!(unknown), 'Unidentified folder');
-    assert.equal(rule.folderDetail!(identified), '11 files · FLAC');
-    assert.equal(rule.folderDetail!(unknown), '1 file');
+    // Review L3: the words are the caller's (i18n), as the To fix section passes them.
+    const words = (n: number) => `${n} ${n === 1 ? 'file' : 'files'}`;
+    const title = rule.folderTitle as unknown as (f: Folder, unidentified: string) => string;
+    const detail = rule.folderDetail as unknown as (f: Folder, files: typeof words) => string;
+    assert.equal(title(identified, 'Unidentified folder'), 'After - EP 2');
+    assert.equal(title(unknown, 'Unidentified folder'), 'Unidentified folder');
+    assert.equal(detail(identified, words), '11 files · FLAC');
+    assert.equal(detail(unknown, words), '1 file');
     assert.equal(
         rule.lbPlaceLink!('https://lb.example.org/', null, isPrivateAddress, 'a1b2c3d4e5f6'),
         'https://lb.example.org/#/place/a1b2c3d4e5f6',

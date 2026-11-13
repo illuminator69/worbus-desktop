@@ -16,6 +16,9 @@ export interface LbBotAttentionFolder {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
+/** lb-bot's `_download_folder_id`: 12 lowercase hex characters. */
+const FOLDER_ID = /^[0-9a-f]{12}$/;
+
 /** The folder rows of a `/lb/attention` answer, allowlisted; a row with no id is dropped. */
 export const attentionFolders = (answer: unknown): LbBotAttentionFolder[] => {
     const rows =
@@ -25,7 +28,8 @@ export const attentionFolders = (answer: unknown): LbBotAttentionFolder[] => {
         if (!row || typeof row !== 'object') return [];
         const r = row as Record<string, unknown>;
         const id = str(r.id).trim();
-        if (!id) return [];
+        // Review L3: lb-bot's folder id is 12 lowercase hex characters; nothing else opens.
+        if (!FOLDER_ID.test(id)) return [];
         const fileCount = typeof r.fileCount === 'number' && r.fileCount > 0 ? r.fileCount : 0;
         return [
             {

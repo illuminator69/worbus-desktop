@@ -115,18 +115,18 @@ export const toFixSection = (
     };
 };
 
-/** B-406: what a folder is: lb-bot's "Artist - Album" when it identified one. */
-export const folderTitle = (folder: LbBotAttentionFolder): string =>
-    (folder.identified && folder.matchLabel.trim()) || 'Unidentified folder';
+/** B-406: what a folder is: lb-bot's "Artist - Album" when it identified one, else `unidentified`
+ *  (the caller's words, i18n'd: review L3). */
+export const folderTitle = (folder: LbBotAttentionFolder, unidentified: string): string =>
+    (folder.identified && folder.matchLabel.trim()) || unidentified;
 
-/** B-406: how many files and lb-bot's word for their format ("11 files · FLAC"). */
-export const folderDetail = (folder: LbBotAttentionFolder): string =>
-    [
-        `${folder.fileCount} ${folder.fileCount === 1 ? 'file' : 'files'}`,
-        folder.formats.trim().toUpperCase(),
-    ]
-        .filter(Boolean)
-        .join(' · ');
+/** B-406: how many files (`files`, the caller's words) and lb-bot's word for their format
+ *  ("11 files · FLAC"). */
+export const folderDetail = (
+    folder: LbBotAttentionFolder,
+    files: (count: number) => string,
+): string =>
+    [files(folder.fileCount), folder.formats.trim().toUpperCase()].filter(Boolean).join(' · ');
 
 /** The row, shown only when there is something to fix. */
 export const importsRow = (

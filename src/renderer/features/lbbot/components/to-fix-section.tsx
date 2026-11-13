@@ -44,16 +44,17 @@ export const ToFixSection = () => {
             <ImportsRow />
             {section.folders.map((folder) => {
                 const link = lbPlaceLink(webUrl, activeAddress, isPrivateAddress, folder.id);
+                const detail = folderDetail(folder, (count) =>
+                    t('naviConnect.toFix.files', { count }),
+                );
                 return (
                     <div className={styles.row} data-to-fix-folder="" key={folder.id}>
                         <Stack className={styles.body} gap="0.15rem">
                             <Text isNoSelect lineClamp={1}>
-                                {folderTitle(folder)}
+                                {folderTitle(folder, t('naviConnect.toFix.unidentified'))}
                             </Text>
                             <Text isMuted size="sm">
-                                {link
-                                    ? folderDetail(folder)
-                                    : `${folderDetail(folder)} · ${t('naviConnect.toFix.folderAway')}`}
+                                {link ? detail : `${detail} · ${t('naviConnect.toFix.folderAway')}`}
                             </Text>
                         </Stack>
                         {link && (
