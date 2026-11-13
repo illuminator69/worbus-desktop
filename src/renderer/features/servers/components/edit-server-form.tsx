@@ -212,7 +212,6 @@ export const EditServerForm = ({
                     }
                 }
             }
-
         } catch (err: any) {
             setIsLoading(false);
             return toast.error({ message: err?.message });
