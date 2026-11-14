@@ -741,7 +741,9 @@ async function createWindow(first = true): Promise<void> {
     mainWindow = new BrowserWindow({
         autoHideMenuBar: true,
         frame: false,
-        icon: isWindows() ? getAssetPath('icons/icon.ico') : getAssetPath('icons/icon.png'),
+        // B-340: Chromium sets no _NET_WM_ICON (X11, Xwayland) for a 256 or 512 px icon, so a
+        // window with no desktop entry got the dock's generic icon; 128 px is set.
+        icon: isWindows() ? getAssetPath('icons/icon.ico') : getAssetPath('icons/128x128.png'),
         minHeight: 120,
         minWidth: 480,
         show: false,
