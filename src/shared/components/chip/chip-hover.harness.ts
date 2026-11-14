@@ -58,6 +58,9 @@ test('the_shared_chip_class_draws_upstreams_button_hover', () => {
         "[aria-pressed='true']",
         "[aria-current='page']",
         "[data-active='true']",
+        // A chip painted in the accent at rest (the player bar's device pill) is upstream's
+        // `filled` Button, so it darkens too.
+        "[data-variant='filled']",
     ]) {
         assert.ok(chip.includes(chosen), `the chosen state ${chosen} has no hover`);
     }
@@ -168,6 +171,11 @@ const SITES: { file: string; local: string[] }[] = [
         local: ['chip', 'iconChip'],
     },
     { file: 'src/renderer/features/songs/components/top-rated-chip.tsx', local: ['chip'] },
+    // m4 (review 2026-11-15): the player bar's device pill (an accent button) and lb-bot's Find
+    // sources cards (the card's button). The pill's own transition is its fold, which the class
+    // leaves alone (the test above).
+    { file: 'src/renderer/features/player/components/device-control.tsx', local: ['label'] },
+    { file: 'src/renderer/features/lbbot/components/source-cards.tsx', local: ['head'] },
 ];
 
 /** Each `className={…}` expression in a file, braces balanced. */
@@ -213,6 +221,22 @@ test('the_album_pages_tag_links_hover_and_its_plain_tags_do_not', () => {
     assert.ok(link && span, 'the tag chips moved');
     assert.match(link[1], /\bchipStyles\.chip\b/, 'a tag that links has no hover');
     assert.doesNotMatch(span[1], /\bchipStyles\.chip\b/, 'a plain tag is not a control');
+});
+
+test('the_device_pill_darkens_as_upstreams_filled_button_does', () => {
+    // The pill is painted in the accent at rest, like upstream's `filled` Button, which darkens
+    // 10% under the pointer rather than lightening.
+    const source = read('src/renderer/features/player/components/device-control.tsx');
+    assert.match(
+        source,
+        /className=\{clsx\(\s*chipStyles\.chip,\s*styles\.label,[^}]*\}\s*(?:\/\/[^\n]*\n\s*)?data-variant="filled"/,
+    );
+    const css = read('src/renderer/features/player/components/device-control.module.css');
+    // Its fold is its own transition, and stays so.
+    assert.match(
+        css,
+        /\.label \{[^}]*transition:\s*max-width var\(--fold\),\s*padding var\(--fold\),\s*opacity var\(--fold\);/,
+    );
 });
 
 test('every_segmented_control_label_wears_the_shared_class', () => {

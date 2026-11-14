@@ -8,6 +8,7 @@ import { DeviceRowsList } from '/@/renderer/features/hub/components/device-rows-
 import { sendAct } from '/@/renderer/features/hub/utils/remote-queue';
 import { useDeviceControlState } from '/@/renderer/features/player/hooks/use-device-control-state';
 import { useHubMyDeviceId, useHubStore } from '/@/renderer/store';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { AppIconSelection, Icon } from '/@/shared/components/icon/icon';
 import { Tooltip } from '/@/shared/components/tooltip/tooltip';
 
@@ -110,7 +111,13 @@ export const DeviceControl = () => {
                     <Tooltip label={shown.text} openDelay={300}>
                         <button
                             aria-hidden={!isPill || open}
-                            className={clsx(styles.label, (!isPill || open) && styles.labelOff)}
+                            className={clsx(
+                                chipStyles.chip,
+                                styles.label,
+                                (!isPill || open) && styles.labelOff,
+                            )}
+                            // m4: the accent pill reacts as upstream's filled Button (darker).
+                            data-variant="filled"
                             onClick={(e) => {
                                 e.stopPropagation();
                                 act();

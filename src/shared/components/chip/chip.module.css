@@ -1,7 +1,7 @@
 /*
  * B-293: the fork's chips react to the pointer as upstream's chips (the shared Button) do. A chip on
- * the surface lightens 5% (`default`'s hover), the chosen one darkens 10% (`filled`'s), over the
- * Button's 0.2 s ease-in-out. Drawn as an overlay rather than a new background: white 5% over a
+ * the surface lightens 5% (`default`'s hover); the chosen one, or a chip painted in the accent at
+ * rest (`data-variant="filled"`), darkens 10% (`filled`'s); both over the Button's 0.2 s ease-in-out. Drawn as an overlay rather than a new background: white 5% over a
  * colour is exactly `lighten(colour, 5%)` and black 10% exactly `darken(colour, 10%)`, translucent
  * colours included, so one rule serves the surface, the cover wash's surface and the accent without
  * knowing which the chip's own module paints. The chip's module keeps its size, colours and focus
@@ -44,8 +44,18 @@
         --chip-overlay: rgb(255 255 255 / 5%);
     }
 
-    &:is([aria-pressed='true'], [aria-current='page'], [data-active='true']):hover,
-    &:is([aria-pressed='true'], [aria-current='page'], [data-active='true']):focus-visible {
+    &:is(
+            [aria-pressed='true'],
+            [aria-current='page'],
+            [data-active='true'],
+            [data-variant='filled']
+        ):hover,
+    &:is(
+            [aria-pressed='true'],
+            [aria-current='page'],
+            [data-active='true'],
+            [data-variant='filled']
+        ):focus-visible {
         --chip-overlay: rgb(0 0 0 / 10%);
     }
 }

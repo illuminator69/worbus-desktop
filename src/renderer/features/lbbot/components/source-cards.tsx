@@ -16,6 +16,7 @@ import {
 import { extraFilesView } from '/@/renderer/features/lbbot/utils/album-download';
 import { Fold } from '/@/renderer/features/motion/fold';
 import { Button } from '/@/shared/components/button/button';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Skeleton } from '/@/shared/components/skeleton/skeleton';
 import { LbBotGapSource, LbBotSourceFile, LbBotSourceFiles } from '/@/shared/types/lbbot-types';
 
@@ -213,7 +214,7 @@ export const SourceCards = ({
                         >
                             <button
                                 aria-checked={isSelected}
-                                className={styles.head}
+                                className={clsx(chipStyles.chip, styles.head)}
                                 disabled={disabled}
                                 onClick={() => onSelect(source)}
                                 role="radio"
