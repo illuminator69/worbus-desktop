@@ -32,3 +32,12 @@ test('one_mpv_position_poll', () => {
     assert.doesNotMatch(engine, /PROGRESS_UPDATE_INTERVAL/, 'the dead 250 ms poll');
     assert.match(read('../features/player/audio-player/mpv-player.tsx'), /getCurrentTime\(\)/);
 });
+
+test('page_data_is_kept_two_minutes', () => {
+    // Owner ruling 2026-11-14 (Q-164): a page left for under two minutes comes back from the cache
+    // instead of re-suspending (Home's shelves did after 20 s away). Still stale after 10 s, so what
+    // comes back is shown at once and refreshed behind it.
+    const src = read('../lib/react-query.ts');
+    assert.match(src, /gcTime: 1000 \* 60 \* 2, \/\/ 2 minutes/);
+    assert.match(src, /staleTime: 1000 \* 10, \/\/ 10 seconds/);
+});
