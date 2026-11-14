@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { clapAvailableKey, ClapHub } from './clap-available-key';
 import { DISCOVER_ROWS, DiscoverCapability, DiscoverRowDefinition } from './discover-rows';
 
 import {
@@ -7,11 +8,17 @@ import {
     useLbBotRouteSupport,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { fetchClapAvailable } from '/@/renderer/features/player/auto-dj/audio-muse-source';
-import { useAudioMuseSettings } from '/@/renderer/store/settings.store';
+import { useHubStore } from '/@/renderer/store/hub.store';
+import { useAudioMuseSettings, useHubSettings } from '/@/renderer/store/settings.store';
 
-/** The CLAP probe's query key. Settings reads the same cache entry to say what the server offers. */
-export const clapAvailableKey = (audioMuse: { token: string; url: string }) =>
-    ['discover', 'clap-available', audioMuse.token, audioMuse.url] as const;
+export { clapAvailableKey } from './clap-available-key';
+
+/** The hub settings the CLAP probe's answer depends on (B-321). */
+export const useClapHub = (): ClapHub => {
+    const { enabled, token, url } = useHubSettings();
+    const signedIn = useHubStore((s) => s.authSignedIn);
+    return { enabled, signedIn: !!signedIn, token, url };
+};
 
 /**
  * One answer for every Discover row, instead of six.
@@ -33,13 +40,14 @@ export const useDiscoverCapabilities = () => {
     const lbBotAvailable = useLbBotAvailable();
     const supportsRoute = useLbBotRouteSupport();
     const audioMuse = useAudioMuseSettings();
+    const clapHub = useClapHub();
 
     const clap = useQuery<boolean>({
         // A probe, not content: an hour is plenty, and it must not re-fire as
         // the user scrolls back to the page.
         gcTime: Infinity,
         queryFn: () => fetchClapAvailable(audioMuse),
-        queryKey: clapAvailableKey(audioMuse),
+        queryKey: clapAvailableKey(audioMuse, clapHub),
         refetchOnWindowFocus: false,
         staleTime: 60 * 60 * 1000,
     });

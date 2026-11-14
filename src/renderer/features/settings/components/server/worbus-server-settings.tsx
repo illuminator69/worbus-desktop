@@ -21,7 +21,10 @@ import {
     titlesToArrive,
 } from './server-status';
 
-import { clapAvailableKey } from '/@/renderer/features/discover/use-discover-capabilities';
+import {
+    clapAvailableKey,
+    useClapHub,
+} from '/@/renderer/features/discover/use-discover-capabilities';
 import {
     editServer,
     lookIfNotSet,
@@ -104,10 +107,11 @@ const ServerStatus = memo(() => {
     // Reads the probe's cached answer only (enabled: false): no request is made here. Another
     // screen (Library chips, Discover) runs the probe; until it has, `clap.data` is undefined and
     // the AudioMuse line is left out.
+    const clapHub = useClapHub();
     const clap = useQuery<boolean>({
         enabled: false,
         queryFn: () => Promise.resolve(false),
-        queryKey: clapAvailableKey(audioMuse),
+        queryKey: clapAvailableKey(audioMuse, clapHub),
     });
 
     const signedIn = useHubStore((s) => s.authSignedIn);
