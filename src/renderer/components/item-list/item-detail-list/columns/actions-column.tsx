@@ -1,3 +1,5 @@
+import { t } from 'i18next';
+
 import { ItemDetailListCellProps } from './types';
 
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
@@ -24,6 +26,8 @@ export const ActionsColumn = ({ controls, internalState, song }: ItemDetailListC
 
     return (
         <ActionIcon
+            aria-haspopup="menu"
+            aria-label={t('action.moreOptions')}
             icon="ellipsisHorizontal"
             iconProps={{
                 color: 'muted',

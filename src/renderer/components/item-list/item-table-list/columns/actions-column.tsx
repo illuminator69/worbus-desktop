@@ -1,3 +1,5 @@
+import { t } from 'i18next';
+
 import {
     ItemTableListInnerColumn,
     TableColumnContainer,
@@ -34,6 +36,8 @@ export const ActionsColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <ActionIcon
+                    aria-haspopup="menu"
+                    aria-label={t('action.moreOptions')}
                     className="hover-only"
                     icon="ellipsisHorizontal"
                     iconProps={{

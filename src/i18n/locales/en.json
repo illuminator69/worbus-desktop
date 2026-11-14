@@ -18,6 +18,7 @@
         "downloadStarted": "Started download of {{count}} items",
         "editPlaylist": "Edit $t(entity.playlist, {\"count\": 1})",
         "goToPage": "Go to page",
+        "moreOptions": "More options",
         "moveToNext": "Move to next",
         "moveToBottom": "Move to bottom",
         "moveToTop": "Move to top",

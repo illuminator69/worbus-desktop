@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { t } from 'i18next';
 
 import styles from './row-index-column.module.css';
 
@@ -66,6 +67,7 @@ const DefaultRowIndexColumn = (props: ItemTableListInnerColumn) => {
         return (
             <TableColumnContainer {...props}>
                 <ActionIcon
+                    aria-label={t('common.expand')}
                     className={clsx(styles.expand, 'hover-only')}
                     icon="arrowDownS"
                     iconProps={{ color: 'muted', size: 'md' }}

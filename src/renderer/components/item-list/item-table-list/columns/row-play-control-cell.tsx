@@ -1,4 +1,5 @@
 import clsx from 'clsx';
+import { t } from 'i18next';
 import { ReactNode, useCallback } from 'react';
 
 import { RowPlayControlPopover } from '../../row-play-control-popover';
@@ -74,6 +75,7 @@ export const RowPlayControlCell = (
             {getIndexDisplay(true)}
             <div className={clsx(styles.expand, 'hover-only')}>
                 <ActionIcon
+                    aria-label={t('common.expand')}
                     icon="arrowDownS"
                     iconProps={{ color: 'muted', size: 'md' }}
                     onClick={handleExpand}

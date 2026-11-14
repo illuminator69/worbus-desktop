@@ -246,6 +246,8 @@ export const LeftControls = () => {
                                 </Text>
                                 {isSongDefined && (
                                     <ActionIcon
+                                        aria-haspopup="menu"
+                                        aria-label={t('action.moreOptions')}
                                         className={styles.kebab}
                                         icon="ellipsisVertical"
                                         onClick={(e) => {

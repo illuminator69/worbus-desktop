@@ -1,3 +1,5 @@
+import { t } from 'i18next';
+
 import {
     ItemTableListInnerColumn,
     TableColumnContainer,
@@ -22,6 +24,8 @@ export const FavoriteColumn = (props: ItemTableListInnerColumn) => {
                     // Not `disabled` while a save is in flight: a disabled button drops the
                     // keyboard focus that pressed it. The press is ignored instead.
                     aria-disabled={isMutatingFavorite || undefined}
+                    aria-label={t(row ? 'action.removeFromFavorites' : 'action.addToFavorites')}
+                    aria-pressed={row}
                     className={row ? undefined : 'hover-only'}
                     icon="favorite"
                     iconProps={{

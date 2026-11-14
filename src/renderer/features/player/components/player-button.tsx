@@ -5,6 +5,7 @@ import { forwardRef, ReactNode } from 'react';
 import styles from './player-button.module.css';
 
 import { ActionIcon, ActionIconProps } from '/@/shared/components/action-icon/action-icon';
+import { iconButtonName } from '/@/shared/components/action-icon/icon-button-name';
 import { Tooltip, TooltipProps } from '/@/shared/components/tooltip/tooltip';
 import { PlaybackSelectors } from '/@/shared/constants/playback-selectors';
 
@@ -26,6 +27,9 @@ export const PlayerButton = forwardRef<HTMLButtonElement, PlayerButtonProps>(
                         })}
                         ref={ref}
                         {...rest}
+                        // B-456: the tooltip is this button's own, so the inner ActionIcon never
+                        // sees it; name the button by it.
+                        aria-label={iconButtonName(rest['aria-label'], tooltip.label)}
                         onClick={(e) => {
                             e.stopPropagation();
                             rest.onClick?.(e);

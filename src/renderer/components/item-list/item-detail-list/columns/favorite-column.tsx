@@ -1,3 +1,5 @@
+import { t } from 'i18next';
+
 import { ItemDetailListCellProps } from './types';
 
 import { useIsMutatingCreateFavorite } from '/@/renderer/features/shared/mutations/create-favorite-mutation';
@@ -19,6 +21,8 @@ export const FavoriteColumn = ({
 
     return (
         <ActionIcon
+            aria-label={t(isFavorite ? 'action.removeFromFavorites' : 'action.addToFavorites')}
+            aria-pressed={isFavorite}
             disabled={isMutating}
             icon="favorite"
             iconProps={{

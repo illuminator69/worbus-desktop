@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { t } from 'i18next';
 import { useCallback } from 'react';
 
 import styles from './album-group-controls.module.css';
@@ -80,6 +81,10 @@ export const AlbumGroupControls = ({ albumId, serverId, serverType }: AlbumGroup
         <div className={styles.controls}>
             {showFavorites && (
                 <ActionIcon
+                    aria-label={t(
+                        album.userFavorite ? 'action.removeFromFavorites' : 'action.addToFavorites',
+                    )}
+                    aria-pressed={!!album.userFavorite}
                     className={styles.favorite}
                     disabled={isMutatingFavorite}
                     icon="favorite"
