@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router';
@@ -10,6 +11,7 @@ import { FILTER_KEYS } from '/@/renderer/features/shared/utils';
 import { useSongListFilters } from '/@/renderer/features/songs/hooks/use-song-list-filters';
 import { setMultipleSearchParams } from '/@/renderer/utils/query-params';
 import { runInUrlTransition } from '/@/renderer/utils/url-transition';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Icon } from '/@/shared/components/icon/icon';
 import { SongListSort, SortOrder } from '/@/shared/types/domain-types';
 import { ItemListKey } from '/@/shared/types/types';
@@ -67,7 +69,7 @@ export const TopRatedChip = () => {
     return (
         <button
             aria-pressed={selected}
-            className={styles.chip}
+            className={clsx(chipStyles.chip, styles.chip)}
             data-top-rated
             onClick={toggle}
             onKeyDown={(event) => {

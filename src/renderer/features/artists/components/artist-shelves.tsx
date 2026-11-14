@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { CSSProperties, type KeyboardEvent, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generatePath, Link } from 'react-router';
@@ -36,6 +37,7 @@ import { useContainerQuery } from '/@/renderer/hooks';
 import { useEntryKey } from '/@/renderer/hooks/use-entry-key';
 import { AppRoute } from '/@/renderer/router/routes';
 import { useArtistReleaseTypeItems } from '/@/renderer/store/settings.store';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Album, LibraryItem } from '/@/shared/types/domain-types';
 import { ItemListKey } from '/@/shared/types/types';
@@ -157,7 +159,7 @@ export const ArtistShelves = ({ artistMbid, artistName, ndId, owned }: ArtistShe
                                         {chips.map((chip) => (
                                             <button
                                                 aria-pressed={chip.kind === selected.kind}
-                                                className={styles.chip}
+                                                className={clsx(chipStyles.chip, styles.chip)}
                                                 data-chip={chip.kind}
                                                 key={chip.kind}
                                                 onClick={() => setChosen(chip.kind)}

@@ -25,31 +25,20 @@ const read = (file: string) => readFileSync(path.join(ROOT, file), 'utf8');
 const SHARED = 'src/shared/components/chip/chip.module.css';
 const SHARED_IMPORT = "'/@/shared/components/chip/chip.module.css'";
 
-/** A rule's body by its exact selector (the first top-level match). */
-const ruleBody = (css: string, selector: string): string => {
-    const at = css.indexOf(`${selector} {`);
-    assert.ok(at >= 0, `no rule \`${selector}\``);
-    let depth = 0;
-    for (let i = css.indexOf('{', at); i < css.length; i += 1) {
-        if (css[i] === '{') depth += 1;
-        if (css[i] === '}') depth -= 1;
-        if (depth === 0) return css.slice(at, i + 1);
-    }
-    return css.slice(at);
-};
-
 test('the_shared_chip_class_draws_upstreams_button_hover', () => {
     assert.ok(existsSync(path.join(ROOT, SHARED)), `${SHARED} does not exist`);
     const button = read('src/shared/components/button/button.module.css');
     const chip = read(SHARED);
 
     // Upstream's numbers, read from the Button so a change there fails here.
-    const lightenAt = /&\[data-variant='default'\][\s\S]*?&:hover\s*\{\s*background: lighten\(var\(--theme-colors-surface\), (\d+)%\);/.exec(
-        button,
-    );
-    const darkenAt = /&\[data-variant='filled'\][\s\S]*?&:hover,\s*&:focus-visible\s*\{\s*background: darken\(var\(--theme-colors-primary-filled\), (\d+)%\);/.exec(
-        button,
-    );
+    const lightenAt =
+        /&\[data-variant='default'\][\s\S]*?&:hover\s*\{\s*background: lighten\(var\(--theme-colors-surface\), (\d+)%\);/.exec(
+            button,
+        );
+    const darkenAt =
+        /&\[data-variant='filled'\][\s\S]*?&:hover,\s*&:focus-visible\s*\{\s*background: darken\(var\(--theme-colors-primary-filled\), (\d+)%\);/.exec(
+            button,
+        );
     const duration = /background-color (\d*\.?\d+s) ease-in-out/.exec(button);
     assert.ok(lightenAt && darkenAt && duration, "the Button's hover rules moved");
 
@@ -65,7 +54,7 @@ test('the_shared_chip_class_draws_upstreams_button_hover', () => {
     assert.match(chip, /background-color \d*\.?\d+s ease-in-out/);
 
     // Not on a disabled chip; the chosen one (pressed, current page, active segment) darkens.
-    assert.match(chip, /:not\(:disabled, \[data-disabled='true'\], \[aria-disabled='true'\]\)/);
+    assert.match(chip, /:not\(:disabled, \[data-disabled\], \[aria-disabled='true'\]\)/);
     for (const chosen of [
         "[aria-pressed='true']",
         "[aria-current='page']",
@@ -88,7 +77,10 @@ const SITES: { file: string; local: string[] }[] = [
         file: 'src/renderer/features/albums/components/album-detail-content.tsx',
         local: ['chip', 'iconChip'],
     },
-    { file: 'src/renderer/features/discography/components/filter-bar.tsx', local: ['chip', 'iconChip'] },
+    {
+        file: 'src/renderer/features/discography/components/filter-bar.tsx',
+        local: ['chip', 'iconChip'],
+    },
     { file: 'src/renderer/features/songs/components/top-rated-chip.tsx', local: ['chip'] },
 ];
 
@@ -115,10 +107,13 @@ test('every_fork_chip_wears_the_shared_class', () => {
     const missing: string[] = [];
     for (const { file, local } of SITES) {
         const source = read(file);
-        if (!source.includes(SHARED_IMPORT)) missing.push(`${file}: does not import ${SHARED_IMPORT}`);
+        if (!source.includes(SHARED_IMPORT))
+            missing.push(`${file}: does not import ${SHARED_IMPORT}`);
         for (const expression of classNameExpressions(source)) {
-            const names = local.filter((name) => new RegExp(`styles\\.${name}\\b`).test(expression));
-            if (names.length === 0 || /\bchip\.chip\b/.test(expression)) continue;
+            const names = local.filter((name) =>
+                new RegExp(`styles\\.${name}\\b`).test(expression),
+            );
+            if (names.length === 0 || /\bchipStyles\.chip\b/.test(expression)) continue;
             missing.push(`${file}: ${expression}`);
         }
     }
@@ -127,11 +122,11 @@ test('every_fork_chip_wears_the_shared_class', () => {
 
 test('the_album_pages_tag_links_hover_and_its_plain_tags_do_not', () => {
     const source = read('src/renderer/features/albums/components/album-detail-content.tsx');
-    const link = /<Link className=\{([^}]*styles\.chipTag[^}]*)\}/.exec(source);
+    const link = /<Link\s+className=\{([^}]*styles\.chipTag[^}]*)\}/.exec(source);
     const span = /<span className=\{([^}]*styles\.chipTag[^}]*)\}/.exec(source);
     assert.ok(link && span, 'the tag chips moved');
-    assert.match(link[1], /\bchip\.chip\b/, 'a tag that links has no hover');
-    assert.doesNotMatch(span[1], /\bchip\.chip\b/, 'a plain tag is not a control');
+    assert.match(link[1], /\bchipStyles\.chip\b/, 'a tag that links has no hover');
+    assert.doesNotMatch(span[1], /\bchipStyles\.chip\b/, 'a plain tag is not a control');
 });
 
 test('every_segmented_control_label_wears_the_shared_class', () => {
@@ -140,7 +135,7 @@ test('every_segmented_control_label_wears_the_shared_class', () => {
     // the shared one, never instead of it.
     const source = read('src/shared/components/segmented-control/segmented-control.tsx');
     assert.ok(source.includes(SHARED_IMPORT), 'SegmentedControl does not import the chip class');
-    assert.match(source, /label: clsx\(chip\.chip, styles\.label, classNames\?\.label\)/);
+    assert.match(source, /label: clsx\(chipStyles\.chip, ownLabel \?\? styles\.label\)/);
 });
 
 /**
@@ -149,13 +144,13 @@ test('every_segmented_control_label_wears_the_shared_class', () => {
  * its own is a chip that must be in SITES, or one of the few named here that is not a chip.
  */
 const NOT_CHIPS: Record<string, string> = {
+    // The album page's tags: a plain one is a label; the linked one wears the class (above).
+    'src/renderer/features/albums/components/album-detail-content.module.css .chip-tag': 'tags',
+    // The command palette's rows: highlighted by `data-selected`, which follows the pointer.
+    'src/renderer/features/search/components/command.css [cmdk-item]': 'palette rows',
     // The detail pages' hero buttons (Play's row): buttons, not chips; their outline variants draw
     // with an inset shadow, which the overlay would replace. Reported, not changed (B-293 scope).
     'src/renderer/features/shared/components/hero-actions.module.css .button': 'hero buttons',
-    // The command palette's rows: highlighted by `data-selected`, which follows the pointer.
-    'src/renderer/features/search/components/command.css [cmdk-item]': 'palette rows',
-    // The album page's tags: a plain one is a label; the linked one wears the class (above).
-    'src/renderer/features/albums/components/album-detail-content.module.css .chip-tag': 'tags',
 };
 
 const camel = (kebab: string) => kebab.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
@@ -169,9 +164,7 @@ test('no_clickable_surface_rule_is_left_without_a_hover', () => {
         .filter(Boolean)
         .filter((f) => f !== SHARED);
     const covered = new Set(
-        SITES.flatMap(({ file, local }) =>
-            local.map((name) => `${path.dirname(file)} ${name}`),
-        ),
+        SITES.flatMap(({ file, local }) => local.map((name) => `${path.dirname(file)} ${name}`)),
     );
     const unlisted: string[] = [];
     for (const file of files) {

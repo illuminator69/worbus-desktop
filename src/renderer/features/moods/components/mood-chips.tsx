@@ -1,8 +1,10 @@
+import clsx from 'clsx';
 import { useTranslation } from 'react-i18next';
 
 import styles from './mood-chips.module.css';
 
 import { SidewaysRow } from '/@/renderer/components/sideways-row/sideways-row';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Icon } from '/@/shared/components/icon/icon';
 import { MoodEntry } from '/@/shared/types/mood-types';
 
@@ -35,7 +37,7 @@ export const MoodChips = ({
             {selected && (
                 <button
                     aria-label={t('naviConnect.moods.clearMood')}
-                    className={styles.clear}
+                    className={clsx(chipStyles.chip, styles.clear)}
                     data-mood-clear
                     onClick={onClear}
                     title={t('naviConnect.moods.clearMood')}
@@ -47,7 +49,7 @@ export const MoodChips = ({
             {moods.map((mood) => (
                 <button
                     aria-pressed={mood.id === selected}
-                    className={styles.chip}
+                    className={clsx(chipStyles.chip, styles.chip)}
                     data-mood-chip={mood.id}
                     key={mood.id}
                     onClick={() => onSelect(mood.id)}

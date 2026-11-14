@@ -16,6 +16,7 @@ import {
     libraryTabs,
 } from '/@/renderer/features/library/library-tabs';
 import { useSidebarItems } from '/@/renderer/store/settings.store';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { DropdownMenu } from '/@/shared/components/dropdown-menu/dropdown-menu';
 import { Icon } from '/@/shared/components/icon/icon';
 
@@ -56,7 +57,7 @@ const keepEnterAndSpace = keepKeys(['Enter', ' ']);
 const Chip = ({ selected, tab }: { selected: boolean; tab: LibraryTab }) => (
     <Link
         aria-current={selected ? 'page' : undefined}
-        className={styles.chip}
+        className={clsx(chipStyles.chip, styles.chip)}
         data-library-chip={tab.id}
         onKeyDown={keepEnter}
         to={tab.route}
@@ -110,7 +111,7 @@ export const LibraryChips = () => {
                     <DropdownMenu.Target>
                         <button
                             aria-current={moreSelected ? 'page' : undefined}
-                            className={clsx(styles.chip, styles.more)}
+                            className={clsx(chipStyles.chip, styles.chip, styles.more)}
                             data-library-more
                             onKeyDown={keepEnterAndSpace}
                             ref={moreRef}

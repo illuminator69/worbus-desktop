@@ -1,3 +1,4 @@
+import clsx from 'clsx';
 import { type KeyboardEvent, ReactNode, RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +12,7 @@ import {
 } from '/@/renderer/features/discography/discography-model';
 import { RELEASE_KINDS, type ReleaseKind } from '/@/renderer/features/discography/release-kind';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { DropdownMenu } from '/@/shared/components/dropdown-menu/dropdown-menu';
 import { Icon } from '/@/shared/components/icon/icon';
 import { TextInput } from '/@/shared/components/text-input/text-input';
@@ -64,7 +66,7 @@ export const FilterBar = ({
     const chip = (kind: 'all' | ReleaseKind, count: number) => (
         <button
             aria-pressed={view.type === kind}
-            className={styles.chip}
+            className={clsx(chipStyles.chip, styles.chip)}
             data-kind-chip={kind}
             key={kind}
             onClick={() => setView({ type: kind })}
@@ -106,7 +108,7 @@ export const FilterBar = ({
                 <DropdownMenu position="bottom-start">
                     <DropdownMenu.Target>
                         <button
-                            className={styles.chip}
+                            className={clsx(chipStyles.chip, styles.chip)}
                             data-own-filter={view.own}
                             onKeyDown={keepKeys}
                             type="button"
@@ -138,7 +140,7 @@ export const FilterBar = ({
             <DropdownMenu position="bottom-start">
                 <DropdownMenu.Target>
                     <button
-                        className={styles.chip}
+                        className={clsx(chipStyles.chip, styles.chip)}
                         data-sort-select={view.sort}
                         onKeyDown={keepKeys}
                         type="button"
@@ -166,7 +168,7 @@ export const FilterBar = ({
                         ? 'naviConnect.discography.dirDesc'
                         : 'naviConnect.discography.dirAsc',
                 )}
-                className={`${styles.chip} ${styles.iconChip}`}
+                className={clsx(chipStyles.chip, styles.chip, styles.iconChip)}
                 data-sort-dir={view.dir}
                 onClick={() => setView({ dir: view.dir === 'desc' ? 'asc' : 'desc' })}
                 onKeyDown={keepKeys}

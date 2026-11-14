@@ -50,6 +50,7 @@ import { sanitize } from '/@/renderer/utils/sanitize';
 import { sortSongList } from '/@/shared/api/utils';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
 import { Checkbox } from '/@/shared/components/checkbox/checkbox';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Group } from '/@/shared/components/group/group';
 import { Icon } from '/@/shared/components/icon/icon';
 import { Skeleton } from '/@/shared/components/skeleton/skeleton';
@@ -174,7 +175,11 @@ const ChipLine = ({ chips }: { chips: AlbumChip[] }) =>
         <div className={styles.chips}>
             {chips.map((chip) =>
                 chip.to ? (
-                    <Link className={styles.chipTag} key={chip.id} to={chip.to}>
+                    <Link
+                        className={clsx(chipStyles.chip, styles.chipTag)}
+                        key={chip.id}
+                        to={chip.to}
+                    >
                         {chip.label}
                     </Link>
                 ) : (
@@ -950,7 +955,11 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                     setSortBy={(value) => setSortBy(value as SongListSort)}
                     sortBy={sortBy}
                     target={
-                        <button className={styles.chip} data-sort-select={sortBy} type="button">
+                        <button
+                            className={clsx(chipStyles.chip, styles.chip)}
+                            data-sort-select={sortBy}
+                            type="button"
+                        >
                             <Icon icon="sort" size="sm" />
                             {t('page.albumDetail.sortChip', { value: sortLabel })}
                             <Icon icon="arrowDownS" size="sm" />
@@ -959,7 +968,7 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
                 />
                 <button
                     aria-label={sortOrderLabel}
-                    className={clsx(styles.chip, styles.iconChip)}
+                    className={clsx(chipStyles.chip, styles.chip, styles.iconChip)}
                     data-sort-order={sortOrder}
                     onClick={() =>
                         setSortOrder(sortOrder === SortOrder.ASC ? SortOrder.DESC : SortOrder.ASC)

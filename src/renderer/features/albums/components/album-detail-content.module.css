@@ -102,10 +102,6 @@
     }
 }
 
-a.chip-tag:hover {
-    text-decoration: underline;
-}
-
 /* The board's `.lnk`: accent text links, 13 px weight 700, an external mark after the name. */
 .links {
     display: flex;

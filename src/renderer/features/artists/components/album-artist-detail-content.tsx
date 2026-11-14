@@ -1,4 +1,5 @@
 import { useQuery, UseSuspenseQueryResult } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { type KeyboardEvent, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { generatePath, Link, useParams } from 'react-router';
@@ -26,6 +27,7 @@ import { ArtistItem, useCurrentServer, useCurrentServerId } from '/@/renderer/st
 import { useArtistItems, useExternalLinks } from '/@/renderer/store/settings.store';
 import { sanitize } from '/@/renderer/utils/sanitize';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Skeleton } from '/@/shared/components/skeleton/skeleton';
 import { Stack } from '/@/shared/components/stack/stack';
 import { Text } from '/@/shared/components/text/text';
@@ -66,7 +68,7 @@ const SectionSwitch = <T extends string>({
         {options.map((option) => (
             <button
                 aria-pressed={option.value === value}
-                className={styles.switchChip}
+                className={clsx(chipStyles.chip, styles.switchChip)}
                 key={option.value}
                 onClick={() => onChange(option.value)}
                 onKeyDown={keepKeys}
@@ -451,7 +453,7 @@ const ArtistAbout = ({
                     >
                         {genres!.map((genre) => (
                             <Link
-                                className={styles.genre}
+                                className={clsx(chipStyles.chip, styles.genre)}
                                 key={`genre-${genre.id}`}
                                 to={generatePath(genrePath, {
                                     albumArtistId: null,
