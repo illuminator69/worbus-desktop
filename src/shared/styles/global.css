@@ -10,6 +10,22 @@
     outline-offset: 2px;
 }
 
+/* B-358: the system's reduced motion ends every CSS transition and animation at once (their end
+   events still fire, so code that waits for them goes on) and stops the looping ones. motion/react
+   follows the same setting (`MotionConfig reducedMotion="user"`). */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        scroll-behavior: auto !important;
+        transition-delay: 0s !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-delay: 0s !important;
+        animation-iteration-count: 1 !important;
+    }
+}
+
 *,
 *::before,
 *::after {
