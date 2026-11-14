@@ -9,7 +9,6 @@ import {
     nextHeldRows,
     nextStarsDrawn,
     rowFocusOf,
-    staticStarsMask,
     staticStarsMasks,
     TRACK_LIST_NARROW_PX,
     TRACK_LIST_NARROWER_PX,
@@ -133,26 +132,6 @@ test('theStylesheetBreaksWhereTheModelDoes', () => {
 });
 
 /*
- * R13 review M5: a rated row draws its stars as ONE element (a mask of five stars) until it is pointed
- * at or focused, so five rated Popular rows keep the page under R10's node count. The mask has as many
- * filled stars as the rating, the rest outlined, as Mantine's Rating draws them.
- */
-test('staticStarsMask: filled up to the rating, the rest outlined, clamped to 0 to 5', () => {
-    const svg = (n: number) =>
-        decodeURIComponent(staticStarsMask(n).replace(/^url\("data:image\/svg\+xml,|"\)$/g, ''));
-    const count = (n: number, fill: string) => svg(n).split(`fill='${fill}'`).length - 1;
-    assert.match(staticStarsMask(3), /^url\("data:image\/svg\+xml,.+"\)$/);
-    assert.equal(count(3, '#000'), 3);
-    assert.equal(count(3, 'none'), 2);
-    assert.equal(count(0, '#000'), 0);
-    assert.equal(count(7, '#000'), 5);
-    assert.equal(count(-1, 'none'), 5);
-    assert.equal(svg(2).split('<path').length - 1, 5);
-    // Mantine's star (its 24-unit path), five across.
-    assert.ok(svg(1).includes("viewBox='0 0 120 24'"));
-});
-
-/*
  * B-269 (R15 workstation walk, 2026-10-29): the one-element stars drew a filled star gold to its edge,
  * while Mantine's Rating draws a filled star's outline in the foreground colour (`rating.module.css`:
  * every star's stroke), so a rated row changed its stars when pointed at and when left. The one element
@@ -169,7 +148,10 @@ test('staticStarsMasks: gold insides for the rating, five outlines on top', () =
     assert.ok(!svg(line).includes("fill='#000'"), 'the outlines are not filled');
     assert.equal(svg(staticStarsMasks(0).fill).split('<path').length - 1, 0);
     assert.equal(svg(staticStarsMasks(9).fill).split('<path').length - 1, 5);
-    const css = readFileSync(new URL('./components/artist-track-list.module.css', import.meta.url), 'utf8');
+    const css = readFileSync(
+        new URL('./components/artist-track-list.module.css', import.meta.url),
+        'utf8',
+    );
     assert.match(css, /--stars-line-mask/);
     assert.match(css, /--stars-fill-mask/);
 });

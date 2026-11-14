@@ -26,7 +26,7 @@ import {
     NO_ROW_FOCUS,
     type RowFocus,
     rowFocusOf,
-    staticStarsMask,
+    staticStarsMasks,
     TRACK_LIST_NARROW_PX,
     trackColumns,
     trackColumnTemplate,
@@ -363,8 +363,8 @@ const TrackRow = ({ active, artistId, controls, index, onPlay, playing, song }: 
                             role="img"
                             style={
                                 {
-                                    '--stars-filled': `calc(${song.userRating} * var(--theme-font-size-xs))`,
-                                    '--stars-mask': staticStarsMask(song.userRating),
+                                    '--stars-fill-mask': staticStarsMasks(song.userRating).fill,
+                                    '--stars-line-mask': staticStarsMasks(song.userRating).line,
                                 } as CSSProperties
                             }
                         />

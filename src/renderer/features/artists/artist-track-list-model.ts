@@ -86,19 +86,37 @@ const STAR_PATH =
     'M12 17.75l-6.172 3.245l1.179 -6.873l-5 -4.867l6.9 -1l3.086 -6.253l3.086 6.253l6.9 1l-5 4.867l1.179 6.873z';
 
 /**
- * R13 review M5: a rated row's stars as one element until it is pointed at or focused. The CSS mask
- * of five stars, the first `rating` filled and the rest outlined (1 unit, as Mantine's are stroked),
- * as a `url(...)` value; the element's background gives the filled and the outlined their colours.
+ * R13 review M5, B-269: a rated row's five stars as ONE element until it is pointed at or focused, two
+ * masks painted as Mantine paints its Rating: `fill` holds the insides of the filled stars (gold),
+ * `line` the outlines of all five (the foreground colour, on top). Clamped to 0 to 5.
  */
-export const staticStarsMask = (rating: number): string => {
+export const staticStarsMasks = (rating: number): { fill: string; line: string } => {
     const filled = Math.max(0, Math.min(5, Math.round(rating)));
-    const paths = Array.from(
-        { length: 5 },
-        (_, i) =>
-            `<path transform='translate(${i * 24} 0)' d='${STAR_PATH}' fill='${i < filled ? '#000' : 'none'}' stroke='#000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'/>`,
-    ).join('');
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24'>${paths}</svg>`;
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+    const star = (i: number, paint: string) =>
+        `<path transform='translate(${i * 24} 0)' d='${STAR_PATH}' ${paint}/>`;
+    const svg = (paths: string) =>
+        `url("data:image/svg+xml,${encodeURIComponent(
+            `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24'>${paths}</svg>`,
+        )}")`;
+    const all = Array.from({ length: 5 }, (_, i) => i);
+    return {
+        fill: svg(
+            all
+                .filter((i) => i < filled)
+                .map((i) => star(i, "fill='#000'"))
+                .join(''),
+        ),
+        line: svg(
+            all
+                .map((i) =>
+                    star(
+                        i,
+                        "fill='none' stroke='#000' stroke-width='1' stroke-linecap='round' stroke-linejoin='round'",
+                    ),
+                )
+                .join(''),
+        ),
+    };
 };
 
 /**

@@ -191,19 +191,31 @@
  * stars on hover moves nothing.
  */
 .static-stars {
+    position: relative;
     box-sizing: content-box;
     display: block;
     width: calc(5 * var(--theme-font-size-xs));
     height: var(--theme-font-size-xs);
     padding: 0 var(--theme-spacing-xs);
-    background: linear-gradient(
-            to right,
-            var(--mantine-color-yellow-5) var(--stars-filled),
-            var(--theme-colors-foreground) var(--stars-filled)
-        )
-        content-box;
-    mask: var(--stars-mask) content-box no-repeat;
-    mask-size: 100% 100%;
+
+    /* B-269: Mantine's look in two layers, the filled stars' insides, then five outlines on top. */
+    &::before,
+    &::after {
+        position: absolute;
+        inset: 0 var(--theme-spacing-xs);
+        content: '';
+        mask-size: 100% 100%;
+    }
+
+    &::before {
+        background: var(--mantine-color-yellow-5);
+        mask: var(--stars-fill-mask) no-repeat;
+    }
+
+    &::after {
+        background: var(--theme-colors-foreground);
+        mask: var(--stars-line-mask) no-repeat;
+    }
 }
 
 .hover-only {
