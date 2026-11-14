@@ -1,0 +1,34 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import test from 'node:test';
+
+/**
+ * Q-164 (comparing Psysonic, 2026-11-09; navi-connect/ASSESS-psysonic-2026-11-09.md §1):
+ *   node --test src/renderer/hooks/responsiveness.harness.ts
+ *
+ * Three costs found by reading, measured on the VM walk before and after (RESULTS-stage2-desktop):
+ * - every route change forced a full `global.gc()` and `webFrame.clearCache()` (the decoded-image
+ *   cache: the covers of the page left are decoded again on Back), on top of the 5-minute timer;
+ * - a compact card's caption blurred what is under it (`backdrop-filter`), a filter pass per card
+ *   per frame while a grid scrolls (the owner approved removing it, 2026-11-14);
+ * - the mpv engine polled mpv's position every 250 ms for an `onProgress` that does nothing, beside
+ *   the player's real 500 ms poll.
+ */
+
+const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+
+test('a_route_change_does_not_force_a_collection', () => {
+    const src = read('./use-garbage-collection.ts');
+    assert.doesNotMatch(src, /useLocation/, 'a gc and a cache clear on every route change');
+});
+
+test('compact_cards_draw_no_backdrop_blur', () => {
+    const css = read('../components/item-card/item-card.module.css');
+    assert.doesNotMatch(css, /backdrop-filter/);
+});
+
+test('one_mpv_position_poll', () => {
+    const engine = read('../features/player/audio-player/engine/mpv-player-engine.tsx');
+    assert.doesNotMatch(engine, /PROGRESS_UPDATE_INTERVAL/, 'the dead 250 ms poll');
+    assert.match(read('../features/player/audio-player/mpv-player.tsx'), /getCurrentTime\(\)/);
+});
