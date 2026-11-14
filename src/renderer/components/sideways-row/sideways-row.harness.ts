@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
     hiddenSides,
     LINE_PX,
+    revealLeft,
     scrollStep,
     type SidewaysMetrics,
     sidewaysWheelTarget,
@@ -266,4 +267,31 @@ test('layoutIsReadOnResizeScrollAndMutationNotEveryRender (grep-only)', () => {
     // Chips come and go: new ones observed, removed ones let go.
     assert.match(source, /new MutationObserver/);
     assert.match(source, /\.unobserve\(/);
+});
+
+/**
+ * B-288 (R18 VM walk, 2026-10-30; workstation the same day): Tab reached a chip that was only partly
+ * hidden and Chromium left the row where it was (it scrolls only a chip wholly out of view), so the
+ * end button and the fade covered it: Library at 800 px "Radio stations" 18.9 px past the row's edge,
+ * `scrollLeft` 0. The row now reveals a keyboard-focused chip with the buttons' clearance
+ * (`scroll-padding-inline`, 32 px) on the side it was hidden.
+ */
+test('a_partly_hidden_chip_is_revealed_clear_of_the_button', () => {
+    const row = { clientWidth: 643, scrollLeft: 0, scrollWidth: 766 };
+    // "Radio stations": 540..661.9, 18.9 px past the edge.
+    assert.equal(revealLeft(row, 540, 661.9, 32), 661.9 - 643 + 32);
+    // Already clear of the button: no move.
+    assert.equal(revealLeft(row, 100, 200, 32), null);
+    // Partly hidden at the start of a scrolled row.
+    assert.equal(revealLeft({ ...row, scrollLeft: 100 }, 110, 180, 32), 110 - 32);
+    // The ends: the first and last chips never ask for more than the row has.
+    assert.equal(revealLeft(row, 0, 80, 32), null);
+    assert.equal(revealLeft({ ...row, scrollLeft: 123 }, 700, 766, 32), null);
+    assert.equal(revealLeft({ ...row, scrollLeft: 100 }, 700, 766, 32), 123);
+});
+
+test('the_row_reveals_its_focused_chip', () => {
+    const src = readFileSync(new URL('./sideways-row.tsx', import.meta.url), 'utf8');
+    assert.match(src, /focusin/);
+    assert.match(src, /revealLeft\(/);
 });
