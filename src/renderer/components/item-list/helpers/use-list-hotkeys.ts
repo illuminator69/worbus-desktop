@@ -6,7 +6,7 @@ import {
     ItemListStateActions,
     ItemListStateItemWithRequiredProperties,
 } from '/@/renderer/components/item-list/helpers/item-list-state';
-import { listHotkey } from '/@/renderer/components/item-list/helpers/list-hotkey';
+import { listHotkey, listTakesKey } from '/@/renderer/components/item-list/helpers/list-hotkey';
 import { ItemControls } from '/@/renderer/components/item-list/types';
 import { useHotkeys } from '/@/renderer/hooks/use-hotkeys';
 import { useHotkeySettings, usePlayButtonBehavior } from '/@/renderer/store';
@@ -36,14 +36,17 @@ export const useListHotkeys = ({
     const internalStateRef = useRef(internalState);
     internalStateRef.current = internalState;
 
-    const isListFocused = () => {
+    // m3, n3: a focused control inside a row keeps Enter (and the other play/open keys); only a
+    // text field keeps select-all.
+    const listTakes = (keepFor: 'control' | 'text') => () => {
         const container = focusContainerRef?.current;
         if (container) {
-            return container.contains(document.activeElement);
+            return listTakesKey(container, document.activeElement, keepFor);
         }
 
         return focusedRef.current;
     };
+    const isListFocused = listTakes('control');
 
     // Helper to check if item has required properties
     const hasRequiredStateItemProperties = (
@@ -69,7 +72,7 @@ export const useListHotkeys = ({
     };
 
     useHotkeys([
-        listHotkey('mod+a', isListFocused, () => {
+        listHotkey('mod+a', listTakes('text'), () => {
             const state = internalStateRef.current;
             if (state.isAllSelected()) {
                 state.deselectAll();
