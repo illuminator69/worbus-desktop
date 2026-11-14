@@ -78,3 +78,21 @@ export const sidewaysWheelTarget = (
     if (delta < 0 && from <= EDGE_PX) return null;
     return clamp(from + delta, row);
 };
+
+/**
+ * B-288: where to scroll so a chip (its `start`..`end` in the row's scroll coordinates) shows clear of
+ * the side buttons (`pad`), or null when it already does or the row cannot move. Chromium scrolls a
+ * focused chip only when it is wholly out of view, so a partly hidden one stayed under the button.
+ */
+export const revealLeft = (
+    row: SidewaysMetrics,
+    start: number,
+    end: number,
+    pad: number,
+): null | number => {
+    let target = row.scrollLeft;
+    if (end > row.scrollLeft + row.clientWidth - pad) target = end - row.clientWidth + pad;
+    if (start < target + pad) target = start - pad;
+    const left = clamp(target, row);
+    return Math.abs(left - row.scrollLeft) < EDGE_PX / 2 ? null : left;
+};

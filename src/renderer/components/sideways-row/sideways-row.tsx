@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import styles from './sideways-row.module.css';
 import {
     hiddenSides,
+    revealLeft,
     scrollStep,
     type SidewaysWheel,
     sidewaysWheelTarget,
@@ -47,8 +48,9 @@ const behavior = (): ScrollBehavior =>
  * nothing hidden shows neither, so a row that fits looks like a plain row. On a row in fixed chrome
  * (`wheel="chrome"`) a vertical mouse wheel scrolls it sideways until it reaches that end, then
  * goes on to the page; a row in a scrolling page leaves the plain wheel to the page. A touchpad's
- * sideways swipe and Shift+wheel are the browser's own on both. Focus moving to a hidden chip
- * scrolls it into view natively, clear of the buttons (`scroll-padding-inline`).
+ * sideways swipe and Shift+wheel are the browser's own on both. Keyboard focus on a chip that is
+ * hidden, wholly or partly, scrolls it into view clear of the buttons (`scroll-padding-inline`,
+ * B-288).
  *
  * The props other than `as`, `frameProps` and `wheel` go to the scrolling element, which holds the
  * chips. Layout is read on a scroll, a resize and a chip coming or going, never on a render alone
@@ -121,6 +123,27 @@ export const SidewaysRow = ({
             resize.disconnect();
             mutation.disconnect();
         };
+    }, []);
+
+    // B-288: a chip reached from the keyboard shows whole, clear of the buttons, also when only
+    // part of it was hidden (Chromium scrolls only a chip wholly out of view).
+    useEffect(() => {
+        const row = ref.current;
+        if (!row) return undefined;
+        const onFocusIn = (event: FocusEvent) => {
+            const target = event.target as HTMLElement | null;
+            if (!target?.matches(':focus-visible')) return;
+            const chip = Array.from(row.children).find((child) => child.contains(target));
+            if (!chip) return;
+            const rowBox = row.getBoundingClientRect();
+            const box = chip.getBoundingClientRect();
+            const start = box.left - rowBox.left + row.scrollLeft;
+            const pad = Number.parseFloat(getComputedStyle(row).scrollPaddingInlineStart) || 0;
+            const left = revealLeft(row, start, start + box.width, pad);
+            if (left !== null) glideTo(left);
+        };
+        row.addEventListener('focusin', onFocusIn);
+        return () => row.removeEventListener('focusin', onFocusIn);
     }, []);
 
     useEffect(() => {
