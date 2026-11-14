@@ -71,6 +71,7 @@ import {
 } from '/@/renderer/components/item-list/item-table-list/item-table-list-context';
 import { keepsItsFloor } from '/@/renderer/components/item-list/item-table-list/utils/fit-column-widths';
 import {
+    measureTextFit,
     runsPastItsCell,
     showFullTextWhenCut,
 } from '/@/renderer/components/item-list/item-table-list/utils/full-text-when-cut';
@@ -860,7 +861,7 @@ export const TableColumnTextContainer = (
                                       cell.getBoundingClientRect().left + cell.clientLeft,
                                       cell.clientWidth,
                                   );
-                              showFullTextWhenCut(content, undefined, pastItsCell);
+                              showFullTextWhenCut(content, undefined, pastItsCell, measureTextFit);
                           }
                 }
             >

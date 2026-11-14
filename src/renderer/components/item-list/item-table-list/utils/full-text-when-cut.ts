@@ -22,10 +22,37 @@ export interface FullTextTarget extends CutBox {
     textContent: null | string;
 }
 
+/** B-272: a box's text as laid out (a Range's width, fractional) against the box's content width. */
+export interface TextFit {
+    contentWidth: number;
+    textWidth: number;
+}
+
 /** Whether a box's content runs past it: wider (one line) or taller (a clamped title). */
 export function isCut(box: CutBox): boolean {
     if (box.clientWidth <= 0) return false;
     return box.scrollWidth > box.clientWidth || box.scrollHeight > box.clientHeight;
+}
+
+/**
+ * B-272: the DOM's `TextFit` for an element: its contents' laid-out width (a Range) and its content
+ * box. Only called on a pointer entering a cell; null for a box with no text of its own.
+ */
+export function measureTextFit(box: CutBox): null | TextFit {
+    const element = box as unknown as HTMLElement;
+    if (typeof document === 'undefined' || !element.getBoundingClientRect) return null;
+    if (!element.textContent?.trim()) return null;
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    const textWidth = range.getBoundingClientRect().width;
+    const style = getComputedStyle(element);
+    const contentWidth =
+        element.getBoundingClientRect().width -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight) -
+        parseFloat(style.borderLeftWidth) -
+        parseFloat(style.borderRightWidth);
+    return { contentWidth, textWidth };
 }
 
 /**
@@ -54,10 +81,19 @@ export function showFullTextWhenCut(
     element: FullTextTarget,
     fullText?: string,
     partHidden = false,
+    measure?: (box: CutBox) => null | TextFit,
 ): void {
+    // B-272: a cut under a pixel shows in the text's own width, not in the whole-px box measures.
+    const cutHere = (box: CutBox) => isCut(box) || textRunsPast(measure?.(box) ?? null);
     const cut =
-        partHidden || isCut(element) || Array.from(element.querySelectorAll('*')).some(isCut);
+        partHidden || cutHere(element) || Array.from(element.querySelectorAll('*')).some(cutHere);
     const text = (fullText ?? element.textContent ?? '').replace(/\s+/g, ' ').trim();
     if (cut && text) element.setAttribute('title', text);
     else element.removeAttribute('title');
+}
+
+/** B-272: text wider than its box by more than rounding is cut, though `scrollWidth` (whole px)
+ *  may equal `clientWidth`: "Pop" at 24.38 px in a 24 px cell draws "P...". */
+export function textRunsPast(fit: null | TextFit): boolean {
+    return fit !== null && fit.contentWidth > 0 && fit.textWidth - fit.contentWidth > 0.01;
 }
