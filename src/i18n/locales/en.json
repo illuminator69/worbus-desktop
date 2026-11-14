@@ -490,6 +490,18 @@
         }
     },
     "page": {
+        "savedQueues": {
+            "couldNotAddTracks": "Could not add tracks to the playlist",
+            "previewQueue": "Preview queue",
+            "queueActions": "Queue actions",
+            "removeFromHistory": "Remove from history",
+            "renameQueue": "Rename queue",
+            "resume": "Resume",
+            "saveAsPlaylist": "Save as playlist",
+            "saveQueueAsPlaylist": "Save queue as playlist",
+            "savedTracks_one": "Saved {{count}} track",
+            "savedTracks_other": "Saved {{count}} tracks"
+        },
         "albumArtistDetail": {
             "appearsOn": "Appears on",
             "discographyEmpty": "No releases of their own in your library yet",

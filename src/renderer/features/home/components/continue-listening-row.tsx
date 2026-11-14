@@ -1,6 +1,7 @@
 import { closeAllModals, openModal } from '@mantine/modals';
 import clsx from 'clsx';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import styles from './continue-listening-row.module.css';
 
@@ -40,6 +41,7 @@ interface CardProps {
 }
 
 const ContinueListeningCard = ({ arrival, entry, isActive, serverId }: CardProps) => {
+    const { t } = useTranslation();
     const { isRestoring, restore } = useRestoreSavedQueue();
     const { remove } = useSavedQueuesActions();
 
@@ -71,28 +73,32 @@ const ContinueListeningCard = ({ arrival, entry, isActive, serverId }: CardProps
                                 body: { songId: entry.songs.map((song) => song.id) },
                                 query: { id: data?.id || '' },
                             });
-                            toast.success({ message: `Saved ${entry.songs.length} tracks` });
+                            toast.success({
+                                message: t('page.savedQueues.savedTracks', {
+                                    count: entry.songs.length,
+                                }),
+                            });
                         } catch (err) {
                             toast.error({
                                 message: (err as Error).message,
-                                title: 'Could not add tracks to the playlist',
+                                title: t('page.savedQueues.couldNotAddTracks'),
                             });
                         }
                     }}
                     serverId={serverId}
                 />
             ),
-            title: 'Save queue as playlist',
+            title: t('page.savedQueues.saveQueueAsPlaylist'),
         });
     };
 
     // One list for both menus: the "..." on the cover and a right-click, as on the
     // app's cards.
     const menu: { label: string; onSelect: () => void }[] = [
-        { label: 'Resume', onSelect: () => void restore(entry) },
-        { label: 'Preview queue', onSelect: openPreview },
-        { label: 'Save as playlist', onSelect: saveAsPlaylist },
-        { label: 'Remove from history', onSelect: doRemove },
+        { label: t('page.savedQueues.resume'), onSelect: () => void restore(entry) },
+        { label: t('page.savedQueues.previewQueue'), onSelect: openPreview },
+        { label: t('page.savedQueues.saveAsPlaylist'), onSelect: saveAsPlaylist },
+        { label: t('page.savedQueues.removeFromHistory'), onSelect: doRemove },
     ];
 
     // The card is the button (a click resumes); the ellipsis beside it opens the menu, and a
@@ -134,7 +140,7 @@ const ContinueListeningCard = ({ arrival, entry, isActive, serverId }: CardProps
                     <DropdownMenu>
                         <DropdownMenu.Target>
                             <ActionIcon
-                                aria-label="Queue actions"
+                                aria-label={t('page.savedQueues.queueActions')}
                                 className={styles.more}
                                 icon="ellipsisHorizontal"
                                 size={28}
