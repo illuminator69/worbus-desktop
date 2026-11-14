@@ -16,14 +16,10 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 test('the_clap_probe_is_asked_again_when_the_hub_changes', async () => {
     const { clapAvailableKey } = await import('./clap-available-key.ts');
     const audioMuse = { token: 't', url: 'http://am:8000' };
-    const hub = { enabled: true, signedIn: true, token: 'h', url: 'ws://hub:4790' };
+    const hub = { setUp: true, url: 'ws://hub:4790' };
     const base = JSON.stringify(clapAvailableKey(audioMuse, hub));
-    for (const change of [
-        { enabled: false },
-        { signedIn: false },
-        { token: 'other' },
-        { url: 'ws://elsewhere:4790' },
-    ]) {
+    // `setUp` is `hubSetUp`: the switch, the address and a credential (a secret or a typed token).
+    for (const change of [{ setUp: false }, { url: 'ws://elsewhere:4790' }]) {
         assert.notEqual(
             JSON.stringify(clapAvailableKey(audioMuse, { ...hub, ...change })),
             base,

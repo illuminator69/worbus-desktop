@@ -8,16 +8,16 @@ import {
     useLbBotRouteSupport,
 } from '/@/renderer/features/lbbot/hooks/use-lbbot';
 import { fetchClapAvailable } from '/@/renderer/features/player/auto-dj/audio-muse-source';
-import { useHubStore } from '/@/renderer/store/hub.store';
-import { useAudioMuseSettings, useHubSettings } from '/@/renderer/store/settings.store';
+import { useHubSetUp } from '/@/renderer/store/hub-set-up';
+import { useAudioMuseSettings, useSettingsStore } from '/@/renderer/store/settings.store';
 
 export { clapAvailableKey } from './clap-available-key';
 
 /** The hub settings the CLAP probe's answer depends on (B-321). */
 export const useClapHub = (): ClapHub => {
-    const { enabled, token, url } = useHubSettings();
-    const signedIn = useHubStore((s) => s.authSignedIn);
-    return { enabled, signedIn: !!signedIn, token, url };
+    const setUp = useHubSetUp();
+    const url = useSettingsStore((state) => state.hub.url);
+    return { setUp, url };
 };
 
 /**
