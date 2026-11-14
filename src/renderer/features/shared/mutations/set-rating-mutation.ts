@@ -5,11 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { api } from '/@/renderer/api';
 import { queryKeys } from '/@/renderer/api/query-keys';
 import { eventEmitter } from '/@/renderer/events/event-emitter';
+import { UserRatingEventPayload } from '/@/renderer/events/events';
 import { PreviousQueryData } from '/@/renderer/features/shared/mutations/favorite-optimistic-updates';
 import {
     applyRatingOptimisticUpdates,
     restoreRatingQueryData,
 } from '/@/renderer/features/shared/mutations/rating-optimistic-updates';
+import { restorePayloads } from '/@/renderer/features/shared/mutations/rating-restore';
 import { MutationHookArgs } from '/@/renderer/lib/react-query';
 import { toast } from '/@/shared/components/toast/toast';
 import { LibraryItem, RatingResponse, SetRatingArgs } from '/@/shared/types/domain-types';
@@ -21,7 +23,12 @@ export const useSetRatingMutation = (args: MutationHookArgs) => {
     const queryClient = useQueryClient();
     const { t } = useTranslation();
 
-    return useMutation<RatingResponse, AxiosError, SetRatingArgs, PreviousQueryData[]>({
+    return useMutation<
+        RatingResponse,
+        AxiosError,
+        SetRatingArgs,
+        { event: UserRatingEventPayload; queries: PreviousQueryData[] }
+    >({
         mutationFn: (args) => {
             return api.controller.setRating({
                 ...args,
@@ -31,7 +38,12 @@ export const useSetRatingMutation = (args: MutationHookArgs) => {
         mutationKey: setRatingMutationKey,
         onError: (_error, _variables, context) => {
             if (context) {
-                restoreRatingQueryData(queryClient, context);
+                restoreRatingQueryData(queryClient, context.queries);
+                // n5: list rows, the queue and the hub mirror get back what they showed, not the
+                // value that failed.
+                restorePayloads(context.event).forEach((payload) =>
+                    eventEmitter.emit('USER_RATING', payload),
+                );
             }
 
             toast.show({
@@ -39,23 +51,25 @@ export const useSetRatingMutation = (args: MutationHookArgs) => {
                 title: t('error.genericError') as string,
                 type: 'error',
             });
-
-            eventEmitter.emit('USER_RATING', {
-                id: _variables.query.id,
-                itemType: _variables.query.type,
-                rating: _variables.query.rating,
-                serverId: _variables.apiClientProps.serverId,
-            });
         },
         onMutate: (variables) => {
-            eventEmitter.emit('USER_RATING', {
+            const event: UserRatingEventPayload = {
                 id: variables.query.id,
                 itemType: variables.query.type,
+                previous: new Map(),
                 rating: variables.query.rating,
                 serverId: variables.apiClientProps.serverId,
-            });
+            };
+            eventEmitter.emit('USER_RATING', event);
 
-            return applyRatingOptimisticUpdates(queryClient, variables, variables.query.rating);
+            return {
+                event,
+                queries: applyRatingOptimisticUpdates(
+                    queryClient,
+                    variables,
+                    variables.query.rating,
+                ),
+            };
         },
         onSuccess: (_data, variables) => {
             if (

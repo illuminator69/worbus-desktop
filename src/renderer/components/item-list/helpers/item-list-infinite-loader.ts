@@ -13,6 +13,7 @@ import { useListContext } from '/@/renderer/context/list-context';
 import { eventEmitter } from '/@/renderer/events/event-emitter';
 import { UserFavoriteEventPayload, UserRatingEventPayload } from '/@/renderer/events/events';
 import { getListRefreshMutationKey } from '/@/renderer/features/shared/components/list-refresh-button';
+import { notePrevious } from '/@/renderer/features/shared/mutations/rating-restore';
 import { LibraryItem, SortKeyRandom } from '/@/shared/types/domain-types';
 
 export const getListQueryKeyName = (itemType: LibraryItem): string => {
@@ -447,7 +448,13 @@ export const useItemListInfiniteLoader = ({
             }
 
             const dataIndexes = payload.id
-                .map((id: string) => (data as any).idToIndexMap?.get(id))
+                .map((id: string) => {
+                    const idx = (data as any).idToIndexMap?.get(id);
+                    if (typeof idx === 'number') {
+                        notePrevious(payload, id, (data?.dataMap.get(idx) as any)?.userRating);
+                    }
+                    return idx;
+                })
                 .filter((idx): idx is number => typeof idx === 'number');
 
             if (dataIndexes.length === 0) {

@@ -44,6 +44,7 @@ import { RemoteQueuePushHook } from '/@/renderer/features/remote/hooks/use-remot
 import { RemoteRadioPushHook } from '/@/renderer/features/remote/hooks/use-remote-radio-push';
 import { RemoteSettingsPushHook } from '/@/renderer/features/remote/hooks/use-remote-settings-push';
 import { ComponentErrorBoundary } from '/@/renderer/features/shared/components/component-error-boundary';
+import { notePrevious } from '/@/renderer/features/shared/mutations/rating-restore';
 import { VisualizerSystemAudioBridgeHook } from '/@/renderer/features/visualizer/components/visualizer-system-audio-bridge';
 import { useSettingsStore } from '/@/renderer/store';
 import {
@@ -51,8 +52,10 @@ import {
     updateQueueRatings,
     useCurrentServerId,
     useHubActions,
+    useHubStore,
     usePlaybackSettings,
     usePlaybackType,
+    usePlayerStoreBase,
     useSettingsStoreActions,
 } from '/@/renderer/store';
 import { logger } from '/@/renderer/utils/logger';
@@ -316,6 +319,17 @@ const AudioPlayersContent = ({
         const handleRating = (payload: UserRatingEventPayload) => {
             if (payload.itemType !== LibraryItem.SONG || payload.serverId !== serverId) {
                 return;
+            }
+
+            // n5: note what the queue and the mirror showed, for a failed save to put back.
+            if (payload.previous) {
+                const wanted = new Set(payload.id);
+                for (const song of Object.values(usePlayerStoreBase.getState().queue.songs)) {
+                    if (wanted.has(song.id)) notePrevious(payload, song.id, song.userRating);
+                }
+                for (const track of useHubStore.getState().remoteQueue) {
+                    if (wanted.has(track.id)) notePrevious(payload, track.id, track.rating);
+                }
             }
 
             updateQueueRatings(payload.id, payload.rating);

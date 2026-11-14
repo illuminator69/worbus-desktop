@@ -12,6 +12,7 @@ import { useListContext } from '/@/renderer/context/list-context';
 import { eventEmitter } from '/@/renderer/events/event-emitter';
 import { UserFavoriteEventPayload, UserRatingEventPayload } from '/@/renderer/events/events';
 import { getListRefreshMutationKey } from '/@/renderer/features/shared/components/list-refresh-button';
+import { notePrevious } from '/@/renderer/features/shared/mutations/rating-restore';
 import { LibraryItem, SortKeyRandom } from '/@/shared/types/domain-types';
 
 const getQueryKeyName = (itemType: LibraryItem): string => {
@@ -206,7 +207,13 @@ export const useItemListPaginatedLoader = ({
             );
 
             const dataIndexes = payload.id
-                .map((id: string) => idToIndexMap[id])
+                .map((id: string) => {
+                    const idx = idToIndexMap[id];
+                    if (idx !== undefined) {
+                        notePrevious(payload, id, (data.items[idx] as any)?.userRating);
+                    }
+                    return idx;
+                })
                 .filter((idx) => idx !== undefined);
 
             if (dataIndexes.length === 0) {

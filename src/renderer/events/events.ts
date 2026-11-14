@@ -103,6 +103,11 @@ export type UserFavoriteEventPayload = {
 export type UserRatingEventPayload = {
     id: string[];
     itemType: LibraryItem;
+    /**
+     * On the optimistic emit of a save only: each listener notes what it showed for an id before
+     * applying `rating` (`notePrevious`), so a failed save can put it back (`restorePayloads`).
+     */
+    previous?: Map<string, null | number>;
     rating: null | number;
     serverId: string;
 };
