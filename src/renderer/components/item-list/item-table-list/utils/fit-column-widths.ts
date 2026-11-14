@@ -43,6 +43,16 @@ export const TITLE_MIN_WIDTH = 200;
  */
 const RESIZED_SCALE = GENERIC_MIN_WIDTH / 300;
 
+/** The columns narrow by design (60 to 70 px by default: icons and row controls), on the share floor. */
+const SHARE_FLOOR_IDS: ReadonlySet<string> = new Set([
+    'actions',
+    'imageUrl',
+    'playlistReorder',
+    'rowIndex',
+    'skip',
+    'userFavorite',
+]);
+
 const TITLE_IDS: ReadonlySet<string> = new Set(['name', 'titleArtist', 'titleCombined']);
 const RATING_ID = 'userRating';
 
@@ -51,7 +61,11 @@ export function columnMinWidth(column: FitColumn, containerWidth: number): numbe
     let floor: number;
     if (TITLE_IDS.has(column.id)) floor = Math.min(TITLE_MIN_WIDTH, containerWidth / 2);
     else if (column.id === RATING_ID) floor = RATING_MIN_WIDTH;
-    else floor = Math.min(GENERIC_MIN_WIDTH, column.width * MIN_SCALE);
+    // B-277: the share is for the columns narrow by design (icons, row controls), not for a text
+    // or number column dragged under 100 px, which would then show under 40 px.
+    else if (SHARE_FLOOR_IDS.has(column.id))
+        floor = Math.min(GENERIC_MIN_WIDTH, column.width * MIN_SCALE);
+    else floor = GENERIC_MIN_WIDTH;
     return Math.max(floor, column.width * RESIZED_SCALE);
 }
 
@@ -144,6 +158,23 @@ export function ownWidthForResize(
             containerWidth,
         )[index];
 
+    // B-273: a drag cannot take the column below the floor it shows. At that floor already,
+    // nothing changes (like a click: own width 1 kept it at its floor on every wider window);
+    // above it, it narrows to the floor with the largest own width that shows it, so it keeps a
+    // proportion that a wider window widens again.
+    const floorShown = shownAt(1);
+    if (target <= floorShown) {
+        if (shownAt(column.width) <= floorShown) return column.width;
+        let narrow = 1;
+        let wide = column.width;
+        while (narrow < wide) {
+            const mid = Math.ceil((narrow + wide) / 2);
+            if (shownAt(mid) <= floorShown) narrow = mid;
+            else wide = mid - 1;
+        }
+        return narrow;
+    }
+
     // At this own width the column's floor alone is the target plus one column's minimum, so it
     // shows at least the target: in the band it gives less than that minimum.
     let high = Math.max(1, Math.ceil((target + GENERIC_MIN_WIDTH) / RESIZED_SCALE));
@@ -225,12 +256,14 @@ export function keepsItsFloor(id: string): boolean {
  * B-267: whether a column gives px when the floors overflow by less than one column's minimum.
  * Only text columns do (Title, Album, Artist, Album artist, Genre, Composer, Path, Comment and any
  * custom text column). Rating keeps its floor (its stars stay whole), so do the columns in
- * `KEEPS_ITS_FLOOR_IDS` and any other column on the `MIN_SCALE` floor (narrower than 100 px).
+ * `KEEPS_ITS_FLOOR_IDS` and the columns on the `MIN_SCALE` floor (`SHARE_FLOOR_IDS`, B-277).
  */
 function givesInTheBand(column: FitColumn): boolean {
     if (column.id === RATING_ID || keepsItsFloor(column.id)) return false;
     if (TITLE_IDS.has(column.id)) return true;
-    return column.width * MIN_SCALE >= GENERIC_MIN_WIDTH;
+    // B-277: by the column's kind, as its floor is, not by its own width (a text column dragged
+    // under 100 px still gives).
+    return !SHARE_FLOOR_IDS.has(column.id);
 }
 
 /**

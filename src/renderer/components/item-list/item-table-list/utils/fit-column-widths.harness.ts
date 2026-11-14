@@ -275,12 +275,12 @@ test('aSmallOverflowFitsTheContainer', () => {
 });
 
 test('ratingAndIconColumnsDoNotShrinkInTheBand', () => {
-    const withCover = [TRACKS[0], col('image', 70), ...TRACKS.slice(1)];
+    const withCover = [TRACKS[0], col('imageUrl', 70), ...TRACKS.slice(1)];
     for (const columns of [TRACKS, withCover]) {
         const floors = floorsTotal(columns, 1000);
         for (let container = floors - GENERIC_MIN_WIDTH + 1; container < floors; container++) {
             const widths = fitColumnWidths(columns, container);
-            for (const id of ['rowIndex', 'image', 'userFavorite', 'userRating']) {
+            for (const id of ['rowIndex', 'imageUrl', 'userFavorite', 'userRating']) {
                 const index = columns.findIndex((c) => c.id === id);
                 if (index < 0) continue;
                 assert.equal(
