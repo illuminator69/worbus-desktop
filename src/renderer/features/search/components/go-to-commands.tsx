@@ -46,7 +46,7 @@ export const GoToCommands = ({ handleClose, setPages, setQuery }: GoToCommandsPr
                     {t('page.sidebar.settings')}
                 </Command.Item>
             </Command.Group>
-            <Command.Group heading="Library">
+            <Command.Group heading={t('page.library.title')}>
                 {/* F6: the Library frame (its Artists page); the entries below open its other chips. */}
                 <Command.Item onSelect={() => goTo(AppRoute.LIBRARY)}>
                     {t('page.library.title')}
@@ -75,7 +75,7 @@ export const GoToCommands = ({ handleClose, setPages, setQuery }: GoToCommandsPr
                 other page, and it did not know these existed. Gated on their
                 sources the same way the sidebar entries are. */}
             {naviConnectItems.length > 0 && (
-                <Command.Group heading="Discover">
+                <Command.Group heading={t('page.globalSearch.discover')}>
                     {naviConnectItems.map((item) => (
                         <Command.Item key={item.id} onSelect={() => goTo(item.route as AppRoute)}>
                             {item.label}

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { generatePath, useNavigate } from 'react-router';
 
 import { useLbBotAlbumLookup } from '/@/renderer/features/lbbot/hooks/use-lbbot';
@@ -45,6 +46,7 @@ export function SearchExternalAlbumsSection({
     onSelectResult,
     onToggle,
 }: SearchExternalAlbumsSectionProps) {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     // The debounced term only. This and the artist lookup share lb-bot's one
     // global MusicBrainz second, so a keystroke here costs two of them.
@@ -56,7 +58,7 @@ export function SearchExternalAlbumsSection({
     return (
         <CollapsibleCommandGroup
             expanded={expanded}
-            heading="Albums on MusicBrainz"
+            heading={t('page.globalSearch.albumsOnMusicBrainz')}
             onToggle={onToggle}
         >
             {isLoading ? (
@@ -105,8 +107,8 @@ export function SearchExternalAlbumsSection({
                                 {candidate.releaseOwned && (
                                     <Badge size="xs">
                                         {candidate.releaseAlbumId
-                                            ? 'In your library'
-                                            : 'Added — waiting for library'}
+                                            ? t('page.globalSearch.inYourLibrary')
+                                            : t('page.globalSearch.waitingForLibrary')}
                                     </Badge>
                                 )}
                             </Group>

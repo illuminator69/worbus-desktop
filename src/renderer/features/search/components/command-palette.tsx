@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Command, CommandPalettePages } from '/@/renderer/features/search/components/command';
 import { GoToCommands } from '/@/renderer/features/search/components/go-to-commands';
@@ -174,6 +175,7 @@ function CommandPaletteSearch({
 }
 
 export const CommandPalette = ({ modalProps }: CommandPaletteProps) => {
+    const { t } = useTranslation();
     const [value, setValue] = useState('');
     const [query, setQuery] = useState('');
     const [pages, setPages] = useState<CommandPalettePages[]>([CommandPalettePages.HOME]);
@@ -227,7 +229,7 @@ export const CommandPalette = ({ modalProps }: CommandPaletteProps) => {
                     if (value.includes('search')) return 1;
                     return 0;
                 }}
-                label="Global Command Menu"
+                label={t('page.globalSearch.commandMenu')}
                 onKeyDown={(e) => {
                     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                         searchInputRef.current?.focus();

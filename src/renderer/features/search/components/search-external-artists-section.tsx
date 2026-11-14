@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router';
 
 import { useLbBotArtistLookup } from '/@/renderer/features/lbbot/hooks/use-lbbot';
@@ -41,6 +42,7 @@ export function SearchExternalArtistsSection({
     onSelectResult,
     onToggle,
 }: SearchExternalArtistsSectionProps) {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     // The debounced term only: this is a live MusicBrainz search behind lb-bot's
     // global 1 req/sec lock, not a local index read.
@@ -52,7 +54,7 @@ export function SearchExternalArtistsSection({
     return (
         <CollapsibleCommandGroup
             expanded={expanded}
-            heading="Not in your library"
+            heading={t('page.globalSearch.notInYourLibrary')}
             onToggle={onToggle}
         >
             {isLoading ? (

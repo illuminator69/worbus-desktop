@@ -704,6 +704,12 @@
             "title": "$t(entity.folder, {\"count\": 2})"
         },
         "globalSearch": {
+            "albumsOnMusicBrainz": "Albums on MusicBrainz",
+            "commandMenu": "Global Command Menu",
+            "discover": "Discover",
+            "inYourLibrary": "In your library",
+            "notInYourLibrary": "Not in your library",
+            "waitingForLibrary": "Added — waiting for library",
             "commands": {
                 "goToPage": "Go to page",
                 "searchFor": "Search for {{query}}",
