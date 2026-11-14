@@ -2,9 +2,9 @@
  * B-313, the shared artist-name vectors (owner's ruling 2026-11-12: one normaliser rule on both
  * clients, a letter in ANY script counts). Worbus for desktop's `album-match.ts` is held to every row
  * by `artist-name.harness.ts`; Worbus for Android's `creditKey` / `creditActs` / `sameArtist`
- * (`BrowseResolver.kt`) are to be held to the same rows. `android` is what Android's code answers
- * TODAY where that differs from the shared answer (measured on a JVM replica of its host-test
- * semantics, 2026-11-12); a row without it is one both clients already agree on.
+ * (`BrowseResolver.kt`) are held to the same rows by its `ArtistNameVectorsTest` (generated from this
+ * table, all 89 rows; green on the VM). Q-174: the `android` column that recorded where Android
+ * answered differently before it took the rule is gone; both clients answer every row alike.
  *
  * The rule, in words: lower-case (the language-neutral Unicode mapping, `toLowerCase()` /
  * `lowercase()`), then every code point that is not a letter (`\p{L}`) or a decimal digit (`\p{Nd}`)
@@ -22,8 +22,6 @@
  */
 
 export type KeyVector = {
-    /** What Android's `creditKey` answers today, when it differs. */
-    android?: string;
     input: string;
     key: string;
     note: string;
@@ -31,8 +29,6 @@ export type KeyVector = {
 
 export type SameArtistVector = {
     a: string;
-    /** What Android's `sameArtist(a, b)` answers today, when it differs. */
-    android?: boolean;
     b: string;
     note: string;
     same: boolean;
@@ -74,23 +70,20 @@ export const KEY_VECTORS: readonly KeyVector[] = [
         note: 'Devanagari vowel signs are marks, so separators (see the pairs)',
     },
     {
-        android: 'daft\u00a0punk',
         input: 'Daft\u00a0Punk',
         key: 'daft punk',
-        note: 'a no-break space is a separator; Android keeps it inside the word',
+        note: 'a no-break space is a separator (Android kept it inside the word before 2026-11-12)',
     },
     {
-        android: '米津\u3000玄師',
         input: '米津\u3000玄師',
         key: '米津 玄師',
-        note: 'an ideographic space is a separator; Android keeps it inside the word',
+        note: 'an ideographic space is a separator (Android kept it inside the word before 2026-11-12)',
     },
-    { android: 'a\tb', input: 'a\tb', key: 'a b', note: 'a tab is a separator; Android keeps it' },
+    { input: 'a\tb', key: 'a b', note: 'a tab is a separator (Android kept it before 2026-11-12)' },
     {
-        android: '野家',
         input: '\u{20bb7}野家',
         key: '\u{20bb7}野家',
-        note: '𠮷 (U+20BB7, outside the BMP) is a letter; Android tests UTF-16 units and drops it',
+        note: '𠮷 (U+20BB7, outside the BMP) is a letter (Android tested UTF-16 units and dropped it before 2026-11-12)',
     },
     { input: '!!!', key: '', note: 'nothing but punctuation' },
     { input: '🎵', key: '', note: 'an emoji is not a letter' },
@@ -137,7 +130,6 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     { a: 'Би-2', b: 'Ю-2', note: 'constructed: both were "2"', same: false },
     {
         a: 'Iannis Xénakis',
-        android: true,
         b: 'Iannis',
         note: 'x before é split there (an ASCII word boundary); a letter in any script keeps x inside the word',
         same: false,
@@ -150,18 +142,16 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     // bracketed part in round or full-width brackets, also matches `A` alone and `B` alone, each as a
     // whole key; two bracketed acts match only as wholes; a disambiguator in the bracket is never a
     // name on its own (it still separates `A (UK)` from `A (US)`).
-    { a: 'BTS (방탄소년단)', android: false, b: 'BTS', note: 'A (B) matches A', same: true },
-    { a: 'BTS (방탄소년단)', android: false, b: '방탄소년단', note: 'A (B) matches B', same: true },
+    { a: 'BTS (방탄소년단)', b: 'BTS', note: 'A (B) matches A', same: true },
+    { a: 'BTS (방탄소년단)', b: '방탄소년단', note: 'A (B) matches B', same: true },
     {
         a: 'BTS\uff08방탄소년단\uff09',
-        android: false,
         b: 'BTS',
         note: 'full-width brackets, no space before them',
         same: true,
     },
     {
         a: 'BTS\uff08방탄소년단\uff09',
-        android: false,
         b: '방탄소년단',
         note: 'full-width brackets: B',
         same: true,
@@ -176,7 +166,6 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     },
     {
         a: 'IU (아이유) & BTS (방탄소년단)',
-        android: false,
         b: '아이유',
         note: 'the credit is split first, then each act read',
         same: true,
@@ -185,7 +174,6 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     { a: 'BTS (방탄소년단)', b: 'BT', note: 'A matches only as a whole key', same: false },
     {
         a: 'Nirvana (US)',
-        android: false,
         b: 'Nirvana',
         note: 'disambiguated A (B) matches A',
         same: true,
@@ -201,7 +189,6 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     { a: 'Bush (UK band)', b: 'UK Band', note: 'every word a disambiguator', same: false },
     {
         a: 'Nirvana (2)',
-        android: false,
         b: 'Nirvana',
         note: 'a Discogs number: A matches',
         same: true,
@@ -211,7 +198,6 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
     { a: '아이유 (가수)', b: '가수', note: 'a native-script role word is not a name', same: false },
     {
         a: 'Robbie Robertson (The Band)',
-        android: false,
         b: 'The Band',
         note: 'a name in the bracket is a name, even one made of a disambiguator and "the"',
         same: true,
@@ -244,29 +230,26 @@ export const SAME_ARTIST_VECTORS: readonly SameArtistVector[] = [
         same: true,
     },
 
-    // Where Android differs today.
+    // Where Android differed before it took the shared rule (2026-11-12).
     {
         a: 'Daft\u00a0Punk',
-        android: false,
         b: 'Daft Punk',
         note: 'a no-break space separates words',
         same: true,
     },
     {
         a: '米津\u3000玄師',
-        android: false,
         b: '米津 玄師',
         note: 'an ideographic space separates words',
         same: true,
     },
     {
         a: '\u{20bb7}野家',
-        android: true,
         b: '\u{2000b}野家',
-        note: 'constructed: two letters outside the BMP are two letters (Android reads both as "野家")',
+        note: 'constructed: two letters outside the BMP are two letters (Android read both as "野家" before 2026-11-12)',
         same: false,
     },
-    { a: '!!!', android: true, b: '???', note: 'no act on either side', same: false },
-    { a: '', android: true, b: '', note: 'empty against empty', same: false },
-    { a: '🎵', android: true, b: '💀', note: 'emoji only: no act', same: false },
+    { a: '!!!', b: '???', note: 'no act on either side', same: false },
+    { a: '', b: '', note: 'empty against empty', same: false },
+    { a: '🎵', b: '💀', note: 'emoji only: no act', same: false },
 ];
