@@ -10,6 +10,7 @@ import {
     nextStarsDrawn,
     rowFocusOf,
     staticStarsMask,
+    staticStarsMasks,
     TRACK_LIST_NARROW_PX,
     TRACK_LIST_NARROWER_PX,
     trackColumns,
@@ -149,6 +150,28 @@ test('staticStarsMask: filled up to the rating, the rest outlined, clamped to 0 
     assert.equal(svg(2).split('<path').length - 1, 5);
     // Mantine's star (its 24-unit path), five across.
     assert.ok(svg(1).includes("viewBox='0 0 120 24'"));
+});
+
+/*
+ * B-269 (R15 workstation walk, 2026-10-29): the one-element stars drew a filled star gold to its edge,
+ * while Mantine's Rating draws a filled star's outline in the foreground colour (`rating.module.css`:
+ * every star's stroke), so a rated row changed its stars when pointed at and when left. The one element
+ * now paints two layers, as Mantine does: the filled stars' insides in gold, then all five outlines in
+ * the foreground colour on top.
+ */
+test('staticStarsMasks: gold insides for the rating, five outlines on top', () => {
+    const svg = (url: string) =>
+        decodeURIComponent(url.replace(/^url\("data:image\/svg\+xml,|"\)$/g, ''));
+    const { fill, line } = staticStarsMasks(3);
+    assert.equal(svg(fill).split('<path').length - 1, 3, 'one inside per filled star');
+    assert.ok(!svg(fill).includes("stroke='#000'"), 'the insides carry no outline');
+    assert.equal(svg(line).split("stroke='#000'").length - 1, 5, 'five outlines');
+    assert.ok(!svg(line).includes("fill='#000'"), 'the outlines are not filled');
+    assert.equal(svg(staticStarsMasks(0).fill).split('<path').length - 1, 0);
+    assert.equal(svg(staticStarsMasks(9).fill).split('<path').length - 1, 5);
+    const css = readFileSync(new URL('./components/artist-track-list.module.css', import.meta.url), 'utf8');
+    assert.match(css, /--stars-line-mask/);
+    assert.match(css, /--stars-fill-mask/);
 });
 
 /*
