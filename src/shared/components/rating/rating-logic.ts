@@ -20,3 +20,39 @@ export const arrowMoveValue = (
     const value = Number.parseFloat(target.value ?? '');
     return Number.isFinite(value) ? value : null;
 };
+
+interface RatingNow {
+    busy: boolean;
+    onChange?: (value: number) => void;
+    value: null | number | undefined;
+}
+
+/**
+ * The stage 2 review's m1: a change made while a rating save is in flight is held, not dropped, and
+ * sent once the save settles (only the latest; a star chosen again clears against the value then).
+ */
+export const createRatingGate = () => {
+    let held: null | { rating: number; toggles: boolean } = null;
+    const send = (rating: number, toggles: boolean, now: RatingNow) => {
+        now.onChange?.(toggles ? nextRating(rating, now.value) : rating);
+    };
+    return {
+        /** A change: sent now, or held while a save is in flight. */
+        offer(rating: number, toggles: boolean, now: RatingNow) {
+            if (!now.onChange) return;
+            if (now.busy) {
+                held = { rating, toggles };
+                return;
+            }
+            held = null;
+            send(rating, toggles, now);
+        },
+        /** The save state moved: send the held change once nothing is in flight. */
+        settle(now: RatingNow) {
+            if (now.busy || !held) return;
+            const { rating, toggles } = held;
+            held = null;
+            send(rating, toggles, now);
+        },
+    };
+};

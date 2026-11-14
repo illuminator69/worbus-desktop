@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import styles from './rating.module.css';
 
-import { arrowMoveValue, nextRating } from '/@/shared/components/rating/rating-logic';
+import { arrowMoveValue, createRatingGate } from '/@/shared/components/rating/rating-logic';
 
 interface RatingProps extends MantineRatingProps {
     /**
@@ -29,17 +29,20 @@ export const Rating = ({
 }: RatingProps) => {
     // B-368: one debounce per Rating, so quick changes merge across renders, deciding with the
     // props of the moment it fires (a star chosen again clears against the value then).
+    // m1: a change made while a save is in flight is held and sent once it settles, never dropped.
     const latest = useRef({ busy, onChange, value: props.value });
     latest.current = { busy, onChange, value: props.value };
+    const gate = useMemo(() => createRatingGate(), []);
     const change = useMemo(
         () =>
             debounce((rating: number, toggles: boolean) => {
-                const now = latest.current;
-                if (now.busy || !now.onChange) return;
-                now.onChange(toggles ? nextRating(rating, now.value) : rating);
+                gate.offer(rating, toggles, latest.current);
             }, 100),
-        [],
+        [gate],
     );
+    useEffect(() => {
+        gate.settle(latest.current);
+    }, [busy, gate]);
     // A change made just before the stars go away still counts.
     useEffect(() => () => change.flush(), [change]);
 
