@@ -7,6 +7,7 @@ import { forwardRef, useMemo } from 'react';
 
 import styles from './action-icon.module.css';
 
+import { iconButtonName } from '/@/shared/components/action-icon/icon-button-name';
 import { AppIcon, Icon, IconProps } from '/@/shared/components/icon/icon';
 import { Tooltip, TooltipProps } from '/@/shared/components/tooltip/tooltip';
 import { createPolymorphicComponent } from '/@/shared/utils/create-polymorphic-component';
@@ -62,6 +63,8 @@ const _ActionIcon = forwardRef<HTMLButtonElement, ActionIconProps>(
             size: mantineSize,
             variant,
             ...props,
+            // B-197, B-325: an icon button is named by its tooltip unless it names itself.
+            'aria-label': iconButtonName(props['aria-label'], tooltip?.label),
             onClick: handleClick,
             ...(compactSize && { 'data-size': compactSize }),
         };

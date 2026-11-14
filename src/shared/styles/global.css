@@ -3,6 +3,13 @@
     outline: none;
 }
 
+/* B-197: the keyboard's focus is drawn everywhere a component does not draw its own mark (a rule of
+   its class wins: `:where` adds no specificity). A pointer's focus is not `:focus-visible`. */
+:where(:focus-visible) {
+    outline: 2px solid var(--theme-colors-primary-filled);
+    outline-offset: 2px;
+}
+
 *,
 *::before,
 *::after {

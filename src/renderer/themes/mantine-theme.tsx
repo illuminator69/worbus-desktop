@@ -59,7 +59,8 @@ const mantineTheme: MantineThemeOverride = createTheme({
     },
     cursorType: 'pointer',
     defaultRadius: 'sm',
-    focusRing: 'never',
+    // B-197: the keyboard's focus shows (`:focus-visible`); a pointer's does not.
+    focusRing: 'auto',
     fontFamily: 'var(--theme-content-font-family)',
     fontSizes: {
         '2xl': rem('20px'),
