@@ -133,3 +133,21 @@ test('the_queue_records_where_its_element_stopped', () => {
         'a hand-back seek outlives its song',
     );
 });
+
+/**
+ * The stage 2 review's m5: B-423 on the mpv engine. Its position is a 500 ms poll that runs only while
+ * the store says PLAYING; a pause flips the store first, and mpv plays on through the 300 ms fade, so
+ * the queue's position (the hub's report, the radio hand-back) could be up to about 0.8 s short. Once
+ * the local status turns PAUSED (the engine has paused mpv, over the same ordered IPC), mpv's own
+ * position is read once and written.
+ */
+test('the_mpv_queue_records_where_mpv_stopped', () => {
+    const player = readFileSync(
+        new URL('../../player/audio-player/mpv-player.tsx', import.meta.url),
+        'utf8',
+    );
+    assert.match(player, /recordStoppedPosition\(/, 'the pause keeps the last poll, not the stop');
+    const record = player.slice(player.indexOf('const recordStoppedPosition'));
+    assert.match(record.slice(0, 900), /getCurrentTime\(\)/, 'mpv’s own position at the stop');
+    assert.match(record.slice(0, 900), /PlayerStatus\.PAUSED/, 'only while the store says paused');
+});
