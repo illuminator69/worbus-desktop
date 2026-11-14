@@ -27,7 +27,7 @@ const queryConfig: DefaultOptions = {
         retry: process.env.NODE_ENV === 'production' ? 3 : false,
     },
     queries: {
-        gcTime: 1000 * 20, // 20 seconds
+        gcTime: 1000 * 60 * 2, // 2 minutes (owner ruling 2026-11-14, Q-164: was 20 s)
         refetchOnWindowFocus: false,
         retry: process.env.NODE_ENV === 'production',
         staleTime: 1000 * 10, // 10 seconds
