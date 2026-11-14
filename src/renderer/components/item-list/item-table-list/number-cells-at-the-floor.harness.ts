@@ -315,3 +315,24 @@ test('thePlayableTrackNumberDoesNotDependOnCssOrder', () => {
     assert.match(rule, /display: flex;/);
     assert.match(rule, /overflow: visible;/);
 });
+
+/*
+ * B-275 (found in R17, upstream since `ae8ca54a`): the data cells' containers set the module's `left`
+ * class for `align === 'start'`, and the stylesheet has no `.container.left` rule (it has
+ * `.container.start`), so a start-aligned cell's box stretched instead of aligning to the start: it
+ * cut start-aligned numbers at R15/R16 ("0:...", "2..."), and R17 patched number cells alone with
+ * `.number-cell.left`. Every alignment class a data container sets now has its container rule.
+ */
+test('every_data_cell_alignment_class_has_its_container_rule', () => {
+    const css = read(CSS);
+    const source = read('./item-table-list-column.tsx');
+    const data = source.slice(0, source.indexOf('className={clsx(styles.headerContent'));
+    const classes = [...data.matchAll(/\[styles\.(\w+)\]: props\.columns\[props\.columnIndex\]\.align ===/g)].map(
+        (m) => m[1],
+    );
+    assert.ok(classes.length >= 6, `${classes.length} alignment classes`);
+    for (const name of classes) {
+        const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+        assert.ok(css.includes(`\n.container.${kebab} {`), `.container.${kebab} has no rule`);
+    }
+});
