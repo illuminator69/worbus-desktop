@@ -5,7 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 
 /**
- * B-358 (the Feishin half of B-187; AUDIT-backlog-fixed-unverified-2026-11-09 chunk 7):
+ * B-358 (the desktop half of B-187; AUDIT-backlog-fixed-unverified-2026-11-09 chunk 7):
  *   node --test src/shared/styles/reduced-motion.harness.ts
  *
  * Reduced motion was honoured only by motion/react (`MotionConfig reducedMotion="user"`): 52 of the
