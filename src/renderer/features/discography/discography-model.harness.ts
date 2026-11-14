@@ -483,3 +483,37 @@ test('320 items in 9 kinds: sectionsOf runs in under 50 ms', () => {
     assert.equal(new Set(sections.map((s) => s.kind)).size, 9);
     assert.ok(ms < 50, `${ms} ms`);
 });
+
+/**
+ * B-455: the album title key is the phone's rule (B-427, `TitleKey.kt`, vectors from its
+ * `AlbumTitleKeyScriptTest`): a letter or mark in any script counts, only Latin accents fold. The
+ * old `[a-z0-9]` keyed a mixed-script title by its Latin part (`花様年華 pt.1` = `화양연화 pt.1` = `pt1`)
+ * and an all-CJK or all-Cyrillic title to "", which never pairs.
+ */
+const pairs = (ownedTitle: string, rowTitle: string) =>
+    buildItems(
+        [owned({ name: ownedTitle, rgid: '' })],
+        [row({ rgid: 'rg-x', title: rowTitle })],
+        [],
+    ).length === 1;
+
+test('B-455: letters in any script count in the title key', () => {
+    assert.equal(pairs('花様年華 pt.1', '화양연화 pt.1'), false, 'two scripts, one Latin part');
+    assert.equal(pairs('Кино', 'Кина'), false);
+    assert.equal(pairs('화양연화 pt.1', '화양연화 Pt. 1'), true);
+    assert.equal(pairs('花様年華', '花様年華'), true, 'an all-CJK title pairs with itself');
+    assert.equal(pairs('Кино', 'Кино'), true, 'an all-Cyrillic title pairs with itself');
+});
+
+test('B-455: a kana mark is not an accent', () => {
+    // NFD splits ガ into カ and a combining voiced mark; only Latin accents (U+0300-036F) fold.
+    assert.equal(pairs('ガ', 'カ'), false);
+    assert.equal(pairs('ガ', 'ガ'), true);
+});
+
+test('B-455: the rules before are kept', () => {
+    assert.equal(pairs('Kid A', 'Kid A (Remastered)'), true);
+    assert.equal(pairs('Homogenic', 'Homogénic'), true, 'Latin accents fold');
+    assert.equal(pairs('Hail to the Thief', 'Hail to the Thief - Live'), false);
+    assert.equal(pairs('(Live)', '(Live)'), false, 'an empty key never pairs');
+});
