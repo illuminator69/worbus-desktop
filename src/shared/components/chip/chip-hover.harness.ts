@@ -48,10 +48,9 @@ test('the_shared_chip_class_draws_upstreams_button_hover', () => {
     assert.match(chip, new RegExp(`--chip-overlay: rgb\\(0 0 0 / ${darken * 100}%\\)`));
     assert.match(
         chip,
-        new RegExp(`box-shadow ${duration[1].replace('.', '\\.')} ease-in-out`),
+        new RegExp(`transition: background-color ${duration[1].replace('.', '\\.')} ease-in-out`),
         'the overlay fades in over the Button',
     );
-    assert.match(chip, /background-color \d*\.?\d+s ease-in-out/);
 
     // Not on a disabled chip; the chosen one (pressed, current page, active segment) darkens.
     assert.match(chip, /:not\(:disabled, \[data-disabled\], \[aria-disabled='true'\]\)/);
@@ -62,6 +61,93 @@ test('the_shared_chip_class_draws_upstreams_button_hover', () => {
     ]) {
         assert.ok(chip.includes(chosen), `the chosen state ${chosen} has no hover`);
     }
+});
+
+/** The top-level blocks of a stylesheet: `[prelude, body]`, nesting kept inside the body. */
+const blocks = (css: string): [string, string][] => {
+    const out: [string, string][] = [];
+    const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
+    let depth = 0;
+    let start = 0;
+    let open = 0;
+    for (let i = 0; i < text.length; i += 1) {
+        if (text[i] === '{') {
+            if (depth === 0) open = i;
+            depth += 1;
+        } else if (text[i] === '}') {
+            depth -= 1;
+            if (depth === 0) {
+                out.push([text.slice(start, open).trim(), text.slice(open + 1, i)]);
+                start = i + 1;
+            }
+        }
+    }
+    return out;
+};
+
+/** The declarations written directly in a block body (not in its nested blocks). */
+const ownDeclarations = (body: string): string[] => {
+    let flat = body;
+    for (;;) {
+        const next = flat.replace(/[^{};]*\{[^{}]*\}/g, '');
+        if (next === flat) break;
+        flat = next;
+    }
+    return flat
+        .split(';')
+        .map((d) => d.trim())
+        .filter(Boolean);
+};
+
+test('the_chip_class_never_fights_a_sites_own_rules', () => {
+    // m3 (review 2026-11-15): `.chip` and a site's own class are both one class, so a property
+    // both set is decided by which stylesheet loads last (dev injects, production concatenates).
+    // The overlay is the chip's own `::after`; the class sets nothing a site paints with on the
+    // chip itself, and the host's containing block and stacking context sit in a cascade layer,
+    // which every unlayered site rule beats whatever the order.
+    const chip = read(SHARED);
+    const sheet = blocks(chip);
+    const host = sheet.filter(([prelude]) => prelude === '.chip');
+    for (const [, body] of host) {
+        for (const declaration of ownDeclarations(body)) {
+            assert.match(
+                declaration,
+                /^--chip-/,
+                `.chip sets \`${declaration}\` outside a layer; a site's own rule can lose to it`,
+            );
+        }
+    }
+    const layered = sheet.find(([prelude]) => /^@layer\s+[\w-]+$/.test(prelude));
+    assert.ok(layered, 'the host rules are not in a cascade layer');
+    assert.match(layered[1], /\.chip\s*\{[^}]*position: relative;[^}]*isolation: isolate;/);
+    const overlay = sheet.find(([prelude]) => prelude === '.chip::after');
+    assert.ok(overlay, 'the overlay is not the chip’s ::after');
+    const own = ownDeclarations(overlay[1]).join('; ');
+    for (const needed of [
+        'position: absolute',
+        'inset: 0',
+        'z-index: -1',
+        'pointer-events: none',
+        "content: ''",
+        'background-color: var(--chip-overlay)',
+        'border-radius: inherit',
+    ]) {
+        assert.ok(own.includes(needed), `the overlay lacks \`${needed}\``);
+    }
+
+    // The one thing a site could still fight over is the pseudo-element itself.
+    const clashes: string[] = [];
+    for (const { file, local } of SITES) {
+        const module = /import styles from '\.\/([\w.-]+\.module\.css)';/.exec(read(file))?.[1];
+        assert.ok(module, `${file}: no styles module`);
+        const css = read(path.join(path.dirname(file), module));
+        for (const name of local) {
+            const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+            if (new RegExp(`\\.${kebab}\\b[^{,]*::after`).test(css))
+                clashes.push(`${module} .${kebab}`);
+        }
+    }
+    assert.deepEqual(clashes, []);
 });
 
 /** Every fork chip: the file that draws it and the local classes that make it a chip. */

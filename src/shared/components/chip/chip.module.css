@@ -1,20 +1,41 @@
 /*
  * B-293: the fork's chips react to the pointer as upstream's chips (the shared Button) do. A chip on
  * the surface lightens 5% (`default`'s hover), the chosen one darkens 10% (`filled`'s), over the
- * Button's 0.2 s ease-in-out. Drawn as an inset overlay rather than a new background: white 5% over a
+ * Button's 0.2 s ease-in-out. Drawn as an overlay rather than a new background: white 5% over a
  * colour is exactly `lighten(colour, 5%)` and black 10% exactly `darken(colour, 10%)`, translucent
  * colours included, so one rule serves the surface, the cover wash's surface and the accent without
  * knowing which the chip's own module paints. The chip's module keeps its size, colours and focus
  * ring; this class only adds the response. Reduced motion: the global rule in `global.css`.
+ *
+ * Robust against stylesheet order (m3, 2026-11-15): `.chip` and a site's class are both one class,
+ * so a property both set would be decided by which stylesheet loads last. The overlay is therefore
+ * the chip's own `::after`, painted between its background and its content (z-index -1 inside the
+ * chip's own stacking context), and the class sets nothing on the chip a site paints with: a site's
+ * own `box-shadow` (a card's inset ring) or `transition` (the device pill's fold) is never replaced.
+ * The two things the overlay needs from the host, a containing block and a stacking context, sit in
+ * a cascade layer, which every unlayered rule beats in any order: a site that positions its chip
+ * itself (absolute, sticky) keeps that, and is still a containing block.
  */
+@layer chip {
+    .chip {
+        position: relative;
+        isolation: isolate;
+    }
+}
+
 .chip {
     --chip-overlay: transparent;
+}
 
-    box-shadow: inset 0 0 0 100vmax var(--chip-overlay);
-    transition:
-        box-shadow 0.2s ease-in-out,
-        background-color 0.2s ease-in-out,
-        color 0.2s ease-in-out;
+.chip::after {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    content: '';
+    background-color: var(--chip-overlay);
+    border-radius: inherit;
+    transition: background-color 0.2s ease-in-out;
 }
 
 .chip:not(:disabled, [data-disabled], [aria-disabled='true']) {
