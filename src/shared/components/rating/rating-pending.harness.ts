@@ -62,7 +62,11 @@ test('a_toggling_click_held_over_a_save_decides_against_the_value_then', async (
 test('the_rating_sends_what_it_held_when_the_save_settles', () => {
     const src = read('./rating.tsx');
     const body = src.slice(src.indexOf('export const Rating'));
-    assert.doesNotMatch(body, /if \(now\.busy \|\| !now\.onChange\) return;/, 'a busy change is dropped');
+    assert.doesNotMatch(
+        body,
+        /if \(now\.busy \|\| !now\.onChange\) return;/,
+        'a busy change is dropped',
+    );
     assert.match(body, /\.settle\(/, 'nothing sends the held change once the save settles');
 });
 
