@@ -322,6 +322,8 @@ export function WebPlayer() {
             onCurrentSongChange: () => {
                 // Review M1 (B-402): a seek held for the song that was current is no one's now.
                 heldSeekRef.current.drop();
+                // B-423: so is a radio hand-back still waiting for that song's source.
+                pendingLocalSeekRef.current = -1;
                 setIsTransitioning(false);
             },
             onPlayerQueueChange: () => {
@@ -589,6 +591,30 @@ export function WebPlayer() {
     useLayoutEffect(() => {
         committedUrlRef.current = { 1: player1Url, 2: player2Url };
     }, [player1Url, player2Url]);
+
+    // B-423: where the element stopped is the queue's position. A pause flips the store first and
+    // the element plays on through the fade and up to one progress tick, which the progress handler
+    // no longer records (the store is not PLAYING), so the position (the hub's report, the radio
+    // hand-back) was 0.3 to 0.55 s short. Once the element is paused, its own time is written.
+    const wasLocallyPlayingRef = useRef(localPlayerStatus === PlayerStatus.PLAYING);
+    const recordStoppedPosition = useCallback(() => {
+        const active = num === 1 ? playerRef.current?.player1() : playerRef.current?.player2();
+        const element = active?.ref?.getInternalPlayer() as HTMLMediaElement | null | undefined;
+        if (!element || !Number.isFinite(element.currentTime)) return;
+        // Only the current song's own source: never the silent placeholder or a previous song.
+        const source = slotSource(committedUrlRef.current[num], element.src);
+        if (!readyOnOwnSource(source, num === 1 ? player1Url : player2Url)) return;
+        if (usePlayerStoreBase.getState().player.status !== PlayerStatus.PAUSED) return;
+        setTimestamp(element.currentTime);
+    }, [num, player1Url, player2Url, setTimestamp]);
+
+    useEffect(() => {
+        const was = wasLocallyPlayingRef.current;
+        wasLocallyPlayingRef.current = localPlayerStatus === PlayerStatus.PLAYING;
+        if (was && localPlayerStatus === PlayerStatus.PAUSED) recordStoppedPosition();
+        // Only the local status's transitions decide; the callback's own changes do not.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [localPlayerStatus]);
 
     const applyPendingSeekIfNeeded = useCallback(
         (reactPlayer: ReactPlayer, activeSlot: 1 | 2) => {
