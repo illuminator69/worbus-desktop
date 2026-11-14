@@ -295,3 +295,24 @@ test('the_row_reveals_its_focused_chip', () => {
     assert.match(src, /focusin/);
     assert.match(src, /revealLeft\(/);
 });
+
+/**
+ * B-292 (R18 workstation walk, `--force-device-scale-factor=1.2`): the wheel, the end button and
+ * Shift+wheel all stopped at `scrollLeft` 122.5 with 123 to scroll, and the row kept its end fade and
+ * "Scroll right" button. At scale s a scroll position moves in steps of 1/s px (0.83 at 1.2), so the
+ * last one can sit up to a device pixel short of the end; half a px of slack (and Chromium's 122.49...)
+ * was not enough. An end within one CSS px (a device px at any scale of 1 or more) is reached.
+ */
+test('the_end_is_reached_within_a_device_pixel_at_a_fractional_scale', () => {
+    for (const scale of [1.1, 1.2, 1.25, 1.5]) {
+        const max = 123;
+        const last = Math.floor(max * scale) / scale - 1e-9;
+        assert.equal(
+            hiddenSides({ clientWidth: 643, scrollLeft: last, scrollWidth: 643 + max }).end,
+            false,
+            `${scale}: ${last}`,
+        );
+    }
+    // A real px short is still more to see.
+    assert.equal(hiddenSides({ clientWidth: 643, scrollLeft: 121.5, scrollWidth: 766 }).end, true);
+});
