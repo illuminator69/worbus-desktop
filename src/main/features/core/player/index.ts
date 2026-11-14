@@ -845,8 +845,16 @@ process.on('exit', () => {
     }
 });
 
-// A termination signal quits the app the ordinary way (main `index.ts`, B-422), so `before-quit`
-// above cleans mpv up; the `exit` handler kills it if that quit is cut short.
+// Handle signals that can terminate the process
+process.on('SIGINT', async () => {
+    await cleanupMpv(true);
+    process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+    await cleanupMpv(true);
+    process.exit(0);
+});
 
 // Handle uncaught exceptions - cleanup mpv before crashing
 process.on('uncaughtException', async (error) => {

@@ -37,7 +37,6 @@ import { store } from './features/core/settings';
 import { canHandleVisualizerDisplayMedia } from './features/core/visualizer';
 import log, { autoUpdaterLogInterface } from './logger';
 import MenuBuilder, { MenuPlaybackState } from './menu';
-import { createTerminationHandler } from './termination';
 import './features';
 import { hotkeyToElectronAccelerator } from './utils';
 
@@ -392,22 +391,6 @@ app.on('before-quit', () => {
     forceQuit = true;
     log.info('App quitting', { reason: exitFromTray ? 'tray' : 'before-quit' });
 });
-
-// B-422: a logout, shutdown or `kill` sends SIGTERM; quit as the Quit menu does, never `process.exit`
-// (which skips the quit that writes DOM storage to disk).
-const onTerminationSignal = createTerminationHandler({
-    exit: (code) => app.exit(code),
-    flushStorage: () => {
-        if (app.isReady()) session.defaultSession.flushStorageData();
-    },
-    log: (message, meta) => log.info(message, meta),
-    quit: () => app.quit(),
-    setTimer: (fn, ms) => {
-        setTimeout(fn, ms).unref();
-    },
-});
-process.on('SIGTERM', onTerminationSignal);
-process.on('SIGINT', onTerminationSignal);
 let playbackMenuAccelerators: MenuPlaybackState['accelerators'] = {};
 let inputFocused = false;
 
