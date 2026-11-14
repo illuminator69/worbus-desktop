@@ -701,7 +701,7 @@
         "home": {
             "explore": "Explore from your library",
             "fansAlsoLike": "Artists you might like",
-            "fresh": "Fresh",
+            "fresh": "Fresh releases",
             "genres": "$t(entity.genre, {\"count\": 2})",
             "mostPlayed": "Most Played",
             "newlyAdded": "Recently added",
