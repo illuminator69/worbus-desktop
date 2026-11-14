@@ -76,18 +76,23 @@ export interface Section {
 }
 
 /**
- * Album titles compared the way a person would: case, accents, punctuation and parenthesised edition
- * suffixes all discarded, so "Kid A" and "Kid A (Remastered)" are one record. Deliberately stops
- * there: "Hail to the Thief - Live" is a different record, and hiding a real release is worse than
- * leaving a duplicate on screen. (Moved here from `withoutOwned` in use-lbbot.ts.)
+ * Album titles compared the way a person would: case, Latin accents, punctuation and parenthesised
+ * edition suffixes all discarded, so "Kid A" and "Kid A (Remastered)" are one record. Deliberately
+ * stops there: "Hail to the Thief - Live" is a different record, and hiding a real release is worse
+ * than leaving a duplicate on screen. (Moved here from `withoutOwned` in use-lbbot.ts.)
+ *
+ * B-455: the phone's rule (`albumTitleKey`, B-427): a letter or mark in any script counts, so a
+ * mixed-script title is not keyed by its Latin part alone and an all-CJK title is not keyed empty.
+ * Marks are kept because NFD splits a kana's voiced mark (ガ = カ + U+3099) as it splits an accent;
+ * only the Latin accents (U+0300-036F) fold.
  */
 const titleKey = (title: string): string =>
     title
         .normalize('NFD')
-        .replace(/[̀-ͯ]/g, '')
+        .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
         .replace(/[[({].*?[\])}]/g, '')
-        .replace(/[^a-z0-9]+/g, '')
+        .replace(/[^\p{L}\p{M}\p{Nd}]+/gu, '')
         .trim();
 
 const yearOf = (year: string): null | number => {
