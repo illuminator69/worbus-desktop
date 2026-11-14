@@ -6,6 +6,7 @@ import {
     ItemListStateActions,
     ItemListStateItemWithRequiredProperties,
 } from '/@/renderer/components/item-list/helpers/item-list-state';
+import { listHotkey } from '/@/renderer/components/item-list/helpers/list-hotkey';
 import { ItemControls } from '/@/renderer/components/item-list/types';
 import { useHotkeys } from '/@/renderer/hooks/use-hotkeys';
 import { useHotkeySettings, usePlayButtonBehavior } from '/@/renderer/store';
@@ -60,84 +61,39 @@ export const useListHotkeys = ({
         );
     };
 
+    const playSelected = (playType: Play) => {
+        const selected = internalStateRef.current.getSelected();
+        const validSelected = selected.filter(hasRequiredStateItemProperties);
+        if (validSelected.length === 0) return;
+        controls.onPlay?.({ item: validSelected[0], itemType, playType } as any);
+    };
+
     useHotkeys([
-        [
-            'mod+a',
-            () => {
-                if (!isListFocused()) return;
+        listHotkey('mod+a', isListFocused, () => {
+            const state = internalStateRef.current;
+            if (state.isAllSelected()) {
+                state.deselectAll();
+            } else {
+                state.selectAll();
+            }
+        }),
+        listHotkey(bindings.listPlayDefault.hotkey, isListFocused, () =>
+            playSelected(playButtonBehavior),
+        ),
+        listHotkey(bindings.listPlayNow.hotkey, isListFocused, () => playSelected(Play.NOW)),
+        listHotkey(bindings.listPlayNext.hotkey, isListFocused, () => playSelected(Play.NEXT)),
+        listHotkey(bindings.listPlayLast.hotkey, isListFocused, () => playSelected(Play.LAST)),
+        listHotkey(bindings.listNavigateToPage.hotkey, isListFocused, () => {
+            const selected = internalStateRef.current.getSelected();
+            const validSelected = selected.filter(hasRequiredStateItemProperties);
+            if (validSelected.length === 0) return;
 
-                const state = internalStateRef.current;
-                if (state.isAllSelected()) {
-                    state.deselectAll();
-                } else {
-                    state.selectAll();
-                }
-            },
-        ],
-        [
-            bindings.listPlayDefault.hotkey,
-            () => {
-                if (!isListFocused()) return;
-                const selected = internalState.getSelected();
-                const validSelected = selected.filter(hasRequiredStateItemProperties);
-                if (validSelected.length === 0) return;
-
-                const item = validSelected[0];
-                const playType = playButtonBehavior;
-                controls.onPlay?.({ item, itemType, playType } as any);
-            },
-        ],
-        [
-            bindings.listPlayNow.hotkey,
-            () => {
-                if (!isListFocused()) return;
-                const selected = internalState.getSelected();
-                const validSelected = selected.filter(hasRequiredStateItemProperties);
-                if (validSelected.length === 0) return;
-
-                const item = validSelected[0];
-                controls.onPlay?.({ item, itemType, playType: Play.NOW } as any);
-            },
-        ],
-        [
-            bindings.listPlayNext.hotkey,
-            () => {
-                if (!isListFocused()) return;
-                const selected = internalState.getSelected();
-                const validSelected = selected.filter(hasRequiredStateItemProperties);
-                if (validSelected.length === 0) return;
-
-                const item = validSelected[0];
-                controls.onPlay?.({ item, itemType, playType: Play.NEXT } as any);
-            },
-        ],
-        [
-            bindings.listPlayLast.hotkey,
-            () => {
-                if (!isListFocused()) return;
-                const selected = internalState.getSelected();
-                const validSelected = selected.filter(hasRequiredStateItemProperties);
-                if (validSelected.length === 0) return;
-
-                const item = validSelected[0];
-                controls.onPlay?.({ item, itemType, playType: Play.LAST } as any);
-            },
-        ],
-        [
-            bindings.listNavigateToPage.hotkey,
-            () => {
-                if (!isListFocused()) return;
-                const selected = internalState.getSelected();
-                const validSelected = selected.filter(hasRequiredStateItemProperties);
-                if (validSelected.length === 0) return;
-
-                const item = validSelected[0];
-                const path = getTitlePath(itemType, item.id);
-                if (path) {
-                    navigate(path, { state: { item } });
-                }
-            },
-        ],
+            const item = validSelected[0];
+            const path = getTitlePath(itemType, item.id);
+            if (path) {
+                navigate(path, { state: { item } });
+            }
+        }),
         [
             bindings.listShowPlayingSong.hotkey,
             () => {
