@@ -1,3 +1,4 @@
+import isElectron from 'is-electron';
 import { useEffect, useState } from 'react';
 
 import { TranscodingConfig, usePlaybackSettings } from '/@/renderer/store';
@@ -51,6 +52,8 @@ export const useEffectiveTranscode = (): TranscodingConfig => {
     const { transcode } = usePlaybackSettings();
     const isMetered = useIsMeteredConnection();
 
-    if (!transcode.meteredOnly) return transcode;
+    // B-321: not offered on the desktop (its network API reports no metered connection), so a
+    // switch left on from before is ignored rather than holding transcoding off.
+    if (!transcode.meteredOnly || isElectron()) return transcode;
     return { ...transcode, enabled: transcode.enabled && isMetered };
 };

@@ -1,3 +1,4 @@
+import isElectron from 'is-electron';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,7 +55,8 @@ export const TranscodeSettings = memo(() => {
             ),
             description:
                 'Apply the transcode profile only while on a metered or constrained connection (cellular, data saver). Full quality otherwise.',
-            isHidden: !transcode.enabled,
+            // B-321: the desktop's network API reports no metered connection, so it is not offered.
+            isHidden: !transcode.enabled || isElectron(),
             note,
             title: 'Only when metered',
         },
