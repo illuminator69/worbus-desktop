@@ -30,7 +30,8 @@ export interface WheelInput {
 /** Chromium's pixels per wheel line (`deltaMode` 1). */
 export const LINE_PX = 40;
 
-/** A fractional scroll position (a 1.2 display scale) is at an end within this much. */
+/** A fractional scroll position is at an end within this much: at scale s it moves in 1/s px steps, so
+ *  the last one can sit up to a device px short (B-292: 122.5 of 123 at 1.2). */
 const EDGE_PX = 1;
 
 /** A button moves the row by this share of its visible width, so one chip stays in view. */
@@ -43,8 +44,8 @@ const clamp = (value: number, row: SidewaysMetrics) => Math.min(Math.max(value, 
 export const hiddenSides = (row: SidewaysMetrics): { end: boolean; start: boolean } => {
     const max = maxScroll(row);
     return {
-        end: max >= EDGE_PX && row.scrollLeft < max - EDGE_PX / 2,
-        start: max >= EDGE_PX && row.scrollLeft > EDGE_PX / 2,
+        end: max >= EDGE_PX && row.scrollLeft < max - EDGE_PX,
+        start: max >= EDGE_PX && row.scrollLeft > EDGE_PX,
     };
 };
 
