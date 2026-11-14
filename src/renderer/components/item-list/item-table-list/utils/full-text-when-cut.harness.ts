@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import type { CutBox, FullTextTarget } from './full-text-when-cut.ts';
@@ -89,4 +90,27 @@ test('aHiddenPartCountsAsCut', () => {
     all.attributes.set('title', 'stale');
     showFullTextWhenCut(all, 'Indie, Rock', false);
     assert.equal(all.attributes.has('title'), false);
+});
+
+/**
+ * B-272 (R16 VM walk, 2026-10-29; the workstation 2026-10-30): "Pop" is 24.38 px of text in a 24 px
+ * Genre cell. Chromium draws "P..." but `scrollWidth` equals `clientWidth` (both whole px), so the
+ * cell got no title. The check also compares the text's own laid-out width (a Range's, fractional)
+ * with the box's content width, through the `measure` the caller passes.
+ */
+test('a_cut_under_a_pixel_still_gets_the_full_text', () => {
+    const cell = target(box(24, 24), 'Pop');
+    showFullTextWhenCut(cell, undefined, false, () => ({ contentWidth: 24, textWidth: 24.38 }));
+    assert.equal(cell.attributes.get('title'), 'Pop');
+});
+
+test('text_that_fits_by_a_hair_gets_no_title', () => {
+    const cell = target(box(24, 24), 'Pop');
+    showFullTextWhenCut(cell, undefined, false, () => ({ contentWidth: 24.4, textWidth: 24.38 }));
+    assert.equal(cell.attributes.has('title'), false);
+});
+
+test('the_table_cells_measure_the_text', () => {
+    const src = readFileSync(new URL('../item-table-list-column.tsx', import.meta.url), 'utf8');
+    assert.match(src, /showFullTextWhenCut\(content, undefined, pastItsCell, measureTextFit\)/);
 });
