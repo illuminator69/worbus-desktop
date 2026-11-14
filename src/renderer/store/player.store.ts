@@ -2174,6 +2174,16 @@ export const incrementQueuePlayCount = (ids: string[]) => {
     });
 };
 
+/** B-437: move the queue's cover ids (song id -> current cover id); every entry of a song moves. */
+export const setQueueCoverIds = (changes: ReadonlyMap<string, string>) => {
+    usePlayerStoreBase.setState((state) => {
+        Object.values(state.queue.songs).forEach((song) => {
+            const imageId = changes.get(song.id);
+            if (imageId) song.imageId = imageId;
+        });
+    });
+};
+
 export const updateQueueSong = (songId: string, updatedSong: Song) => {
     usePlayerStoreBase.setState((state) => {
         Object.values(state.queue.songs).forEach((song) => {

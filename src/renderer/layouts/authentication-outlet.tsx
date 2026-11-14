@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { Outlet } from 'react-router';
 
+import { QueueCoverRefresh } from '/@/renderer/features/player/hooks/use-queue-cover-refresh';
 import { askForPassword } from '/@/renderer/features/servers/utils/ask-for-password';
 import { ServerSelector } from '/@/renderer/features/sidebar/components/server-selector';
 import { useServerAuthenticated } from '/@/renderer/hooks/use-server-authenticated';
@@ -53,5 +54,10 @@ export const AuthenticationOutlet = () => {
         return <PasswordNeeded />;
     }
 
-    return <Outlet />;
+    return (
+        <>
+            {authState === AuthState.VALID && <QueueCoverRefresh />}
+            <Outlet />
+        </>
+    );
 };
