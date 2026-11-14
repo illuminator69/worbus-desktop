@@ -12,6 +12,7 @@ import { ListContext } from '/@/renderer/context/list-context';
 import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
 import { AlbumArtistDetailFavoriteSongsListHeader } from '/@/renderer/features/artists/components/album-artist-detail-favorite-songs-list-header';
 import { AlbumArtistDetailFavoriteSongsListHeaderFilters } from '/@/renderer/features/artists/components/album-artist-detail-favorite-songs-list-header-filters';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { applyClientSideSongFilters } from '/@/renderer/features/playlists/hooks/use-playlist-track-list';
 import { AnimatedPage } from '/@/renderer/features/shared/components/animated-page';
@@ -19,7 +20,6 @@ import { FilterBar } from '/@/renderer/features/shared/components/filter-bar';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
 import { useSearchTermFilter } from '/@/renderer/features/shared/hooks/use-search-term-filter';
 import { FILTER_KEYS, searchLibraryItems } from '/@/renderer/features/shared/utils';
-import { usePlayerSong } from '/@/renderer/store';
 import { useAppStore } from '/@/renderer/store/app.store';
 import { useCurrentServer } from '/@/renderer/store/auth.store';
 import { useSettingsStore } from '/@/renderer/store/settings.store';
@@ -85,7 +85,7 @@ const AlbumArtistDetailFavoriteSongsListRoute = () => {
     const itemCount = sortedSongs.length;
 
     const tableConfig = useSettingsStore((state) => state.lists[ItemListKey.SONG]?.table);
-    const currentSong = usePlayerSong();
+    const currentSong = useRemoteAwarePlayerSong();
     const player = usePlayer();
 
     const columns = useMemo(() => {

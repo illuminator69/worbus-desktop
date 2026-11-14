@@ -11,10 +11,10 @@ import { ItemControls } from '/@/renderer/components/item-list/types';
 import { ListContext } from '/@/renderer/context/list-context';
 import { artistsQueries } from '/@/renderer/features/artists/api/artists-api';
 import { AlbumArtistDetailTopSongsListHeader } from '/@/renderer/features/artists/components/album-artist-detail-top-songs-list-header';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { AnimatedPage } from '/@/renderer/features/shared/components/animated-page';
 import { PageErrorBoundary } from '/@/renderer/features/shared/components/page-error-boundary';
-import { usePlayerSong } from '/@/renderer/store';
 import { useCurrentServer } from '/@/renderer/store/auth.store';
 import { useSettingsStore } from '/@/renderer/store/settings.store';
 import { useLocalStorage } from '/@/shared/hooks/use-local-storage';
@@ -57,7 +57,7 @@ const AlbumArtistDetailTopSongsListRoute = () => {
     const songs = useMemo(() => topSongsQuery?.data?.items || [], [topSongsQuery?.data?.items]);
 
     const tableConfig = useSettingsStore((state) => state.lists[ItemListKey.SONG]?.table);
-    const currentSong = usePlayerSong();
+    const currentSong = useRemoteAwarePlayerSong();
     const player = usePlayer();
 
     const columns = useMemo(() => {

@@ -10,11 +10,11 @@ import { ItemTableList } from '/@/renderer/components/item-list/item-table-list/
 import { ItemTableListColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { ItemControls, ItemListTableComponentProps } from '/@/renderer/components/item-list/types';
 import { useListContext } from '/@/renderer/context/list-context';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { usePlaylistSongListFilters } from '/@/renderer/features/playlists/hooks/use-playlist-song-list-filters';
 import { useSearchTermFilter } from '/@/renderer/features/shared/hooks/use-search-term-filter';
 import { searchLibraryItems } from '/@/renderer/features/shared/utils';
-import { usePlayerSong } from '/@/renderer/store';
 import { sortSongList } from '/@/shared/api/utils';
 import {
     LibraryItem,
@@ -95,7 +95,7 @@ export const PlaylistDetailSongListTable = forwardRef<any, PlaylistDetailSongLis
 
         const player = usePlayer();
 
-        const currentSong = usePlayerSong();
+        const currentSong = useRemoteAwarePlayerSong();
 
         const overrideControls: Partial<ItemControls> = useMemo(() => {
             return {
@@ -221,7 +221,7 @@ export const PlaylistDetailSongListEditTable = forwardRef<any, PlaylistDetailSon
 
         const player = usePlayer();
 
-        const currentSong = usePlayerSong();
+        const currentSong = useRemoteAwarePlayerSong();
 
         const overrideControls: Partial<ItemControls> = useMemo(() => {
             return {

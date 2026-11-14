@@ -12,9 +12,9 @@ import { ItemTableList } from '/@/renderer/components/item-list/item-table-list/
 import { ItemTableListColumn } from '/@/renderer/components/item-list/item-table-list/item-table-list-column';
 import { ItemListTableComponentProps } from '/@/renderer/components/item-list/types';
 import { useListContext } from '/@/renderer/context/list-context';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { sortedColumnsFor } from '/@/renderer/features/library/library-model';
 import { songsQueries } from '/@/renderer/features/songs/api/songs-api';
-import { usePlayerSong } from '/@/renderer/store';
 import { LibraryItem, SongListQuery, SongListSort, SortOrder } from '/@/shared/types/domain-types';
 import { ItemListKey } from '/@/shared/types/types';
 
@@ -82,7 +82,7 @@ export const SongListPaginatedTable = ({
         [query.sortBy, query.sortOrder],
     );
 
-    const currentSong = usePlayerSong();
+    const currentSong = useRemoteAwarePlayerSong();
 
     return (
         <ItemListWithPagination

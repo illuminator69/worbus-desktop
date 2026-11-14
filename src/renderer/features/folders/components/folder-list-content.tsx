@@ -11,10 +11,11 @@ import { useListContext } from '/@/renderer/context/list-context';
 import { folderQueries } from '/@/renderer/features/folders/api/folder-api';
 import { FolderTreeBrowser } from '/@/renderer/features/folders/components/folder-tree-browser';
 import { useFolderListFilters } from '/@/renderer/features/folders/hooks/use-folder-list-filters';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { usePlayer } from '/@/renderer/features/player/context/player-context';
 import { ListWithSidebarContainer } from '/@/renderer/features/shared/components/list-with-sidebar-container';
 import { FILTER_KEYS } from '/@/renderer/features/shared/utils';
-import { useCurrentServerId, useListSettings, usePlayerSong } from '/@/renderer/store';
+import { useCurrentServerId, useListSettings } from '/@/renderer/store';
 import { Spinner } from '/@/shared/components/spinner/spinner';
 import { Folder, LibraryItem, Song, SongListSort, SortOrder } from '/@/shared/types/domain-types';
 import { ItemListKey, ListDisplayType, Play } from '/@/shared/types/types';
@@ -151,7 +152,7 @@ export const FolderListView = ({ folderQuery }: FolderListViewProps) => {
         };
     }, [navigateToFolder, player]);
 
-    const currentSong = usePlayerSong();
+    const currentSong = useRemoteAwarePlayerSong();
 
     switch (display) {
         // case ListDisplayType.GRID: {

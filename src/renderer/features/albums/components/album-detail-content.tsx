@@ -23,6 +23,7 @@ import { ItemControls } from '/@/renderer/components/item-list/types';
 import { aboutRow } from '/@/renderer/features/albums/album-page-layout';
 import { albumQueries } from '/@/renderer/features/albums/api/album-api';
 import { AlbumInfiniteCarousel } from '/@/renderer/features/albums/components/album-infinite-carousel';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
 import { AlbumGapBox } from '/@/renderer/features/lbbot/components/gap-box';
 import { SimilarAlbumsShelf } from '/@/renderer/features/lbbot/components/similar-albums-shelf';
 import { useLbBotAlbumMeta } from '/@/renderer/features/lbbot/hooks/use-lbbot';
@@ -39,7 +40,7 @@ import {
 import { FILTER_KEYS, searchLibraryItems } from '/@/renderer/features/shared/utils';
 import { useHotkeys } from '/@/renderer/hooks/use-hotkeys';
 import { AppRoute } from '/@/renderer/router/routes';
-import { useCurrentServer, usePlayerSong } from '/@/renderer/store';
+import { useCurrentServer } from '/@/renderer/store';
 import { useExternalLinks, useSettingsStore } from '/@/renderer/store/settings.store';
 import { sentenceCase, titleCase } from '/@/renderer/utils';
 import { replaceURLWithHTMLLinks } from '/@/renderer/utils/linkify';
@@ -759,7 +760,7 @@ const AlbumDetailSongsTable = ({ songs }: AlbumDetailSongsTableProps) => {
     const [debouncedSearchTerm] = useDebouncedValue(searchTerm, 300);
     const tableConfig = useSettingsStore((state) => state.lists[ItemListKey.ALBUM_DETAIL]?.table);
 
-    const currentSong = usePlayerSong();
+    const currentSong = useRemoteAwarePlayerSong();
 
     const [sortBy, setSortBy] = useState<SongListSort>(SongListSort.ID);
     const [sortOrder, setSortOrder] = useState<SortOrder>(SortOrder.ASC);

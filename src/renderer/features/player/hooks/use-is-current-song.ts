@@ -1,20 +1,9 @@
-import { useMemo } from 'react';
-
-import { usePlayerSong } from '/@/renderer/store';
+import { useRemoteAwarePlayerSong } from '/@/renderer/features/hub/hooks/use-remote-aware';
+import { songRowIsPlaying } from '/@/renderer/features/player/utils/row-is-playing';
 import { QueueSong, Song } from '/@/shared/types/domain-types';
 
+/** Whether a list row is the playing song: the session's, whichever device plays it (B-451). */
 export const useIsCurrentSong = (song: QueueSong | Song) => {
-    const currentSong = usePlayerSong();
-
-    const isActive = useMemo(() => {
-        const queueSong = song as QueueSong;
-
-        if (queueSong._uniqueId != null && queueSong._uniqueId !== '') {
-            return queueSong._uniqueId === currentSong?._uniqueId;
-        }
-
-        return song.id === currentSong?.id;
-    }, [song, currentSong?.id, currentSong?._uniqueId]);
-
-    return { isActive };
+    const currentSong = useRemoteAwarePlayerSong();
+    return { isActive: songRowIsPlaying(song as QueueSong, currentSong) };
 };
