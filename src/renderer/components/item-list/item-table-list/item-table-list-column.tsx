@@ -812,7 +812,6 @@ export const TableColumnTextContainer = (
                 [styles.center]: props.columns[props.columnIndex].align === 'center',
                 [styles.dataRow]: isDataRow,
                 [styles.dragging]: isDataRow && isDragging,
-                [styles.left]: props.columns[props.columnIndex].align === 'start',
                 [styles.noHorizontalPadding]: isNoHorizontalPaddingColumn(props.type),
                 [styles.numberCell]: isNumber,
                 [styles.paddingLg]: props.cellPadding === 'lg',
@@ -823,6 +822,7 @@ export const TableColumnTextContainer = (
                 [styles.right]: props.columns[props.columnIndex].align === 'end',
                 [styles.rowHoverHighlightEnabled]: isDataRow && props.enableRowHoverHighlight,
                 [styles.rowSelected]: isDataRow && isSelected,
+                [styles.start]: props.columns[props.columnIndex].align === 'start',
                 // When clamped, the bottom border is drawn on the spacer below
                 // instead.
                 [styles.withHorizontalBorder]: showHorizontalBorder && clampHeight === null,
@@ -1003,7 +1003,6 @@ export const TableColumnContainer = (
                 [styles.center]: props.columns[props.columnIndex].align === 'center',
                 [styles.dataRow]: isDataRow,
                 [styles.dragging]: isDataRow && isDragging,
-                [styles.left]: props.columns[props.columnIndex].align === 'start',
                 [styles.noHorizontalPadding]: isNoHorizontalPaddingColumn(props.type),
                 [styles.noVerticalPadding]:
                     props.type === TableColumn.ALBUM_GROUP && (props.albumGroupImageSize ?? 0) > 0,
@@ -1019,6 +1018,7 @@ export const TableColumnContainer = (
                     props.type !== TableColumn.ALBUM_GROUP,
                 [styles.rowSelected]:
                     isDataRow && isSelected && props.type !== TableColumn.ALBUM_GROUP,
+                [styles.start]: props.columns[props.columnIndex].align === 'start',
                 // When clamped, the bottom border is drawn on the spacer below instead.
                 [styles.withHorizontalBorder]: showHorizontalBorder && clampHeight === null,
                 [styles.withVerticalBorder]: showVerticalBorder,

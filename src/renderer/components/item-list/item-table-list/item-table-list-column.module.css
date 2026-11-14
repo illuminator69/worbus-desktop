@@ -575,9 +575,8 @@
    side's padding by exactly what it lacks, so "10:03" reads whole instead of "0:03". The shift is 0
    for a number that fits its side, which keeps its alignment. 100cqw is the cell's content box and
    100% the box's own width, so the only edge is the padding box: no threshold to guess. Centred, a
-   box no wider than the padding box already stays inside it. The table's data cells reach start
-   alignment as `left` (`.container.start` is never set on them), so a number cell names it here. */
-.number-cell.left > .number-content {
+   box no wider than the padding box already stays inside it. B-275: start is `.container.start`. */
+.number-cell.start > .number-content {
     align-self: flex-start;
     text-align: left;
     translate: min(0px, 100cqw + var(--number-cell-padding) - 100%);

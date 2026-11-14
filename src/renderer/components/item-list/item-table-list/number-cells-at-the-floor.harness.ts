@@ -243,12 +243,12 @@ test('aNumberWiderThanItsCellEndsInAnEllipsisInsideIt', () => {
 
 test('aNumberUsesTheOtherSidesPaddingBeforeItIsCut', () => {
     const css = read(CSS);
-    // The table's data cells reach their start alignment as the module's `left` class.
+    // B-275: the table's data cells reach their start alignment as the module's `start` class.
     assert.match(
         container(),
-        /\[styles\.left\]: props\.columns\[props\.columnIndex\]\.align === 'start',/,
+        /\[styles\.start\]: props\.columns\[props\.columnIndex\]\.align === 'start',/,
     );
-    const start = rules(css, '.number-cell.left > .number-content');
+    const start = rules(css, '.number-cell.start > .number-content');
     assert.match(start, /align-self: flex-start;/);
     assert.match(start, /translate: min\(0px, 100cqw \+ var\(--number-cell-padding\) - 100%\);/);
     assert.match(
@@ -327,9 +327,9 @@ test('every_data_cell_alignment_class_has_its_container_rule', () => {
     const css = read(CSS);
     const source = read('./item-table-list-column.tsx');
     const data = source.slice(0, source.indexOf('className={clsx(styles.headerContent'));
-    const classes = [...data.matchAll(/\[styles\.(\w+)\]: props\.columns\[props\.columnIndex\]\.align ===/g)].map(
-        (m) => m[1],
-    );
+    const classes = [
+        ...data.matchAll(/\[styles\.(\w+)\]: props\.columns\[props\.columnIndex\]\.align ===/g),
+    ].map((m) => m[1]);
     assert.ok(classes.length >= 6, `${classes.length} alignment classes`);
     for (const name of classes) {
         const kebab = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
