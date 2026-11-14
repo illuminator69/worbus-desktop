@@ -13,7 +13,9 @@ const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8'
 
 test('the_fresh_shelf_has_one_title', () => {
     const en = JSON.parse(read('../../../i18n/locales/en.json'));
-    const discover = /id: 'fresh',[\s\S]*?title: '([^']+)'/.exec(read('../discover/discover-rows.ts'));
+    const discover = /id: 'fresh',[\s\S]*?title: '([^']+)'/.exec(
+        read('../discover/discover-rows.ts'),
+    );
     assert.ok(discover, 'the Discover row');
     assert.equal(en.page.home.fresh, discover[1]);
 });

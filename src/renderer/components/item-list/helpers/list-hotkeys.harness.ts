@@ -18,11 +18,11 @@ import { listHotkey } from './list-hotkey.ts';
 const event = () => {
     let prevented = false;
     return {
-        get prevented() {
-            return prevented;
-        },
         preventDefault: () => {
             prevented = true;
+        },
+        get prevented() {
+            return prevented;
         },
     } as unknown as KeyboardEvent & { prevented: boolean };
 };
@@ -38,7 +38,11 @@ test('a_binding_may_leave_the_default_alone', () => {
 
 test('enter_reaches_a_focused_link_when_the_list_is_not_focused', () => {
     let played = 0;
-    const [, handler, options] = listHotkey('enter', () => false, () => (played += 1));
+    const [, handler, options] = listHotkey(
+        'enter',
+        () => false,
+        () => (played += 1),
+    );
     const e = event();
     handler(e);
     assert.equal(options?.preventDefault, false);
@@ -48,7 +52,11 @@ test('enter_reaches_a_focused_link_when_the_list_is_not_focused', () => {
 
 test('enter_on_the_focused_list_plays_and_keeps_the_key', () => {
     let played = 0;
-    const [, handler] = listHotkey('enter', () => true, () => (played += 1));
+    const [, handler] = listHotkey(
+        'enter',
+        () => true,
+        () => (played += 1),
+    );
     const e = event();
     handler(e);
     assert.equal(e.prevented, true);
@@ -58,5 +66,9 @@ test('enter_on_the_focused_list_plays_and_keeps_the_key', () => {
 test('every_list_binding_is_a_list_hotkey', () => {
     const src = readFileSync(new URL('./use-list-hotkeys.ts', import.meta.url), 'utf8');
     const list = src.slice(src.indexOf('useHotkeys(['));
-    assert.doesNotMatch(list, /if \(!isListFocused\(\)\) return;/, 'a binding prevents while unfocused');
+    assert.doesNotMatch(
+        list,
+        /if \(!isListFocused\(\)\) return;/,
+        'a binding prevents while unfocused',
+    );
 });

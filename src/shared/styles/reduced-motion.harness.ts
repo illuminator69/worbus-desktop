@@ -40,6 +40,8 @@ test('the_modules_that_move_are_many', () => {
     const files = execFileSync('git', ['ls-files', '*.module.css'], { cwd: ROOT, encoding: 'utf8' })
         .split('\n')
         .filter(Boolean)
-        .filter((f) => /\b(transition|animation)\s*:/.test(readFileSync(path.join(ROOT, f), 'utf8')));
+        .filter((f) =>
+            /\b(transition|animation)\s*:/.test(readFileSync(path.join(ROOT, f), 'utf8')),
+        );
     assert.ok(files.length >= 60, `${files.length} modules move`);
 });

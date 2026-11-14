@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -8,7 +9,6 @@ import {
     KICKER_FADE_SPAN,
     kickerOpacity,
 } from './header-bar-progress.ts';
-import { readFileSync } from 'node:fs';
 
 /**
  * Sticky headers, Task 2:  node --test src/renderer/features/shared/components/header-bar-progress.harness.ts

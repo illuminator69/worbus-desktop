@@ -43,5 +43,9 @@ test('the_table_cells_use_them', () => {
     const cell = read('./item-table-list-column.tsx');
     const at = cell.indexOf('case TableColumn.SAMPLE_RATE:');
     assert.ok(at > 0);
-    assert.match(cell.slice(at, at + 200), /SampleRateColumn/, 'the rate is drawn as a bare number');
+    assert.match(
+        cell.slice(at, at + 200),
+        /SampleRateColumn/,
+        'the rate is drawn as a bare number',
+    );
 });
