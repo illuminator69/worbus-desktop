@@ -370,11 +370,11 @@ const RatingButton = memo(
         const isMutatingRating = useIsMutatingRating();
         return (
             <Rating
+                busy={isMutatingRating}
                 className={styles.rating}
                 onChange={onChange}
                 onClick={ratingClickHandler}
                 onMouseDown={ratingMouseDownHandler}
-                readOnly={isMutatingRating}
                 size="sm"
                 value={rating}
             />

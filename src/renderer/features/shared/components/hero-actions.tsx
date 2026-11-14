@@ -190,8 +190,8 @@ export const HeroActions = ({
                 <div className={styles.end}>
                     {onRating && (
                         <Rating
+                            busy={isMutatingRating}
                             onChange={onRating}
-                            readOnly={isMutatingRating}
                             size="md"
                             value={rating || 0}
                         />

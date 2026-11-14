@@ -99,9 +99,9 @@ export const AlbumGroupControls = ({ albumId, serverId, serverType }: AlbumGroup
             )}
             {showRating && (
                 <Rating
+                    busy={isMutatingRating}
                     className={styles.rating}
                     onChange={handleRating}
-                    readOnly={isMutatingRating}
                     size="xs"
                     value={album.userRating || 0}
                 />

@@ -10,6 +10,7 @@ export const RatingColumn = ({ controls, internalState, song }: ItemDetailListCe
 
     return (
         <Rating
+            busy={isMutatingRating}
             onChange={(rating) => {
                 const index = internalState?.findItemIndex(song.id) ?? -1;
                 controls?.onRating?.({
@@ -21,7 +22,6 @@ export const RatingColumn = ({ controls, internalState, song }: ItemDetailListCe
                     rating,
                 });
             }}
-            readOnly={isMutatingRating}
             size="xs"
             value={value}
         />

@@ -442,8 +442,8 @@ export const LibraryHeaderMenu = ({
             <Group gap="sm" wrap="nowrap">
                 {onRating && (
                     <Rating
+                        busy={isMutatingRating}
                         onChange={onRating}
-                        readOnly={isMutatingRating}
                         size="lg"
                         value={rating || 0}
                     />
