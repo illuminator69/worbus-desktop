@@ -167,6 +167,32 @@ export function MpvPlayer() {
         return () => clearInterval(interval);
     }, [hasCurrentSong, status, setTimestamp]);
 
+    // m5 (B-423 on mpv): where mpv stopped is the queue's position. The poll above stops when the
+    // store leaves PLAYING, and mpv plays on through the fade, so the last poll was up to ~0.8 s
+    // short. Once the local status is PAUSED the engine has paused mpv (its pause goes over the same
+    // ordered IPC before this read), so mpv's own position is read once and written.
+    const wasLocallyPlayingRef = useRef(localPlayerStatus === PlayerStatus.PLAYING);
+    const songIdRef = useRef(currentSong?.id);
+    songIdRef.current = currentSong?.id;
+    const recordStoppedPosition = useCallback(async () => {
+        if (!mpvPlayer) return;
+        const songId = songIdRef.current;
+        try {
+            const time = await mpvPlayer.getCurrentTime();
+            if (time === undefined || songIdRef.current !== songId) return;
+            if (usePlayerStore.getState().player.status !== PlayerStatus.PAUSED) return;
+            setTimestamp(time);
+        } catch {
+            // The poll's last value stands.
+        }
+    }, [setTimestamp]);
+
+    useEffect(() => {
+        const was = wasLocallyPlayingRef.current;
+        wasLocallyPlayingRef.current = localPlayerStatus === PlayerStatus.PLAYING;
+        if (was && localPlayerStatus === PlayerStatus.PAUSED) recordStoppedPosition();
+    }, [localPlayerStatus, recordStoppedPosition]);
+
     useEffect(() => {
         if (status !== PlayerStatus.PLAYING || localPlayerStatus === PlayerStatus.PLAYING) {
             return;
