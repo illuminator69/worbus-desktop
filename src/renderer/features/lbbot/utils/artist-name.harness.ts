@@ -27,8 +27,18 @@ test('every pair answers its shared verdict, either way round', () => {
     assert.deepEqual(wrong, []);
 });
 
-test("an Android column is only written where Android's answer differs", () => {
-    for (const v of KEY_VECTORS) if (v.android !== undefined) assert.notEqual(v.android, v.key);
-    for (const v of SAME_ARTIST_VECTORS)
-        if (v.android !== undefined) assert.notEqual(v.android, v.same);
+/**
+ * Q-174: the `android` column described Android before it took the shared rule. Its
+ * `ArtistNameVectorsTest` (navic-gaps, generated from this table at 557d89831, all 89 rows, both ways
+ * round) holds the shared answer on every row and is green (2397 host tests, 0 failures, `9af1d34c`,
+ * RESULTS-phase-b-android-2026-11-10.md). A row that says Android answers otherwise is stale.
+ */
+test('no row claims Android answers otherwise', () => {
+    const claims = [...KEY_VECTORS, ...SAME_ARTIST_VECTORS].filter(
+        (v) => (v as { android?: unknown }).android !== undefined,
+    );
+    assert.deepEqual(
+        claims.map((v) => v.note),
+        [],
+    );
 });
