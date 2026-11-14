@@ -51,6 +51,7 @@ import { PlaylistReorderColumn } from '/@/renderer/components/item-list/item-tab
 import { RatingColumn } from '/@/renderer/components/item-list/item-table-list/columns/rating-column';
 import { ReleaseYearColumn } from '/@/renderer/components/item-list/item-table-list/columns/release-year-column';
 import { RowIndexColumn } from '/@/renderer/components/item-list/item-table-list/columns/row-index-column';
+import { SampleRateColumn } from '/@/renderer/components/item-list/item-table-list/columns/sample-rate-column';
 import { SizeColumn } from '/@/renderer/components/item-list/item-table-list/columns/size-column';
 import { TextColumn } from '/@/renderer/components/item-list/item-table-list/columns/text-column';
 import { TitleArtistColumn } from '/@/renderer/components/item-list/item-table-list/columns/title-artist-column';
@@ -262,11 +263,9 @@ const ItemTableListColumnBase = (props: ItemTableListColumn) => {
             case TableColumn.BPM:
             case TableColumn.CHANNELS:
             case TableColumn.DISC_NUMBER:
-            case TableColumn.SAMPLE_RATE:
                 return <NumericColumn {...props} {...dragProps} controls={controls} type={type} />;
             case TableColumn.BIT_RATE:
                 return <BitRateColumn {...props} {...dragProps} controls={controls} type={type} />;
-
             case TableColumn.COMPOSER:
                 return <ComposerColumn {...props} {...dragProps} controls={controls} type={type} />;
 
@@ -315,6 +314,11 @@ const ItemTableListColumnBase = (props: ItemTableListColumn) => {
 
             case TableColumn.ROW_INDEX:
                 return <RowIndexColumn {...props} {...dragProps} controls={controls} type={type} />;
+
+            case TableColumn.SAMPLE_RATE:
+                return (
+                    <SampleRateColumn {...props} {...dragProps} controls={controls} type={type} />
+                );
 
             case TableColumn.SIZE:
                 return <SizeColumn {...props} {...dragProps} controls={controls} type={type} />;

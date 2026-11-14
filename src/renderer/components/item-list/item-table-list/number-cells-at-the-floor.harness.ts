@@ -290,6 +290,7 @@ const NUMBER_CELLS = [
     'NumericColumn',
     'RelativeDateColumn',
     'ReleaseYearColumn',
+    'SampleRateColumn',
     'SizeColumn',
     'TrackDateColumn',
     'TrackNumberColumn',
