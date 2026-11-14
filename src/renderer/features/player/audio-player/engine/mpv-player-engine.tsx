@@ -9,7 +9,7 @@ import { eventEmitter } from '/@/renderer/events/event-emitter';
 import { useEffectiveTranscode } from '/@/renderer/features/player/audio-player/hooks/use-effective-transcode';
 import { usePlayerEvents } from '/@/renderer/features/player/audio-player/hooks/use-player-events';
 import { getSongUrl } from '/@/renderer/features/player/audio-player/hooks/use-stream-url';
-import { AudioPlayer, PlayerOnProgressProps } from '/@/renderer/features/player/audio-player/types';
+import { AudioPlayer } from '/@/renderer/features/player/audio-player/types';
 import { useRadioStore } from '/@/renderer/features/radio/hooks/use-radio-player';
 import { getMpvProperties } from '/@/renderer/features/settings/components/playback/mpv-properties';
 import {
@@ -17,7 +17,6 @@ import {
     useMpvInitialized,
     usePlaybackSettings,
     usePlayerActions,
-    usePlayerSong,
     usePlayerStore,
     useSettingsStore,
 } from '/@/renderer/store';
@@ -30,7 +29,6 @@ interface MpvPlayerEngineProps {
     isMuted: boolean;
     isTransitioning: boolean;
     onEnded: () => void;
-    onProgress: (e: PlayerOnProgressProps) => void;
     playerRef: RefObject<MpvPlayerEngineHandle | null>;
     playerStatus: PlayerStatus;
     preservePitch?: boolean;
@@ -42,26 +40,12 @@ const mpvPlayer = isElectron() ? window.api.mpvPlayer : null;
 const mpvPlayerListener = isElectron() ? window.api.mpvPlayerListener : null;
 const ipc = isElectron() ? window.api.ipc : null;
 
-const PROGRESS_UPDATE_INTERVAL = 250;
-
 export const MpvPlayerEngine = (props: MpvPlayerEngineProps) => {
-    const {
-        isMuted,
-        isTransitioning,
-        onEnded,
-        onProgress,
-        playerRef,
-        playerStatus,
-        preservePitch,
-        speed,
-        volume,
-    } = props;
+    const { isMuted, onEnded, playerRef, playerStatus, preservePitch, speed, volume } = props;
 
     const [internalVolume, setInternalVolume] = useState(volume / 100 || 0);
     const isInitialized = useMpvInitialized();
-    const currentSong = usePlayerSong();
 
-    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const hasPopulatedQueueRef = useRef<boolean>(false);
     const isMountedRef = useRef<boolean>(true);
     const [initializationTick, setInitializationTick] = useState(0);
@@ -280,49 +264,8 @@ export const MpvPlayerEngine = (props: MpvPlayerEngineProps) => {
         }
     }, [initializationTick, isInitialized, playerStatus]);
 
-    const hasCurrentSong = !!currentSong?.id;
-
-    // Set up progress tracking
-    useEffect(() => {
-        if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-        }
-        if (!hasCurrentSong) {
-            return;
-        }
-        let cancelled = false;
-
-        if (playerStatus !== PlayerStatus.PLAYING) {
-            return;
-        }
-
-        const updateProgress = async () => {
-            if (!mpvPlayer || cancelled) {
-                return;
-            }
-
-            try {
-                const time = await mpvPlayer.getCurrentTime();
-                if (time !== undefined && !cancelled) {
-                    onProgress({
-                        played: time / (time + 10),
-                        playedSeconds: time,
-                    });
-                }
-            } catch {
-                // Catch
-            }
-        };
-        progressIntervalRef.current = setInterval(updateProgress, PROGRESS_UPDATE_INTERVAL);
-        updateProgress();
-        return () => {
-            cancelled = true;
-            if (progressIntervalRef.current) {
-                clearInterval(progressIntervalRef.current);
-                progressIntervalRef.current = null;
-            }
-        };
-    }, [hasCurrentSong, isTransitioning, onProgress, playerStatus]);
+    // Q-164: no position poll here. `mpv-player.tsx` polls mpv's position (500 ms) and writes the
+    // timestamp; this engine's 250 ms poll fed an `onProgress` that did nothing.
 
     const { mediaAutoNext } = usePlayerActions();
 

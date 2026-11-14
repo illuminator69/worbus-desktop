@@ -80,11 +80,6 @@ export function MpvPlayer() {
         [],
     );
 
-    const onProgress = useCallback(() => {
-        // Progress callback is now only used for transition logic
-        // Timestamp updates are handled separately in useEffect
-    }, []);
-
     const handleOnEnded = useCallback(() => {
         // When mpv auto-advances to the next song (position 1 becomes position 0),
         // we need to update the player store first, then update the mpv queue with the new next song
@@ -189,7 +184,6 @@ export function MpvPlayer() {
             isMuted={isMuted}
             isTransitioning={isTransitioning}
             onEnded={handleOnEnded}
-            onProgress={onProgress}
             playerRef={playerRef}
             playerStatus={localPlayerStatus}
             preservePitch={preservePitch}

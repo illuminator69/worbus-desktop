@@ -208,8 +208,10 @@
     gap: 0;
     width: 100%;
     padding: var(--theme-spacing-xs);
+
+    /* Q-164: no backdrop blur (a filter pass per card per frame in a scrolling grid; the owner
+       approved removing it, 2026-11-14). */
     background-color: alpha(var(--theme-colors-background), 0.5);
-    backdrop-filter: blur(2px);
     transform: translateY(0);
     transition:
         transform 0.2s ease-in-out,
