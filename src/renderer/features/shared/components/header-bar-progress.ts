@@ -35,3 +35,29 @@ export const headerBarLine = ({
     restTitleBottom: number;
     span: number;
 }): number => (span <= 0 ? barBottom : Math.min(barBottom, restTitleBottom - span));
+
+/** B-235: the hero's kicker ("ALBUM") fades out over half the bar's span. */
+export const KICKER_FADE_SPAN = BAR_FADE_SPAN / 2;
+
+/**
+ * B-235: the hero kicker's opacity. It fades out over `span` before its bottom reaches the line the bar
+ * measures against (the same rising line as the title's, so the page opens with it whole), and so it
+ * is gone while the bar is still fading in instead of sitting under it as a second label.
+ */
+export const kickerOpacity = ({
+    barBottom,
+    kickerBottom,
+    restKickerBottom,
+    span,
+}: {
+    barBottom: number;
+    kickerBottom: number;
+    restKickerBottom: number;
+    span: number;
+}): number =>
+    1 -
+    headerBarProgress({
+        barBottom: headerBarLine({ barBottom, restTitleBottom: restKickerBottom, span }),
+        span,
+        titleBottom: kickerBottom,
+    });

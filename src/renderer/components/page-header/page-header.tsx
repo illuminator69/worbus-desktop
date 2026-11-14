@@ -11,6 +11,8 @@ import {
     BAR_FADE_SPAN,
     headerBarLine,
     headerBarProgress,
+    KICKER_FADE_SPAN,
+    kickerOpacity,
 } from '/@/renderer/features/shared/components/header-bar-progress';
 import { LibraryBackgroundOverlay } from '/@/renderer/features/shared/components/library-background-overlay';
 import { setWashOrigin, WashUnderlay } from '/@/renderer/features/shared/components/wash-underlay';
@@ -142,6 +144,9 @@ const BasePageHeader = ({
             const barRect = bar.getBoundingClientRect();
             setWashOrigin(bar, barRect.left, barRect.top);
             let progress = 0;
+            // B-235: the hero's kicker fades out ahead of the bar, whole at the top of the page.
+            const kicker = hero?.querySelector<HTMLElement>('[data-hero-kicker]');
+            let kickerShown = 1;
             // At the top of the page the bar never shows, whatever the title's geometry.
             if (title && scroller.scrollTop > 0) {
                 const span = reduce.matches ? 0 : BAR_FADE_SPAN;
@@ -152,7 +157,18 @@ const BasePageHeader = ({
                     span,
                 });
                 progress = headerBarProgress({ barBottom, span, titleBottom });
+                if (kicker) {
+                    const kickerSpan = reduce.matches ? 0 : KICKER_FADE_SPAN;
+                    const kickerBottom = kicker.getBoundingClientRect().bottom;
+                    kickerShown = kickerOpacity({
+                        barBottom: barRect.bottom,
+                        kickerBottom,
+                        restKickerBottom: kickerBottom + scroller.scrollTop,
+                        span: kickerSpan,
+                    });
+                }
             }
+            if (kicker) kicker.style.opacity = kickerShown === 1 ? '' : String(kickerShown);
             bar.style.setProperty('--bar-progress', String(progress));
             bar.setAttribute('data-visible', progress >= 1 ? 'true' : 'false');
             bar.toggleAttribute('data-fading', progress > 0 && progress < 1);

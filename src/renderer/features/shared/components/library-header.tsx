@@ -256,11 +256,14 @@ export const LibraryHeader = forwardRef(
                 {title && (
                     <div className={styles.metadataSection}>
                         {item.children ? (
-                            <div className={styles.itemType}>{item.children}</div>
+                            <div className={styles.itemType} data-hero-kicker>
+                                {item.children}
+                            </div>
                         ) : (
                             <Text
                                 className={styles.itemType}
                                 component={Link}
+                                data-hero-kicker
                                 fw={hero ? undefined : 600}
                                 isLink
                                 size="md"
