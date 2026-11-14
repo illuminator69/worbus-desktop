@@ -26,3 +26,16 @@ test('the_overlay_leaves_a_taken_escape_alone', () => {
     const src = read('../../../layouts/default-layout/right-sidebar.tsx');
     assert.match(src, /event\.key !== 'Escape' \|\| event\.defaultPrevented/);
 });
+
+/**
+ * The stage 2 review's n2: the box took every Escape, so on an empty box the first Escape cleared
+ * nothing and only blurred, and a second one closed the overlay. An empty box leaves its Escape to
+ * the overlay (one Escape closes it); a box with text still takes the first one to clear itself.
+ */
+test('an_empty_search_box_leaves_its_escape_to_the_overlay', () => {
+    const src = read('./search-input.tsx');
+    const at = src.indexOf('const handleEscape');
+    const body = src.slice(at, src.indexOf('\n    };', at));
+    assert.doesNotMatch(body, /^\s*e\.preventDefault\(\);/m, 'an empty box takes the Escape too');
+    assert.match(body, /if \(e\.currentTarget\.value\) e\.preventDefault\(\);/);
+});
