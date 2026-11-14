@@ -51,6 +51,8 @@ export const SearchInput = ({
 
     const handleEscape = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.code === 'Escape') {
+            // B-214: this Escape is the box's (it clears and leaves the field), not an overlay's.
+            e.preventDefault();
             onChange?.({ target: { value: '' } } as ChangeEvent<HTMLInputElement>);
             if (ref.current) {
                 ref.current.value = '';
