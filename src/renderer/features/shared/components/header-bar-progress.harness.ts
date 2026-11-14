@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { BAR_FADE_SPAN, headerBarLine, headerBarProgress } from './header-bar-progress.ts';
+import {
+    BAR_FADE_SPAN,
+    headerBarLine,
+    headerBarProgress,
+    KICKER_FADE_SPAN,
+    kickerOpacity,
+} from './header-bar-progress.ts';
+import { readFileSync } from 'node:fs';
 
 /**
  * Sticky headers, Task 2:  node --test src/renderer/features/shared/components/header-bar-progress.harness.ts
@@ -62,4 +69,59 @@ test('lineWithZeroSpanIsTheBar', () => {
 
 test('theSpanIsSpotifys', () => {
     assert.equal(BAR_FADE_SPAN, 64);
+});
+
+/**
+ * B-235 (the owner, 2026-11-14: fade the "ALBUM" kicker before the sticky header reaches it). Measured
+ * on the workstation 2026-10-28: the bar's box ends at 147, the kicker rests at 134..152, so at scroll
+ * 20 / 40 / 60 the kicker sat under a bar at 0.31 / 0.63 / 0.94, two labels on screen for 60 px. The
+ * kicker now fades out over KICKER_FADE_SPAN (half the bar's span) before its bottom reaches the line
+ * the bar measures against, so it is gone while the bar is still at half.
+ */
+const albumPage = (scroll: number) => ({
+    barBottom: 147,
+    kickerBottom: 152 - scroll,
+    restKickerBottom: 152,
+    span: KICKER_FADE_SPAN,
+});
+
+test('the_kicker_is_whole_at_rest_and_gone_before_the_bar_is', () => {
+    assert.equal(KICKER_FADE_SPAN, BAR_FADE_SPAN / 2);
+    assert.equal(kickerOpacity(albumPage(0)), 1);
+    assert.equal(kickerOpacity(albumPage(16)), 0.5);
+    assert.equal(kickerOpacity(albumPage(KICKER_FADE_SPAN)), 0);
+    assert.equal(kickerOpacity(albumPage(60)), 0);
+    // The bar at the scroll where the kicker is gone (the title rests at 216): under half.
+    const bar = headerBarProgress({
+        barBottom: headerBarLine({ barBottom: 147, restTitleBottom: 216, span: BAR_FADE_SPAN }),
+        span: BAR_FADE_SPAN,
+        titleBottom: 216 - KICKER_FADE_SPAN,
+    });
+    assert.ok(bar <= 0.5, `bar ${bar}`);
+});
+
+test('a_kicker_far_below_the_bar_fades_just_before_it', () => {
+    // A tall window: the kicker rests 300 px under the bar's bottom.
+    const page = (scroll: number) => ({
+        barBottom: 147,
+        kickerBottom: 447 - scroll,
+        restKickerBottom: 447,
+        span: KICKER_FADE_SPAN,
+    });
+    assert.equal(kickerOpacity(page(200)), 1);
+    assert.equal(kickerOpacity(page(300 - 16)), 0.5);
+    assert.equal(kickerOpacity(page(300)), 0);
+});
+
+test('reduced_motion_steps', () => {
+    const step = (kickerBottom: number) =>
+        kickerOpacity({ barBottom: 147, kickerBottom, restKickerBottom: 152, span: 0 });
+    assert.equal(step(152), 1);
+    assert.equal(step(147), 0);
+});
+
+test('the_page_header_fades_the_heros_kicker', () => {
+    const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), 'utf8');
+    assert.match(read('./library-header.tsx'), /data-hero-kicker/);
+    assert.match(read('../../../components/page-header/page-header.tsx'), /kickerOpacity\(/);
 });
