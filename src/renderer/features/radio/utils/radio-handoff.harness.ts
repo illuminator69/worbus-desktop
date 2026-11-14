@@ -110,3 +110,26 @@ test('a_station_that_fails_stops_by_the_plan', () => {
         'a station that cannot play after its retries is left playing silence',
     );
 });
+
+/**
+ * B-423 (VM walk 2026-11-13: paused at 124.3 s, a station, Stop: the queue back at 123.7 / 123.9):
+ * the queue's position is the last progress tick written while the store said PLAYING. A pause flips
+ * the store first; the element plays on through the 300 ms fade (`audioFadeOnStatusChange`) and up
+ * to one 250 ms tick, unrecorded. So the hand-back (and the hub's report) was 0.3 to 0.55 s short.
+ * The web player now records the element's own position when it stops. And a hand-back seek waiting
+ * for the queue's source is dropped when the song changes first, as the held seek is (B-402 M1):
+ * it was a position in the song that is gone.
+ */
+test('the_queue_records_where_its_element_stopped', () => {
+    const player = readFileSync(
+        new URL('../../player/audio-player/web-player.tsx', import.meta.url),
+        'utf8',
+    );
+    assert.match(player, /recordStoppedPosition\(/, 'the pause keeps the last tick, not the stop');
+    const change = player.slice(player.indexOf('onCurrentSongChange: () => {'));
+    assert.match(
+        change.slice(0, change.indexOf('},')),
+        /pendingLocalSeekRef\.current = -1/,
+        'a hand-back seek outlives its song',
+    );
+});
