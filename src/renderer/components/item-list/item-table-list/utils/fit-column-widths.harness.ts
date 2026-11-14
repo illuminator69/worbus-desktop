@@ -570,3 +570,42 @@ test('everyTableColumnIsClassifiedForTheBand', () => {
         assert.equal(kept, KEEPS_ITS_FLOOR.includes(id), `${id}: ${widths.join(' ')}`);
     }
 });
+
+/*
+ * B-273 (R16 VM walk) and B-277 (R16 + R17 workstation walk), 2026-10-29/30. A drag below a column's
+ * floor: Title dragged -20 at its floor saved own width 1 (the smallest own width that shows the
+ * floor), so on any wider window it stayed at its floor; Album dragged -120 saved own width 24 and
+ * showed 16 px, under its 40 px floor, since a text column whose own width falls under 100 takes the
+ * icon columns' floor (`MIN_SCALE` of its own width). A drag cannot take a column below the floor it
+ * has when the drag starts: at that floor already, nothing changes (like a click); above it, the
+ * column narrows to that floor and keeps the largest own width that shows it, so a wider window
+ * widens it again.
+ */
+test('a_drag_below_the_floor_at_the_floor_changes_nothing', () => {
+    const container = 340; // every column on its floor
+    for (const [id, delta] of [
+        ['titleCombined', -20],
+        ['album', -120],
+        ['genres', -5],
+    ] as Array<[string, number]>) {
+        const index = TRACKS.findIndex((c) => c.id === id);
+        const shown = fitColumnWidths(TRACKS, container)[index];
+        const own = ownWidthForResize(TRACKS, container, index, shown + delta);
+        assert.equal(own, TRACKS[index].width, `${id} ${delta}`);
+    }
+});
+
+test('a_drag_below_the_floor_stops_at_it_and_keeps_its_proportion', () => {
+    for (const container of [790, 1150]) {
+        for (const id of ['album', 'titleCombined', 'genres']) {
+            const index = TRACKS.findIndex((c) => c.id === id);
+            const floor = Math.round(columnMinWidth(TRACKS[index], container));
+            const after = resized(TRACKS, container, id, floor - 120);
+            const shown = at(after, fitColumnWidths(after, container), id);
+            assert.equal(shown, floor, `${container} ${id}: ${shown}, floor ${floor}`);
+            // A wider window widens it again: not saved as a sliver.
+            const wider = at(after, fitColumnWidths(after, container + 800), id);
+            assert.ok(wider > floor, `${container} ${id} at +800: ${wider}`);
+        }
+    }
+});
