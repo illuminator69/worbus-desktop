@@ -293,50 +293,177 @@ test('every_segmented_control_label_wears_the_shared_class', () => {
 });
 
 /**
- * The guard that keeps the list whole: a CSS rule that draws a clickable thing on the surface
- * (`cursor: pointer` and the surface or the wash's surface as its background) and has no hover of
- * its own is a chip that must be in SITES, or one of the few named here that is not a chip.
+ * The guard that keeps the lists whole. Widened after M1 and m4 slipped past the first one, which
+ * only looked at `cursor: pointer` together with the surface as the background (the tiles paint a
+ * cover or a gradient, the device pill the accent, the source cards nothing), and never at a button
+ * without a pointer cursor. Two nets now:
+ *  - every CSS rule in `src/renderer` and `src/shared` with `cursor: pointer`, whatever it paints;
+ *  - every `<button>`, `<Link>`, `<a>` and `role="button"` whose `className` names a class of its
+ *    own module, pointer cursor or not;
+ * and each must answer the pointer: a `:hover` of its own (nested, compound or `@media`), an
+ * ancestor's `:hover` that names it (`.row:hover .play`), the chip class (SITES), the card class
+ * (TILES), or a named exception with its reason. Upstream's own rules are named too, so a new fork
+ * rule anywhere fails here rather than passing as "upstream".
  */
+const TILES: Record<string, string> = {
+    // A clickable tile's cover sits in ItemCard's image container (the_fork_tiles_wear_…).
+    'src/renderer/features/discover/components/discover-row.module.css .tile': 'DiscoverTile',
+    // The face around them is ItemCard's image container.
+    'src/renderer/features/moods/components/mood-tile.module.css .open': 'MoodTile',
+    'src/renderer/features/moods/components/mood-tile.module.css .play': 'MoodTile',
+};
+
 const NOT_CHIPS: Record<string, string> = {
     // The album page's tags: a plain one is a label; the linked one wears the class (above).
     'src/renderer/features/albums/components/album-detail-content.module.css .chip-tag': 'tags',
-    // The command palette's rows: highlighted by `data-selected`, which follows the pointer.
-    'src/renderer/features/search/components/command.css [cmdk-item]': 'palette rows',
-    // The detail pages' hero buttons (Play's row): buttons, not chips; their outline variants draw
-    // with an inset shadow, which the overlay would replace. Reported, not changed (B-293 scope).
+    'src/renderer/features/discography/components/discography.module.css .section-toggle':
+        'section heading',
+    // Inside a card that wears the chip class (Continue listening).
+    'src/renderer/features/home/components/continue-listening-row.module.css .main': 'in a chip',
+    // Text, not a control surface: an underlined link and a folding section heading.
+    'src/renderer/features/lbbot/components/gap-box.module.css .link': 'underlined link',
+    // Inside a row whose own `.row:hover` lightens it (Mixes, Saved queues).
+    'src/renderer/features/mixes/routes/mixes-route.module.css .row-main': 'row hover',
+    // The side queue's Autoplay switch: upstream's Switch has no hover either.
+    'src/renderer/features/now-playing/components/queue-panel-header.module.css .switch-track':
+        'a switch',
+    'src/renderer/features/saved-queues/routes/saved-queues-route.module.css .row-main':
+        'row hover',
+    // The detail pages' hero buttons (Play's row): buttons, not chips; B-461 waits for the owner.
     'src/renderer/features/shared/components/hero-actions.module.css .button': 'hero buttons',
+    'src/renderer/features/shared/components/hero-actions.module.css .play': 'hero buttons',
+    // The collapsed queue rail's 32 px next-song cover: upstream's small covers (the player bar's)
+    // show no shade either. Reported for the owner, not changed.
+    'src/renderer/layouts/default-layout/queue-rail.module.css .cover': 'rail thumbnail',
+    // A text field (it opens the palette), not a chip.
+    'src/renderer/layouts/default-layout/top-bar.module.css .search-input': 'a field',
 };
 
-const camel = (kebab: string) => kebab.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+/** Upstream's own clickables without a hover; the fork leaves them as upstream draws them. */
+const UPSTREAM = [
+    'src/renderer/components/item-list/item-detail-list/columns/genre-badge-column.module.css .group a',
+    'src/renderer/components/item-list/item-table-list/columns/album-artists-column.module.css .group a',
+    'src/renderer/components/item-list/item-table-list/columns/artists-column.module.css .group a',
+    'src/renderer/components/item-list/item-table-list/columns/genre-badge-column.module.css .group a',
+    'src/renderer/components/item-list/item-detail-list/item-detail-list.module.css .image-wrapper',
+    'src/renderer/components/item-list/selection-dialog.module.css .info-icon',
+    'src/renderer/components/page-header/page-header.module.css .header',
+    'src/renderer/features/lyrics/karaoke-lyric-line.module.css .karaoke-line:global(.synchronized)',
+    'src/renderer/features/lyrics/lyric-line.module.css .lyric-line:global(.synchronized)',
+    'src/renderer/features/player/components/full-screen-player-image.module.css .metadata-container',
+    'src/renderer/features/player/components/mobile-playerbar.module.css .image',
+    'src/renderer/features/player/components/mobile-playerbar.module.css .line-item',
+    'src/renderer/features/player/components/player-button.module.css .motion-wrapper',
+    'src/renderer/features/player/components/playerbar-waveform.module.css .wavesurfer-container',
+    'src/renderer/features/player/components/shared-full-screen-player-metadata.module.css .metadata-container',
+    'src/renderer/features/radio/components/radio-list-items.module.css .radio-item-button',
+    'src/renderer/features/search/components/command.css [cmdk-item]',
+    'src/renderer/features/sidebar/components/server-selector.module.css .button-container',
+    // Mantine's Accordion.Control (its own hover); the class only marks a drag over it.
+    'src/renderer/features/sidebar/components/playlist-folder-tree.module.css .root-drop-target-dragged-over',
+    'src/shared/components/read-only-rating/read-only-rating.module.css .root.interactive',
+    'src/shared/components/spoiler/spoiler.module.css .spoiler',
+    'src/shared/components/spoiler/spoiler.module.css .spoiler.can-expand',
+];
 
-test('no_clickable_surface_rule_is_left_without_a_hover', () => {
-    const files = execFileSync('git', ['ls-files', 'src/renderer/*.css', 'src/shared/*.css'], {
-        cwd: ROOT,
-        encoding: 'utf8',
-    })
-        .split('\n')
-        .filter(Boolean)
-        .filter((f) => f !== SHARED);
-    const covered = new Set(
-        SITES.flatMap(({ file, local }) => local.map((name) => `${path.dirname(file)} ${name}`)),
+const camel = (kebab: string) => kebab.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
+const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const uncomment = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+/** A rule for `.cls` that answers the pointer: its own `:hover` anywhere, or an ancestor's. */
+const answersThePointer = (css: string, cls: string): boolean => {
+    const c = escape(cls);
+    if (new RegExp(`\\.${c}(?![\\w-])[^{,\\s]*:hover`).test(css)) return true;
+    if (new RegExp(`:hover[^{},;]*\\s[^{},;]*\\.${c}(?![\\w-])`).test(css)) return true;
+    for (const [prelude, body] of blocks(css)) {
+        if (!new RegExp(`(^|,)\\s*\\.${c}(?![\\w-])[^,]*$`, 'm').test(prelude)) continue;
+        if (/:hover/.test(body)) return true;
+    }
+    return false;
+};
+
+const listed = (key: string, chipCovered: Set<string>, file: string, cls: string) =>
+    Boolean(
+        NOT_CHIPS[key] ||
+        TILES[key] ||
+        UPSTREAM.includes(key) ||
+        chipCovered.has(`${path.dirname(file)} ${camel(cls)}`),
     );
+
+const chipCoverage = () =>
+    new Set(SITES.flatMap(({ file, local }) => local.map((n) => `${path.dirname(file)} ${n}`)));
+
+const lsFiles = (...patterns: string[]) =>
+    execFileSync('git', ['ls-files', ...patterns], { cwd: ROOT, encoding: 'utf8' })
+        .split('\n')
+        .filter(Boolean);
+
+test('no_clickable_rule_is_left_without_a_hover', () => {
+    const covered = chipCoverage();
     const unlisted: string[] = [];
-    for (const file of files) {
-        const css = read(file);
-        for (const match of css.matchAll(/^([^\s{}@/][^{}]*?)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/gm)) {
+    for (const file of lsFiles('src/renderer/*.css', 'src/shared/*.css')) {
+        if (file === SHARED) continue;
+        const css = uncomment(read(file));
+        for (const match of css.matchAll(
+            /^([^\s{}@/][^{}]*?)\s*\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}/gm,
+        )) {
             const [, selectorList, body] = match;
-            if (!/cursor: pointer/.test(body)) continue;
-            if (!/background: var\(--(theme-colors-surface|wash-surf2)\)/.test(body)) continue;
+            if (!/cursor:\s*pointer/.test(body) || /:hover/.test(body)) continue;
             for (const selector of selectorList.split(',').map((s) => s.trim())) {
                 const key = `${file} ${selector}`;
-                if (NOT_CHIPS[key]) continue;
-                const cls = /^\.([a-z][a-z0-9-]*)$/.exec(selector)?.[1];
-                const hasOwnHover = cls && new RegExp(`\\.${cls}[^{,]*:hover`).test(css);
-                if (hasOwnHover || /&:hover/.test(body)) continue;
-                if (cls && covered.has(`${path.dirname(file)} ${camel(cls)}`)) continue;
+                // The element's own class: the last compound's.
+                const cls = /\.([a-z][a-z0-9-]*)(?=[^.\s]*$)/.exec(selector)?.[1];
+                if (cls && answersThePointer(css, cls)) continue;
+                if (listed(key, covered, file, cls ?? '')) continue;
                 unlisted.push(key);
             }
         }
     }
     assert.deepEqual(unlisted, []);
+});
+
+/** A JSX opening tag from its `<` to its `>`, braces (props) balanced. */
+const openingTag = (source: string, start: number): string => {
+    let depth = 0;
+    for (let end = start; end < source.length; end += 1) {
+        if (source[end] === '{') depth += 1;
+        if (source[end] === '}') depth -= 1;
+        if (source[end] === '>' && depth === 0 && source[end - 1] !== '=') {
+            return source.slice(start, end + 1);
+        }
+    }
+    return source.slice(start);
+};
+
+test('no_clickable_element_is_left_without_a_hover', () => {
+    // The cursor-less half: a button, link or role="button" styled by its own module.
+    const covered = chipCoverage();
+    const unlisted: string[] = [];
+    for (const file of lsFiles('src/renderer/*.tsx', 'src/shared/*.tsx')) {
+        const source = read(file);
+        const imported = /import (\w+) from '\.\/([\w.-]+\.module\.css)';/.exec(source);
+        if (!imported) continue;
+        const [, styles, module] = imported;
+        const cssFile = path.join(path.dirname(file), module);
+        const css = uncomment(read(cssFile));
+        const opening = /<(button|Link|a|NavLink|UnstyledButton)\b|role="button"/g;
+        for (const element of source.matchAll(opening)) {
+            const start = element[1]
+                ? (element.index ?? 0)
+                : source.lastIndexOf('<', element.index);
+            const tag = openingTag(source, start);
+            const at = tag.indexOf('className={');
+            if (at < 0) continue;
+            const expression = classNameExpressions(tag.slice(at))[0] ?? '';
+            if (/\bchipStyles\.chip\b|\bcardStyles\.imageContainer\b/.test(expression)) continue;
+            const name = new RegExp(`\\b${styles}\\.(\\w+)`).exec(expression)?.[1];
+            if (!name) continue;
+            const cls = kebab(name);
+            if (answersThePointer(css, cls)) continue;
+            if (listed(`${cssFile} .${cls}`, covered, cssFile, cls)) continue;
+            unlisted.push(`${file} ${element[0]} ${styles}.${name}`);
+        }
+    }
+    assert.deepEqual([...new Set(unlisted)], []);
 });
