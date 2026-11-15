@@ -35,8 +35,8 @@ test('metainfo_has_screenshots', () => {
     });
 
     const versions = [...xml.matchAll(/<release\b[^>]*\bversion="([^"]+)"/g)].map((m) => m[1]);
-    assert.deepEqual(versions.slice(0, 2), ['0.7.0', '0.6.0'], '0.7.0 sits above 0.6.0');
-    assert.equal(JSON.parse(text('package.json')).version, '0.7.0', 'package.json is 0.7.0');
+    assert.deepEqual(versions.slice(0, 2), ['0.8.0', '0.7.0'], '0.8.0 sits above 0.7.0');
+    assert.equal(JSON.parse(text('package.json')).version, '0.8.0', 'package.json is 0.8.0');
 });
 
 test('manifest_screenshot_is_ours', () => {

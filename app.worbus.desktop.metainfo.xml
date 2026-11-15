@@ -45,6 +45,11 @@
     <category>Music</category>
   </categories>
   <releases>
+    <release date="2026-11-15" type="stable" version="0.8.0">
+      <description>
+        <p>Playback follows the session on every device, chips and tiles react on hover, the keyboard reaches every control, and pages open faster.</p>
+      </description>
+    </release>
     <release date="2026-11-08" type="stable" version="0.7.0">
       <description>
         <p>After a fresh start, the resumed song plays from where the Worbus Server says, not from the beginning.</p>
