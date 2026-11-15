@@ -13,10 +13,22 @@
     border-radius: 10px;
 }
 
-/* The whole tile opens the preview; its text sits at the bottom. */
+/*
+ * M1: the tile's face is ItemCard's image container (upstream's card hover: a shade over the cover
+ * under the pointer, its `::before` at z-index 5). The face fills the tile, which keeps its own
+ * radius and clips the face's; isolated, so the shade and the controls above it stack inside the
+ * tile, never against the page around it.
+ */
+.face {
+    height: 100%;
+    isolation: isolate;
+}
+
+/* The whole tile opens the preview; its text sits at the bottom, above the face's shade. */
 .open {
     position: absolute;
     inset: 0;
+    z-index: 6;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -55,6 +67,7 @@
     position: absolute;
     right: 10px;
     bottom: 10px;
+    z-index: 6;
     display: grid;
     place-items: center;
     width: 40px;

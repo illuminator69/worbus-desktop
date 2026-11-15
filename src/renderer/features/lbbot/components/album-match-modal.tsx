@@ -59,6 +59,7 @@ import { leaveAfterAlbumJob } from '/@/renderer/features/lbbot/utils/leave-album
 import { AppRoute } from '/@/renderer/router/routes';
 import { Badge } from '/@/shared/components/badge/badge';
 import { Button } from '/@/shared/components/button/button';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { Group } from '/@/shared/components/group/group';
 import { closeModal, openModal } from '/@/shared/components/modal/modal';
 import { Progress } from '/@/shared/components/progress/progress';
@@ -846,9 +847,14 @@ const AlbumMatchModal = ({
                                 <div className={styles.covers}>
                                     <button
                                         aria-pressed={coverUrl === ''}
-                                        className={clsx(styles.cover, styles.keep, {
-                                            [styles.chosen]: coverUrl === '',
-                                        })}
+                                        className={clsx(
+                                            chipStyles.chip,
+                                            styles.cover,
+                                            styles.keep,
+                                            {
+                                                [styles.chosen]: coverUrl === '',
+                                            },
+                                        )}
                                         onClick={() => setCoverUrl('')}
                                         type="button"
                                     >
@@ -857,7 +863,7 @@ const AlbumMatchModal = ({
                                     {coverList.map((cover) => (
                                         <button
                                             aria-pressed={coverUrl === cover.full}
-                                            className={clsx(styles.cover, {
+                                            className={clsx(chipStyles.chip, styles.cover, {
                                                 [styles.chosen]: coverUrl === cover.full,
                                             })}
                                             key={cover.full}

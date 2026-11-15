@@ -79,6 +79,19 @@
     border-radius: 50%;
 }
 
+/*
+ * M1: a clickable tile's cover sits in ItemCard's image container (its hover shade, read from
+ * there). Isolated, so the shade's z-index stays inside it, under the tile's overlaid action.
+ */
+.shade {
+    isolation: isolate;
+}
+
+/* `.cover`'s gap to the caption, which the container clips; a custom cover (a mix) has none. */
+.shade-gap {
+    margin-bottom: var(--theme-spacing-xs);
+}
+
 /* A badge laid over the bottom of the cover (a release's state). */
 .badged {
     position: relative;

@@ -27,6 +27,7 @@ import {
     useSavedQueuesActions,
 } from '/@/renderer/store';
 import { ActionIcon } from '/@/shared/components/action-icon/action-icon';
+import chipStyles from '/@/shared/components/chip/chip.module.css';
 import { ContextMenu } from '/@/shared/components/context-menu/context-menu';
 import { DropdownMenu } from '/@/shared/components/dropdown-menu/dropdown-menu';
 import { Icon } from '/@/shared/components/icon/icon';
@@ -107,7 +108,8 @@ const ContinueListeningCard = ({ arrival, entry, isActive, serverId }: CardProps
         <ContextMenu>
             <ContextMenu.Target>
                 <div
-                    className={clsx(styles.card, arrival?.className)}
+                    // M1: the card answers the pointer as a surface Button does (lighter 5%).
+                    className={clsx(chipStyles.chip, styles.card, arrival?.className)}
                     data-arrive={arrival?.['data-arrive']}
                     data-continue-card={entry.id}
                     style={arrival?.style}

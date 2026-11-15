@@ -176,6 +176,10 @@ const SITES: { file: string; local: string[] }[] = [
     // leaves alone (the test above).
     { file: 'src/renderer/features/player/components/device-control.tsx', local: ['label'] },
     { file: 'src/renderer/features/lbbot/components/source-cards.tsx', local: ['head'] },
+    // Home's Continue listening cards: a surface card, so the surface Button's response.
+    { file: 'src/renderer/features/home/components/continue-listening-row.tsx', local: ['card'] },
+    // lb-bot's album match modal: the cover choices (the chosen one `aria-pressed`).
+    { file: 'src/renderer/features/lbbot/components/album-match-modal.tsx', local: ['cover'] },
 ];
 
 /** Each `className={…}` expression in a file, braces balanced. */
@@ -237,6 +241,46 @@ test('the_device_pill_darkens_as_upstreams_filled_button_does', () => {
         css,
         /\.label \{[^}]*transition:\s*max-width var\(--fold\),\s*padding var\(--fold\),\s*opacity var\(--fold\);/,
     );
+});
+
+/**
+ * M1 (review 2026-11-15): "home page mixes" is also Home's "Your mixes" row and the mood-mix tiles
+ * under the mood chips, poster tiles beside upstream's album carousels. Upstream's cards answer the
+ * pointer with ItemCard's image container: a black shade over the cover (its `::before`, 0.7 dark /
+ * 0.5 light, 0.2 s). The fork's tiles wear that same class rather than a copy of its values.
+ */
+const CARD_IMPORT = "'/@/renderer/components/item-card/item-card.module.css'";
+
+test('the_fork_tiles_wear_upstreams_card_hover', () => {
+    const card = read('src/renderer/components/item-card/item-card.module.css');
+    const shade = /\.image-container \{[\s\S]*?&::before \{([^}]*)\}[\s\S]*?&:hover \{/.exec(card);
+    assert.ok(shade, "ItemCard's cover shade moved");
+    const shadeZ = Number(/z-index: (\d+);/.exec(shade[1])?.[1]);
+    assert.ok(shadeZ > 0, "ItemCard's shade has no z-index");
+
+    // Every Discover / Home / lb-bot poster tile (Your mixes, Fresh, ListenBrainz, rediscovery,
+    // similar artists and albums, missing albums, Listening): a clickable tile's cover sits in the
+    // card's image container, isolated so the shade stays under the tile's own overlaid action.
+    const tile = read('src/renderer/features/discover/components/discover-tile.tsx');
+    assert.ok(tile.includes(CARD_IMPORT), 'DiscoverTile does not import the card class');
+    assert.match(
+        tile,
+        /onClick\s*\?\s*\(\s*<div\s+className=\{clsx\(cardStyles\.imageContainer, styles\.shade,/,
+        "a clickable DiscoverTile's cover is not in the card's image container",
+    );
+    const row = read('src/renderer/features/discover/components/discover-row.module.css');
+    assert.match(row, /\.shade \{[^}]*isolation: isolate;/);
+
+    // The mood-mix tiles: the whole face is the target, and its text and play button stay above
+    // the shade, as upstream's play controls do over a shaded cover.
+    const mood = read('src/renderer/features/moods/components/mood-tile.tsx');
+    assert.ok(mood.includes(CARD_IMPORT), 'MoodTile does not import the card class');
+    assert.match(mood, /className=\{clsx\(cardStyles\.imageContainer, styles\.face\)\}/);
+    const moodCss = read('src/renderer/features/moods/components/mood-tile.module.css');
+    for (const name of ['open', 'play']) {
+        const z = Number(new RegExp(`\\.${name} \\{[^}]*z-index: (\\d+);`).exec(moodCss)?.[1]);
+        assert.ok(z > shadeZ, `.${name} is not above ItemCard's shade (z-index ${shadeZ})`);
+    }
 });
 
 test('every_segmented_control_label_wears_the_shared_class', () => {

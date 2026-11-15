@@ -4,6 +4,7 @@ import { Link } from 'react-router';
 
 import styles from './discover-row.module.css';
 
+import cardStyles from '/@/renderer/components/item-card/item-card.module.css';
 import { ItemImage } from '/@/renderer/components/item-image/item-image';
 import { Text } from '/@/shared/components/text/text';
 import { LibraryItem } from '/@/shared/types/domain-types';
@@ -119,11 +120,28 @@ export const DiscoverTile = ({
             type="itemCard"
         />
     );
+    // M1: a tile that goes somewhere answers the pointer as upstream's cards beside it do: its
+    // cover sits in ItemCard's own image container, whose shade darkens it under the pointer. The
+    // container is isolated so the shade stays under the tile's overlaid action (the one-tap
+    // acquire), and it carries the gap a library cover keeps from its caption (`.cover`'s, which
+    // the container would clip).
+    const shaded = onClick ? (
+        <div
+            className={clsx(cardStyles.imageContainer, styles.shade, {
+                [cardStyles.isRound]: isRound,
+                [styles.shadeGap]: !cover,
+            })}
+        >
+            {image}
+        </div>
+    ) : (
+        image
+    );
     const content = (
         <>
             {badge ? (
                 <div className={styles.badged}>
-                    {image}
+                    {shaded}
                     <div
                         className={badgePlacement === 'top-start' ? styles.badgeTop : styles.badge}
                     >
@@ -131,7 +149,7 @@ export const DiscoverTile = ({
                     </div>
                 </div>
             ) : (
-                image
+                shaded
             )}
             <Text className={styles.name} size="sm">
                 {title}

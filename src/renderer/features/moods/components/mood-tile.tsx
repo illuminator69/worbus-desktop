@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import styles from './mood-tile.module.css';
 
+import cardStyles from '/@/renderer/components/item-card/item-card.module.css';
 import { lbModalSettings } from '/@/renderer/features/lbbot/components/lb-modal-layout';
 import { MoodMixPreview } from '/@/renderer/features/moods/components/mood-mix-preview';
 import { MOOD_MIX_SIZE, tileColors, tilePlayResult } from '/@/renderer/features/moods/mood-mix';
@@ -101,21 +102,29 @@ export const MoodTile = ({
             data-mood-tile={`${mood.id}/${variant.id}`}
             style={style}
         >
-            <button className={styles.open} onClick={openPreview} type="button">
-                <span className={styles.title}>{variant.title}</span>
-                <span className={styles.line}>
-                    {t('naviConnect.moods.aboutSongs', { count: MOOD_MIX_SIZE })}
-                </span>
-            </button>
-            <button
-                aria-busy={busy || undefined}
-                aria-label={t('naviConnect.moods.play', { title: variant.title })}
-                className={styles.play}
-                onClick={() => void play()}
-                type="button"
-            >
-                <Icon animate={busy ? 'spin' : undefined} icon={busy ? 'spinner' : 'mediaPlay'} />
-            </button>
+            {/* M1: the face answers the pointer as upstream's cards beside it do (ItemCard's image
+                container and its shade), the text and the play button above the shade as
+                upstream's play controls are above a shaded cover. */}
+            <div className={clsx(cardStyles.imageContainer, styles.face)}>
+                <button className={styles.open} onClick={openPreview} type="button">
+                    <span className={styles.title}>{variant.title}</span>
+                    <span className={styles.line}>
+                        {t('naviConnect.moods.aboutSongs', { count: MOOD_MIX_SIZE })}
+                    </span>
+                </button>
+                <button
+                    aria-busy={busy || undefined}
+                    aria-label={t('naviConnect.moods.play', { title: variant.title })}
+                    className={styles.play}
+                    onClick={() => void play()}
+                    type="button"
+                >
+                    <Icon
+                        animate={busy ? 'spin' : undefined}
+                        icon={busy ? 'spinner' : 'mediaPlay'}
+                    />
+                </button>
+            </div>
         </div>
     );
 };
