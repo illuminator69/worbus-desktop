@@ -75,7 +75,7 @@ export const GoToCommands = ({ handleClose, setPages, setQuery }: GoToCommandsPr
                 other page, and it did not know these existed. Gated on their
                 sources the same way the sidebar entries are. */}
             {naviConnectItems.length > 0 && (
-                <Command.Group heading={t('page.globalSearch.discover')}>
+                <Command.Group heading={t('page.library.tab.discover')}>
                     {naviConnectItems.map((item) => (
                         <Command.Item key={item.id} onSelect={() => goTo(item.route as AppRoute)}>
                             {item.label}

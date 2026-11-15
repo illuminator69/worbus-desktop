@@ -107,7 +107,7 @@ export function SearchExternalAlbumsSection({
                                 {candidate.releaseOwned && (
                                     <Badge size="xs">
                                         {candidate.releaseAlbumId
-                                            ? t('page.globalSearch.inYourLibrary')
+                                            ? t('naviConnect.gapBox.inLibrary')
                                             : t('page.globalSearch.waitingForLibrary')}
                                     </Badge>
                                 )}

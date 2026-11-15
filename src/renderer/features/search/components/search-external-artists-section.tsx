@@ -54,7 +54,7 @@ export function SearchExternalArtistsSection({
     return (
         <CollapsibleCommandGroup
             expanded={expanded}
-            heading={t('page.globalSearch.notInYourLibrary')}
+            heading={t('page.library.notInLibrary')}
             onToggle={onToggle}
         >
             {isLoading ? (

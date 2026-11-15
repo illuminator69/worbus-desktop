@@ -36,14 +36,27 @@ test('no_palette_heading_or_label_is_a_literal', () => {
 test('the_keys_exist_in_english', () => {
     const en = JSON.parse(read('../../../../i18n/locales/en.json'));
     const search = en.page.globalSearch;
-    for (const key of [
-        'albumsOnMusicBrainz',
-        'commandMenu',
-        'discover',
-        'inYourLibrary',
-        'notInYourLibrary',
-        'waitingForLibrary',
-    ]) {
+    for (const key of ['albumsOnMusicBrainz', 'commandMenu', 'waitingForLibrary']) {
         assert.equal(typeof search[key], 'string', `page.globalSearch.${key}`);
+    }
+});
+
+test('the_palette_reuses_the_keys_that_already_say_it', () => {
+    // n5 (review 2026-11-15): "Discover", "In your library" and "Not in your library" already had
+    // keys; reusing them picks up whatever translations those have, where a duplicate key falls
+    // back to English.
+    const en = JSON.parse(read('../../../../i18n/locales/en.json'));
+    const reused: [string, string][] = [
+        ['./go-to-commands.tsx', 'page.library.tab.discover'],
+        ['./search-external-albums-section.tsx', 'naviConnect.gapBox.inLibrary'],
+        ['./search-external-artists-section.tsx', 'page.library.notInLibrary'],
+    ];
+    for (const [file, key] of reused) {
+        assert.ok(read(file).includes(`t('${key}')`), `${file} does not read ${key}`);
+        const value = key.split('.').reduce((node, part) => node?.[part], en);
+        assert.equal(typeof value, 'string', key);
+    }
+    for (const duplicate of ['discover', 'inYourLibrary', 'notInYourLibrary']) {
+        assert.equal(en.page.globalSearch[duplicate], undefined, `page.globalSearch.${duplicate}`);
     }
 });
