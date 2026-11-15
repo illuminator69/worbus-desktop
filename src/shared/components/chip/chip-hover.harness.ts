@@ -39,21 +39,44 @@ test('the_shared_chip_class_draws_upstreams_button_hover', () => {
         /&\[data-variant='filled'\][\s\S]*?&:hover,\s*&:focus-visible\s*\{\s*background: darken\(var\(--theme-colors-primary-filled\), (\d+)%\);/.exec(
             button,
         );
+    const focusAt =
+        /&\[data-variant='default'\][\s\S]*?&:focus-visible\s*\{\s*background: lighten\(var\(--theme-colors-surface\), (\d+)%\);/.exec(
+            button,
+        );
     const duration = /background-color (\d*\.?\d+s) ease-in-out/.exec(button);
-    assert.ok(lightenAt && darkenAt && duration, "the Button's hover rules moved");
+    assert.ok(lightenAt && darkenAt && focusAt && duration, "the Button's hover rules moved");
 
     const lighten = Number(lightenAt[1]) / 100;
     const darken = Number(darkenAt[1]) / 100;
     assert.match(chip, new RegExp(`--chip-overlay: rgb\\(255 255 255 / ${lighten * 100}%\\)`));
     assert.match(chip, new RegExp(`--chip-overlay: rgb\\(0 0 0 / ${darken * 100}%\\)`));
+
+    // Keyboard focus lightens as the default Button's does (n1: 10%, not the hover's 5%).
+    const focus =
+        /&:focus-visible,\s*:focus-visible \+ & \{\s*--chip-overlay: rgb\(255 255 255 \/ (\d+)%\);/.exec(
+            chip,
+        );
+    assert.ok(focus, 'keyboard focus has no overlay of its own');
+    assert.equal(Number(focus[1]), Number(focusAt[1]));
+    // n2: a SegmentedControl's focus sits on Mantine's hidden radio input just before the label.
+    // n4: a touch screen keeps `:hover` after a tap, so the hover is for pointers that hover.
+    assert.match(chip, /@media \(hover: hover\) \{\s*&:hover \{/);
+    assert.doesNotMatch(
+        chip.replaceAll(/@media \(hover: hover\) \{[\s\S]*?\n {4}\}/g, ''),
+        /&:hover|\):hover/,
+        'a hover outside the (hover: hover) guard',
+    );
     assert.match(
         chip,
         new RegExp(`transition: background-color ${duration[1].replace('.', '\\.')} ease-in-out`),
         'the overlay fades in over the Button',
     );
 
-    // Not on a disabled chip; the chosen one (pressed, current page, active segment) darkens.
-    assert.match(chip, /:not\(:disabled, \[data-disabled\], \[aria-disabled='true'\]\)/);
+    // Not on a disabled or read-only chip; the chosen one (pressed, current page, active segment) darkens.
+    assert.match(
+        chip,
+        /:not\(:disabled, \[data-disabled\], \[data-read-only\], \[aria-disabled='true'\]\)/,
+    );
     for (const chosen of [
         "[aria-pressed='true']",
         "[aria-current='page']",
@@ -289,7 +312,11 @@ test('every_segmented_control_label_wears_the_shared_class', () => {
     // the shared one, never instead of it.
     const source = read('src/shared/components/segmented-control/segmented-control.tsx');
     assert.ok(source.includes(SHARED_IMPORT), 'SegmentedControl does not import the chip class');
-    assert.match(source, /label: clsx\(chipStyles\.chip, ownLabel \?\? styles\.label\)/);
+    // n3: a read-only one (nothing to choose) does not react.
+    assert.match(
+        source,
+        /label: clsx\(!props\.readOnly && chipStyles\.chip, ownLabel \?\? styles\.label\)/,
+    );
 });
 
 /**

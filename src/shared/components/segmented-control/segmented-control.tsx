@@ -21,8 +21,9 @@ export const SegmentedControl = forwardRef<HTMLDivElement, SegmentedControlProps
                     root: styles.root,
                     ...classNames,
                     // B-293: every label reacts to the pointer as the fork's chips do; a caller's
-                    // own label class replaces this one's look, never the response.
-                    label: clsx(chipStyles.chip, ownLabel ?? styles.label),
+                    // own label class replaces this one's look, never the response. A read-only
+                    // control offers no choice, so it does not react.
+                    label: clsx(!props.readOnly && chipStyles.chip, ownLabel ?? styles.label),
                 }}
                 ref={ref}
                 size={size}

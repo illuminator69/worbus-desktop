@@ -38,10 +38,33 @@
     transition: background-color 0.2s ease-in-out;
 }
 
-.chip:not(:disabled, [data-disabled], [aria-disabled='true']) {
-    &:hover,
-    &:focus-visible {
-        --chip-overlay: rgb(255 255 255 / 5%);
+/*
+ * Under the pointer: only where the pointer hovers (a touch screen keeps `:hover` after a tap).
+ * Keyboard focus as the default Button's (lighter 10%); a SegmentedControl's focus sits on Mantine's
+ * hidden radio input just before the label, hence `:focus-visible + &`. The chosen one darkens 10%
+ * for both. Not on a disabled or read-only chip.
+ */
+.chip:not(:disabled, [data-disabled], [data-read-only], [aria-disabled='true']) {
+    @media (hover: hover) {
+        &:hover {
+            --chip-overlay: rgb(255 255 255 / 5%);
+        }
+    }
+
+    &:focus-visible,
+    :focus-visible + & {
+        --chip-overlay: rgb(255 255 255 / 10%);
+    }
+
+    @media (hover: hover) {
+        &:is(
+            [aria-pressed='true'],
+            [aria-current='page'],
+            [data-active='true'],
+            [data-variant='filled']
+            ):hover {
+            --chip-overlay: rgb(0 0 0 / 10%);
+        }
     }
 
     &:is(
@@ -49,13 +72,13 @@
             [aria-current='page'],
             [data-active='true'],
             [data-variant='filled']
-        ):hover,
-    &:is(
+        ):focus-visible,
+    :focus-visible + &:is(
             [aria-pressed='true'],
             [aria-current='page'],
             [data-active='true'],
             [data-variant='filled']
-        ):focus-visible {
+        ) {
         --chip-overlay: rgb(0 0 0 / 10%);
     }
 }
