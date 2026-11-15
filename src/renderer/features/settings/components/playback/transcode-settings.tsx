@@ -53,10 +53,13 @@ export const TranscodeSettings = memo(() => {
                     }}
                 />
             ),
-            description:
-                'Apply the transcode profile only while on a metered or constrained connection (cellular, data saver). Full quality otherwise.',
-            // B-321: the desktop's network API reports no metered connection, so it is not offered.
-            isHidden: !transcode.enabled || isElectron(),
+            description: isElectron()
+                ? // B-321: a desktop is never metered, so with this on it always plays full quality.
+                  'This computer is never treated as a metered connection, so while this is on it plays full quality. Turn it off to transcode.'
+                : 'Apply the transcode profile only while on a metered or constrained connection (cellular, data saver). Full quality otherwise.',
+            // B-321: on the desktop the switch can only hold transcoding off, so it is shown there
+            // only while it is on (to turn it off) and hidden otherwise.
+            isHidden: !transcode.enabled || (isElectron() && !transcode.meteredOnly),
             note,
             title: 'Only when metered',
         },

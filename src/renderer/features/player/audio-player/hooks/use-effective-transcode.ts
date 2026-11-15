@@ -1,6 +1,7 @@
 import isElectron from 'is-electron';
 import { useEffect, useState } from 'react';
 
+import { effectiveTranscode } from '/@/renderer/features/player/audio-player/hooks/effective-transcode';
 import { TranscodingConfig, usePlaybackSettings } from '/@/renderer/store';
 
 interface NetworkInformationLike {
@@ -43,17 +44,9 @@ export const useIsMeteredConnection = (): boolean => {
     return metered;
 };
 
-/**
- * The transcode profile the player engines should actually use: same as the
- * stored config, except that with `meteredOnly` set, transcoding only kicks in
- * while the connection is metered (full quality otherwise).
- */
+/** The effective transcode profile (see `effectiveTranscode`) for the player engines. */
 export const useEffectiveTranscode = (): TranscodingConfig => {
     const { transcode } = usePlaybackSettings();
     const isMetered = useIsMeteredConnection();
-
-    // B-321: not offered on the desktop (its network API reports no metered connection), so a
-    // switch left on from before is ignored rather than holding transcoding off.
-    if (!transcode.meteredOnly || isElectron()) return transcode;
-    return { ...transcode, enabled: transcode.enabled && isMetered };
+    return effectiveTranscode(transcode, { isDesktop: isElectron(), isMetered });
 };
