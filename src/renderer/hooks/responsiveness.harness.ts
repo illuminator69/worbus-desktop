@@ -41,3 +41,18 @@ test('page_data_is_kept_two_minutes', () => {
     assert.match(src, /gcTime: 1000 \* 60 \* 2, \/\/ 2 minutes/);
     assert.match(src, /staleTime: 1000 \* 10, \/\/ 10 seconds/);
 });
+
+test('the_infinite_lists_assembled_map_is_not_kept_two_minutes', () => {
+    // m2 (review 2026-11-15): the infinite loader's assembled map (every loaded page of a list, by
+    // index) is wiped and refetched when a list mounts again, random sort excepted, so the
+    // 2-minute rule only held a long list in memory for nothing. It is released like the page
+    // responses it is built from (15 s); a random-sort list, whose map a remount does reuse, keeps
+    // the 2-minute default.
+    const src = read('../components/item-list/helpers/item-list-infinite-loader.ts');
+    const map = /useQuery<InfiniteLoaderCacheData>\(\{([\s\S]*?)\}\);/.exec(src);
+    assert.ok(map, 'the assembled-map query moved');
+    assert.match(map[1], /\.\.\.\(isRandomSort \? \{\} : \{ gcTime: 1000 \* 15 \}\)/);
+    // The remount wipe this relies on is still there, and still spares random sort.
+    assert.match(src, /if \(isRandomSort\) \{\s*const existingData = queryClient\.getQueryData/);
+    assert.match(src, /dataMap: new Map\(\),\s*idToIndexMap: new Map\(\),\s*pagesLoaded: \{\},/);
+});

@@ -255,6 +255,11 @@ export const useItemListInfiniteLoader = ({
 
     const { data } = useQuery<InfiniteLoaderCacheData>({
         enabled: false,
+        // m2 (Q-164): the assembled map is wiped and refetched when the list mounts again (the
+        // effect above), so it is released like the page responses it is built from rather than
+        // kept 2 minutes for nothing. A random-sort list reuses its map on a remount, so it keeps
+        // the 2-minute default.
+        ...(isRandomSort ? {} : { gcTime: 1000 * 15 }),
         initialData: getInitialData(),
         queryFn: () => {
             return getInitialData();
